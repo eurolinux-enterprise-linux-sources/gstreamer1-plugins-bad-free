@@ -10,7 +10,7 @@
 
 Name:           gstreamer1-plugins-bad-free
 Version:        1.4.5
-Release:        4%{?dist}
+Release:        6%{?dist}
 Summary:        GStreamer streaming media framework "bad" plugins
 
 License:        LGPLv2+ and LGPLv2
@@ -23,6 +23,11 @@ Source1:        gst-p-bad-cleanup.sh
 Patch0:         0001-bayer-update-ORC-files.patch
 Patch1:         update-test-check-orc-bayer.patch
 Patch2:         0001-tests-fix-audiomixer-test-on-big-endian-systems.patch
+Patch3:         0001-vmncdec-Sanity-check-width-height-before-using-it.patch
+Patch4:         0001-h264parse-Ensure-codec_data-has-the-required-size-wh.patch
+Patch5:         0002-h265parse-Ensure-codec_data-has-the-required-size-wh.patch
+Patch6:         0003-mpegtssection-Fix-PAT-parsing.patch
+Patch7:         0004-mpegtssection-Add-more-section-size-checks.patch
 
 BuildRequires:  gstreamer1-devel >= %{version}
 BuildRequires:  gstreamer1-plugins-base-devel >= %{version}
@@ -153,6 +158,11 @@ aren't tested well enough, or the code is not of good enough quality.
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
+%patch4 -p1
+%patch5 -p1
+%patch6 -p1
+%patch7 -p1
 
 
 %build
@@ -349,6 +359,15 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstcamerab
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{majorminor}.pc
 
 %changelog
+* Wed Dec 07 2016 Wim Taymans <wtaymans@redhat.com> - 1.4.5-6
+- Fix h264 and h265 buffer size checks
+- Fix mpegts pat parsing and add more size checks
+Resolves: rhbz#1400897
+
+* Tue Dec 06 2016 Wim Taymans <wtaymans@redhat.com> - 1.4.5-5
+- vmncdec: Sanity-check width/height before using it
+Resolves: rhbz#1400897
+
 * Thu May 26 2016 Wim Taymans <wtaymans@redhat.com> - 1.4.5-4
 - rebuild for libdvdnav update
 - Resolves: #1340047
