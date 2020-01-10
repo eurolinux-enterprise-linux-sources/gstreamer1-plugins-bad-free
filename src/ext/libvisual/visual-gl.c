@@ -27,7 +27,7 @@
  * <refsect2>
  * <title>Examples</title>
  * |[
- * gst-launch-1.0 -v audiotestsrc ! libvisual_gl_lv_flower ! glimagesink
+ * gst-launch -v audiotestsrc ! libvisual_gl_lv_flower ! glimagesink
  * ]|
  * </refsect2>
  */
@@ -216,8 +216,10 @@ gst_visual_gl_class_init (gpointer g_class, gpointer class_data)
         klass->plugin->info->name, klass->plugin->info->version);
 
     /* FIXME: improve to only register what plugin supports? */
-    gst_element_class_add_static_pad_template (element_class, &src_template);
-    gst_element_class_add_static_pad_template (element_class, &sink_template);
+    gst_element_class_add_pad_template (element_class,
+        gst_static_pad_template_get (&src_template));
+    gst_element_class_add_pad_template (element_class,
+        gst_static_pad_template_get (&sink_template));
 
     gst_element_class_set_metadata (element_class,
         longname, "Visualization", klass->plugin->info->about,

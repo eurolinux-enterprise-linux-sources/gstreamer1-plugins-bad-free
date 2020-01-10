@@ -31,6 +31,12 @@
    language is requested. */
 #undef ENABLE_NLS
 
+/* The x in 2.x */
+#undef FAAD2_MINOR_VERSION
+
+/* Define if AAC is using new api prefix */
+#undef FAAD_IS_NEAAC
+
 /* gettext package name */
 #define GETTEXT_PACKAGE "gst-plugins-bad-1.0"
 
@@ -40,17 +46,11 @@
 /* The GIO modules directory. */
 #undef GIO_MODULE_DIR
 
-/* The GIO install prefix. */
-#undef GIO_PREFIX
-
 /* Define if GSM header in gsm/ subdir */
 #undef GSM_HEADER_IN_SUBDIR
 
 /* GStreamer API Version */
 #define GST_API_VERSION "1.0"
-
-/* Define if extra runtime checks should be enabled */
-#undef GST_ENABLE_EXTRA_CHECKS
 
 /* Extra platform specific plugin suffix */
 #undef GST_EXTRA_MODULE_SUFFIX
@@ -86,7 +86,7 @@
 #define GST_PACKAGE_ORIGIN "Unknown package origin"
 
 /* GStreamer package release date/time for plugins as YYYY-MM-DD */
-#define GST_PACKAGE_RELEASE_DATETIME "2017-02-23"
+#define GST_PACKAGE_RELEASE_DATETIME "2014-12-18"
 
 /* Define if static plugins should be built */
 #undef GST_PLUGIN_BUILD_STATIC
@@ -115,12 +115,6 @@
 /* Define to enable Bluez (used by bluez). */
 #undef HAVE_BLUEZ
 
-/* Bluez5 detected */
-#undef HAVE_BLUEZ5
-
-/* Define to enable bs2b (used by bs2b). */
-#undef HAVE_BS2B
-
 /* Define to enable bz2 library (used by bz2). */
 #undef HAVE_BZ2
 
@@ -135,14 +129,8 @@
 /* Define to enable chromaprint (used by chromaprint). */
 #undef HAVE_CHROMAPRINT
 
-/* Define if the target CPU is AARCH64 */
-#undef HAVE_CPU_AARCH64
-
 /* Define if the target CPU is an Alpha */
 #undef HAVE_CPU_ALPHA
-
-/* Define if the target CPU is an ARC */
-#undef HAVE_CPU_ARC
 
 /* Define if the target CPU is an ARM */
 #undef HAVE_CPU_ARM
@@ -205,6 +193,9 @@
 /* Define to enable Direct3D plug-in (used by direct3dsink). */
 #undef HAVE_DIRECT3D
 
+/* Define to enable DirectDraw plug-in (used by directdrawsink). */
+#undef HAVE_DIRECTDRAW
+
 /* Define to enable directfb (used by dfbvideosink ). */
 #undef HAVE_DIRECTFB
 
@@ -217,17 +208,11 @@
 /* define for working do while(0) macros */
 #undef HAVE_DOWHILE_MACROS
 
-/* Define to enable DTLS plugin (used by dtls). */
-#undef HAVE_DTLS
-
 /* Define to enable dts library (used by dtsdec). */
 #undef HAVE_DTS
 
 /* Define to enable DVB Source (used by dvb). */
 #undef HAVE_DVB
-
-/* Define to 1 if the system has the type `EGLAttrib'. */
-#undef HAVE_EGLATTRIB
 
 /* Define to enable building of experimental plug-ins. */
 #undef HAVE_EXPERIMENTAL
@@ -238,7 +223,7 @@
 /* Define to enable AAC encoder plug-in (used by faac). */
 #undef HAVE_FAAC
 
-/* Define to enable FAAD2 AAC decoder plug-in (used by faad). */
+/* Define to enable AAC decoder plug-in (used by faad). */
 #undef HAVE_FAAD
 
 /* Define to enable linux framebuffer (used by fbdevsink). */
@@ -246,9 +231,6 @@
 
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
-
-/* Define to enable fdkaac plugin (used by fdkaac). */
-#undef HAVE_FDK_AAC
 
 /* FIONREAD ioctl found in sys/filio.h */
 #undef HAVE_FIONREAD_IN_SYS_FILIO
@@ -277,20 +259,11 @@
 /* Define to 1 if the system has the type `GLeglImageOES'. */
 #undef HAVE_GLEGLIMAGEOES
 
-/* Define to 1 if the system has the type `GLint64'. */
-#undef HAVE_GLINT64
-
 /* Define to 1 if the system has the type `GLintptr'. */
 #undef HAVE_GLINTPTR
 
 /* Define to 1 if the system has the type `GLsizeiptr'. */
 #undef HAVE_GLSIZEIPTR
-
-/* Define to 1 if the system has the type `GLsync'. */
-#undef HAVE_GLSYNC
-
-/* Define to 1 if the system has the type `GLuint64'. */
-#undef HAVE_GLUINT64
 
 /* Define to enable gme decoder (used by gme). */
 #undef HAVE_GME
@@ -301,17 +274,17 @@
 /* Use graphene */
 #undef HAVE_GRAPHENE
 
+/* Define to enable GSettings plugin (used by gsettings). */
+#undef HAVE_GSETTINGS
+
 /* Define to enable GSM library (used by gsmenc gsmdec). */
 #undef HAVE_GSM
 
-/* Define to enable Gtk+ elements (used by gtk). */
-#undef HAVE_GTK3
-
-/* Define if Gtk+ 3.0 GL is installed */
-#undef HAVE_GTK3_GL
-
 /* Define if gudev is installed */
 #undef HAVE_GUDEV
+
+/* Define to 1 if you have the <highgui.h> header file. */
+#undef HAVE_HIGHGUI_H
 
 /* Define to enable http live streaming plugin (used by hls). */
 #undef HAVE_HLS
@@ -331,14 +304,8 @@
 /* Define to enable Kate (used by kate). */
 #undef HAVE_KATE
 
-/* Define to enable drm/kms libraries (used by kms). */
-#undef HAVE_KMS
-
 /* Define to enable ladspa (used by ladspa). */
 #undef HAVE_LADSPA
-
-/* Define to enable libde265 HEVC/H.265 decoder (used by libde265). */
-#undef HAVE_LIBDE265
 
 /* Define if libgcrypt is available */
 #undef HAVE_LIBGCRYPT
@@ -360,9 +327,6 @@
 
 /* Define to enable libvisual visualization library (used by libvisual). */
 #undef HAVE_LIBVISUAL
-
-/* Define if we have liblilv >= 0.22 */
-#undef HAVE_LILV_0_22
 
 /* Define to enable Linear Systems SDI plugin (used by linsys). */
 #undef HAVE_LINSYS
@@ -388,6 +352,9 @@
 /* Define to enable mpeg2enc (used by mpeg2enc). */
 #undef HAVE_MPEG2ENC
 
+/* Define to enable mpg123 audio decoder (used by mpg123). */
+#undef HAVE_MPG123
+
 /* Define to enable mplex (used by mplex). */
 #undef HAVE_MPLEX
 
@@ -396,6 +363,9 @@
 
 /* Define to enable musepackdec (used by musepack). */
 #undef HAVE_MUSEPACK
+
+/* Define to enable MythTV client plugins (used by mythtvsrc). */
+#undef HAVE_MYTHTV
 
 /* Define to enable nas plug-in (used by nassink). */
 #undef HAVE_NAS
@@ -415,12 +385,6 @@
 /* Define if nettle is available */
 #undef HAVE_NETTLE
 
-/* Define to enable NVIDIA Encode API (used by nvenc). */
-#undef HAVE_NVENC
-
-/* NVENC GStreamer OpenGL support available */
-#undef HAVE_NVENC_GST_GL
-
 /* Define to enable ofa plugins (used by ofa). */
 #undef HAVE_OFA
 
@@ -430,34 +394,11 @@
 /* Define to enable opencv plugins (used by opencv). */
 #undef HAVE_OPENCV
 
-/* Define to 1 if you have the <opencv2/core/core_c.h> header file. */
-#undef HAVE_OPENCV2_CORE_CORE_C_H
-
-/* Define to 1 if you have the <opencv2/core/version.hpp> header file. */
-#undef HAVE_OPENCV2_CORE_VERSION_HPP
-
 /* Define to 1 if you have the <opencv2/highgui/highgui_c.h> header file. */
 #undef HAVE_OPENCV2_HIGHGUI_HIGHGUI_C_H
 
-/* Define to 1 if you have the <opencv2/imgproc/imgproc_c.h> header file. */
-#undef HAVE_OPENCV2_IMGPROC_IMGPROC_C_H
-
-/* Define to 1 if you have the <opencv2/imgproc/imgproc.hpp> header file. */
-#undef HAVE_OPENCV2_IMGPROC_IMGPROC_HPP
-
-/* Define to 1 if you have the <opencv2/objdetect/objdetect.hpp> header file.
-   */
-#undef HAVE_OPENCV2_OBJDETECT_OBJDETECT_HPP
-
-/* Define to 1 if you have the <opencv2/video/background_segm.hpp> header
-   file. */
-#undef HAVE_OPENCV2_VIDEO_BACKGROUND_SEGM_HPP
-
 /* Define to enable openexr library (used by openexr). */
 #undef HAVE_OPENEXR
-
-/* Define to enable openh264 library (used by openh264). */
-#undef HAVE_OPENH264
 
 /* Define to enable openjpeg library (used by openjpeg). */
 #undef HAVE_OPENJPEG
@@ -465,17 +406,11 @@
 /* Define if OpenJPEG 1 is used */
 #undef HAVE_OPENJPEG_1
 
-/* Define if OpenJPEG 2.1 is used */
-#undef HAVE_OPENJPEG_2_1
-
 /* Define to enable openni2 library (used by openni2). */
 #undef HAVE_OPENNI2
 
 /* Define to enable OpenSL ES (used by opensl). */
 #undef HAVE_OPENSLES
-
-/* Define if openssl is available */
-#undef HAVE_OPENSSL
 
 /* Define to enable opus (used by opus). */
 #undef HAVE_OPUS
@@ -486,41 +421,20 @@
 /* Apple Mac OS X operating system detected */
 #undef HAVE_OSX
 
+/* Define to enable OSX video (used by osxvideosrc). */
+#undef HAVE_OSX_VIDEO
+
 /* Use libpng */
 #undef HAVE_PNG
-
-/* Define if you have POSIX threads libraries and header files. */
-#undef HAVE_PTHREAD
 
 /* Define to 1 if you have the <pthread.h> header file. */
 #undef HAVE_PTHREAD_H
 
-/* Have PTHREAD_PRIO_INHERIT. */
-#undef HAVE_PTHREAD_PRIO_INHERIT
-
 /* Define to enable pvrvideosink (used by pvr). */
 #undef HAVE_PVR
 
-/* Define to enable Qt elements (used by qt). */
-#undef HAVE_QT
-
-/* Define if building with QTKit */
-#undef HAVE_QTKIT
-
-/* Define if Qt eglfs integration is installed */
-#undef HAVE_QT_EGLFS
-
-/* Define if Qt iOS integration is installed */
-#undef HAVE_QT_IOS
-
-/* Define if Qt Mac integration is installed */
-#undef HAVE_QT_MAC
-
-/* Define if Qt Wayland integration is installed */
-#undef HAVE_QT_WAYLAND
-
-/* Define if Qt X11 integration is installed */
-#undef HAVE_QT_X11
+/* Define to enable QuickTime wrapper (used by qtwrapper). */
+#undef HAVE_QUICKTIME
 
 /* Define if RDTSC is available */
 #undef HAVE_RDTSC
@@ -530,6 +444,9 @@
 
 /* Define to enable rsvg decoder (used by rsvg). */
 #undef HAVE_RSVG
+
+/* Have RSVG 2.36.2 or newer */
+#undef HAVE_RSVG_2_36_2
 
 /* Define to enable rtmp library (used by rtmp). */
 #undef HAVE_RTMP
@@ -612,9 +529,6 @@
 /* Define to enable timidity midi soft synth plugin (used by timidity). */
 #undef HAVE_TIMIDITY
 
-/* Define to enable tinyalsa (used by tinyalsa). */
-#undef HAVE_TINYALSA
-
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
@@ -642,9 +556,6 @@
 /* Define to enable vo-amrwbenc library (used by vo-amrwbenc). */
 #undef HAVE_VOAMRWBENC
 
-/* Define to enable Vulkan elements (used by vulkan). */
-#undef HAVE_VULKAN
-
 /* Define to enable WASAPI plug-in (used by wasapi). */
 #undef HAVE_WASAPI
 
@@ -653,9 +564,6 @@
 
 /* Define to enable WebP (used by webp ). */
 #undef HAVE_WEBP
-
-/* Define to enable WebRTC Audio Processing (used by webrtcdsp). */
-#undef HAVE_WEBRTCDSP
 
 /* Define to enable wildmidi midi soft synth plugin (used by wildmidi). */
 #undef HAVE_WILDMIDI
@@ -690,9 +598,6 @@
 /* Define if you have X11 library */
 #undef HAVE_X11
 
-/* Define to enable x265 plug-in (used by x265). */
-#undef HAVE_X265
-
 /* Define to enable xvid plugins (used by xvid). */
 #undef HAVE_XVID
 
@@ -715,14 +620,12 @@
 /* gettext locale dir */
 #define LOCALEDIR PREFIX "\\share\\locale"
 
-/* Define to the sub-directory where libtool stores uninstalled libraries. */
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
 #undef LT_OBJDIR
 
 /* Define if the old MusePack API is used */
 #undef MPC_IS_OLD_API
-
-/* OpenCV path name */
-#undef OPENCV_PATH_NAME
 
 /* opencv install prefix */
 #undef OPENCV_PREFIX
@@ -737,7 +640,7 @@
 #define PACKAGE_NAME "GStreamer Bad Plug-ins"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "GStreamer Bad Plug-ins 1.10.4"
+#define PACKAGE_STRING "GStreamer Bad Plug-ins 1.4.5"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "gst-plugins-bad"
@@ -746,7 +649,7 @@
 #undef PACKAGE_URL
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.10.4"
+#define PACKAGE_VERSION "1.4.5"
 
 /* directory where plugins are located */
 #ifdef _DEBUG
@@ -754,10 +657,6 @@
 #else
 #  define PLUGINDIR PREFIX "\\lib\\gstreamer-0.11"
 #endif
-
-/* Define to necessary symbol if this constant uses a non-standard name on
-   your system. */
-#undef PTHREAD_CREATE_JOINABLE
 
 /* The size of `char', as computed by sizeof. */
 #undef SIZEOF_CHAR
@@ -790,7 +689,7 @@
 #undef USE_EGL_RPI
 
 /* Version number of package */
-#define VERSION "1.10.4"
+#define VERSION "1.4.5"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
@@ -803,6 +702,9 @@
 #  undef WORDS_BIGENDIAN
 # endif
 #endif
+
+/* Define to 1 if the X Window System is missing or not being used. */
+#undef X_DISPLAY_MISSING
 
 /* We need at least WinXP SP2 for __stat64 */
 #undef __MSVCRT_VERSION__

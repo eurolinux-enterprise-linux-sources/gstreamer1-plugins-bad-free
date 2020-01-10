@@ -581,4 +581,20 @@ mpegts_suite (void)
   return s;
 }
 
-GST_CHECK_MAIN (mpegts);
+int
+main (int argc, char **argv)
+{
+  int nf;
+
+  Suite *s = mpegts_suite ();
+
+  SRunner *sr = srunner_create (s);
+
+  gst_check_init (&argc, &argv);
+
+  srunner_run_all (sr, CK_NORMAL);
+  nf = srunner_ntests_failed (sr);
+  srunner_free (sr);
+
+  return nf;
+}

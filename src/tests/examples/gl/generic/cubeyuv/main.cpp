@@ -18,8 +18,12 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include <GL/gl.h>
+#include <GL/glu.h>
+#if __WIN32__ || _WIN32
+# include <GL/glext.h>
+#endif
 #include <gst/gst.h>
-#include <gst/gl/gl.h>
 
 #include <iostream>
 #include <sstream>
@@ -83,11 +87,12 @@ static void identityCallback (GstElement *src, GstBuffer  *buffer, GstElement* t
 
 
 //client reshape callback
-static gboolean reshapeCallback (void * gl_sink, void *context, GLuint width, GLuint height, gpointer data)
+static gboolean reshapeCallback (void * gl_sink, GLuint width, GLuint height, gpointer data)
 {
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
+    gluPerspective(45, (gfloat)width/(gfloat)height, 0.1, 100);
     glMatrixMode(GL_MODELVIEW);
 
     return TRUE;
@@ -95,7 +100,7 @@ static gboolean reshapeCallback (void * gl_sink, void *context, GLuint width, GL
 
 
 //client draw callback
-static gboolean drawCallback (GstElement * gl_sink, GstGLContext *context, GstSample * sample, gpointer data)
+static gboolean drawCallback (void * gl_sink, GLuint texture, GLuint width, GLuint height, gpointer data)
 {
     static GLfloat	xrot = 0;
     static GLfloat	yrot = 0;
@@ -103,21 +108,6 @@ static gboolean drawCallback (GstElement * gl_sink, GstGLContext *context, GstSa
     static GTimeVal current_time;
     static glong last_sec = current_time.tv_sec;
     static gint nbFrames = 0;
-
-    GstVideoFrame v_frame;
-    GstVideoInfo v_info;
-    guint texture = 0;
-    GstBuffer *buf = gst_sample_get_buffer (sample);
-    GstCaps *caps = gst_sample_get_caps (sample);
-
-    gst_video_info_from_caps (&v_info, caps);
-
-    if (!gst_video_frame_map (&v_frame, &v_info, buf, (GstMapFlags) (GST_MAP_READ | GST_MAP_GL))) {
-      g_warning ("Failed to map the video buffer");
-      return TRUE;
-    }
-
-    texture = *(guint *) v_frame.data[0];
 
     g_get_current_time (&current_time);
     nbFrames++ ;
@@ -143,12 +133,11 @@ static gboolean drawCallback (GstElement * gl_sink, GstGLContext *context, GstSa
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
+    glTranslatef(0.0f,0.0f,-5.0f);
+
     glRotatef(xrot,1.0f,0.0f,0.0f);
     glRotatef(yrot,0.0f,1.0f,0.0f);
     glRotatef(zrot,0.0f,0.0f,1.0f);
-
-    /* invert the y-axis to get the front face the correct way up */
-    glScalef (0.5f, -0.5f, 0.5f);
 
     glBegin(GL_QUADS);
 	      // Front Face
@@ -183,13 +172,19 @@ static gboolean drawCallback (GstElement * gl_sink, GstGLContext *context, GstSa
 	      glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f,  1.0f, -1.0f);
     glEnd();
 
-    glDisable(GL_DEPTH_TEST);
-
-    gst_video_frame_unmap (&v_frame);
-
 	xrot+=0.03f;
     yrot+=0.02f;
     zrot+=0.04f;
+
+    //return TRUE causes a postRedisplay
+    //so you have to return FALSE to synchronise to have a graphic FPS
+    //equals to the input video frame rate
+
+    //Usually, we will not always return TRUE (or FALSE)
+    //For example, if you want a fixed graphic FPS equals to 60
+    //then you have to use the timeclock to return TRUE or FALSE
+    //in order to increase or decrease the FPS in real time
+    //to reach the 60.
 
     return TRUE;
 }
@@ -230,9 +225,6 @@ gint main (gint argc, gchar *argv[])
         return -1;
     }
 
-    /* FIXME: remove once the example supports gl3 and/or gles2 */
-    g_setenv ("GST_GL_API", "opengl", FALSE);
-
     std::string video_location(argv[1]);
 
     /* initialization */
@@ -253,14 +245,21 @@ gint main (gint argc, gchar *argv[])
     GstElement* decodebin = gst_element_factory_make ("decodebin", "decodebin");
     GstElement* identity  = gst_element_factory_make ("identity", "identity0");
     GstElement* textoverlay = gst_element_factory_make ("textoverlay", "textoverlay0");
+    GstElement* glcolorscale = gst_element_factory_make ("glcolorscale", "glcolorscale0");
     GstElement* glimagesink  = gst_element_factory_make ("glimagesink", "glimagesink0");
 
 
-    if (!videosrc || !decodebin || !identity || !textoverlay || !glimagesink)
+    if (!videosrc || !decodebin || !identity || !textoverlay ||
+        !glcolorscale || !glimagesink)
     {
         g_print ("one element could not be found \n");
         return -1;
     }
+
+    GstCaps *outcaps = gst_caps_new_simple("video/x-raw",
+                                           "width", G_TYPE_INT, 640,
+                                           "height", G_TYPE_INT, 480,
+                                           NULL);
 
     /* configure elements */
     g_object_set(G_OBJECT(videosrc), "num-buffers", 800, NULL);
@@ -272,7 +271,7 @@ gint main (gint argc, gchar *argv[])
 
     /* add elements */
     gst_bin_add_many (GST_BIN (pipeline), videosrc, decodebin, identity,
-        textoverlay, glimagesink, NULL);
+        textoverlay, glcolorscale, glimagesink, NULL);
 
     /* link elements */
 	gst_element_link_pads (videosrc, "src", decodebin, "sink");
@@ -285,7 +284,10 @@ gint main (gint argc, gchar *argv[])
         return -1;
     }
 
-    gboolean link_ok = gst_element_link (textoverlay, glimagesink);
+	gst_element_link (textoverlay, glcolorscale);
+
+    gboolean link_ok = gst_element_link_filtered(glcolorscale, glimagesink, outcaps) ;
+    gst_caps_unref(outcaps) ;
     if(!link_ok)
     {
         g_warning("Failed to link textoverlay to glimagesink!\n") ;

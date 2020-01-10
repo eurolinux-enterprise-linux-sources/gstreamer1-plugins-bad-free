@@ -71,7 +71,6 @@ struct _DvbBaseBinClass {
   GstBinClass parent_class;
 
   /* signals */
-  void (*do_tune) (DvbBaseBin * dvbbasebin);
 };
 
 GType dvb_base_bin_get_type(void);

@@ -50,7 +50,6 @@
 
 #include <gst/tag/tag.h>
 #include <gst/pbutils/pbutils.h>
-#include <gst/base/gstbytereader.h>
 
 #include "gstmpegdefs.h"
 #include "gstmpegdemux.h"
@@ -90,7 +89,8 @@ enum
 
 enum
 {
-  PROP_0,
+  ARG_0,
+  ARG_SYNC,
   /* FILL ME */
 };
 
@@ -134,41 +134,41 @@ GST_STATIC_PAD_TEMPLATE ("private_%d",
     GST_PAD_SOMETIMES,
     GST_STATIC_CAPS_ANY);
 
-static void gst_ps_demux_base_init (GstPsDemuxClass * klass);
-static void gst_ps_demux_class_init (GstPsDemuxClass * klass);
-static void gst_ps_demux_init (GstPsDemux * demux);
-static void gst_ps_demux_finalize (GstPsDemux * demux);
-static void gst_ps_demux_reset (GstPsDemux * demux);
+static void gst_flups_demux_base_init (GstFluPSDemuxClass * klass);
+static void gst_flups_demux_class_init (GstFluPSDemuxClass * klass);
+static void gst_flups_demux_init (GstFluPSDemux * demux);
+static void gst_flups_demux_finalize (GstFluPSDemux * demux);
+static void gst_flups_demux_reset (GstFluPSDemux * demux);
 
-static gboolean gst_ps_demux_sink_event (GstPad * pad, GstObject * parent,
+static gboolean gst_flups_demux_sink_event (GstPad * pad, GstObject * parent,
     GstEvent * event);
-static GstFlowReturn gst_ps_demux_chain (GstPad * pad, GstObject * parent,
+static GstFlowReturn gst_flups_demux_chain (GstPad * pad, GstObject * parent,
     GstBuffer * buffer);
-static gboolean gst_ps_demux_sink_activate (GstPad * sinkpad,
+static gboolean gst_flups_demux_sink_activate (GstPad * sinkpad,
     GstObject * parent);
-static gboolean gst_ps_demux_sink_activate_mode (GstPad * pad,
+static gboolean gst_flups_demux_sink_activate_mode (GstPad * pad,
     GstObject * parent, GstPadMode mode, gboolean active);
-static void gst_ps_demux_loop (GstPad * pad);
+static void gst_flups_demux_loop (GstPad * pad);
 
-static gboolean gst_ps_demux_src_event (GstPad * pad, GstObject * parent,
+static gboolean gst_flups_demux_src_event (GstPad * pad, GstObject * parent,
     GstEvent * event);
-static gboolean gst_ps_demux_src_query (GstPad * pad, GstObject * parent,
+static gboolean gst_flups_demux_src_query (GstPad * pad, GstObject * parent,
     GstQuery * query);
 
-static GstStateChangeReturn gst_ps_demux_change_state (GstElement * element,
+static GstStateChangeReturn gst_flups_demux_change_state (GstElement * element,
     GstStateChange transition);
 
-static inline gboolean gst_ps_demux_scan_forward_ts (GstPsDemux * demux,
+static inline gboolean gst_flups_demux_scan_forward_ts (GstFluPSDemux * demux,
     guint64 * pos, SCAN_MODE mode, guint64 * rts, gint limit);
-static inline gboolean gst_ps_demux_scan_backward_ts (GstPsDemux * demux,
+static inline gboolean gst_flups_demux_scan_backward_ts (GstFluPSDemux * demux,
     guint64 * pos, SCAN_MODE mode, guint64 * rts, gint limit);
 
-static inline void gst_ps_demux_send_gap_updates (GstPsDemux * demux,
+static inline void gst_flups_demux_send_gap_updates (GstFluPSDemux * demux,
     GstClockTime new_time);
-static inline void gst_ps_demux_clear_times (GstPsDemux * demux);
+static inline void gst_flups_demux_clear_times (GstFluPSDemux * demux);
 
-static void gst_ps_demux_reset_psm (GstPsDemux * demux);
-static void gst_ps_demux_flush (GstPsDemux * demux);
+static void gst_flups_demux_reset_psm (GstFluPSDemux * demux);
+static void gst_flups_demux_flush (GstFluPSDemux * demux);
 
 static GstElementClass *parent_class = NULL;
 
@@ -177,40 +177,40 @@ static void gst_segment_set_position (GstSegment * segment, GstFormat format,
 static void gst_segment_set_duration (GstSegment * segment, GstFormat format,
     guint64 duration);
 
-/*static guint gst_ps_demux_signals[LAST_SIGNAL] = { 0 };*/
+/*static guint gst_flups_demux_signals[LAST_SIGNAL] = { 0 };*/
 
 GType
-gst_ps_demux_get_type (void)
+gst_flups_demux_get_type (void)
 {
-  static GType ps_demux_type = 0;
+  static GType flups_demux_type = 0;
 
-  if (!ps_demux_type) {
-    static const GTypeInfo ps_demux_info = {
-      sizeof (GstPsDemuxClass),
-      (GBaseInitFunc) gst_ps_demux_base_init,
+  if (!flups_demux_type) {
+    static const GTypeInfo flups_demux_info = {
+      sizeof (GstFluPSDemuxClass),
+      (GBaseInitFunc) gst_flups_demux_base_init,
       NULL,
-      (GClassInitFunc) gst_ps_demux_class_init,
+      (GClassInitFunc) gst_flups_demux_class_init,
       NULL,
       NULL,
-      sizeof (GstPsDemux),
+      sizeof (GstFluPSDemux),
       0,
-      (GInstanceInitFunc) gst_ps_demux_init,
+      (GInstanceInitFunc) gst_flups_demux_init,
       NULL
     };
 
-    ps_demux_type =
+    flups_demux_type =
         g_type_register_static (GST_TYPE_ELEMENT, "GstMpegPSDemux",
-        &ps_demux_info, 0);
+        &flups_demux_info, 0);
 
     GST_DEBUG_CATEGORY_INIT (gstflupsdemux_debug, "mpegpsdemux", 0,
         "MPEG program stream demultiplexer element");
   }
 
-  return ps_demux_type;
+  return flups_demux_type;
 }
 
 static void
-gst_ps_demux_base_init (GstPsDemuxClass * klass)
+gst_flups_demux_base_init (GstFluPSDemuxClass * klass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
@@ -229,12 +229,12 @@ gst_ps_demux_base_init (GstPsDemuxClass * klass)
   gst_element_class_add_pad_template (element_class, klass->sink_template);
 
   gst_element_class_set_static_metadata (element_class,
-      "MPEG Program Stream Demuxer", "Codec/Demuxer",
+      "The Fluendo MPEG Program Stream Demuxer", "Codec/Demuxer",
       "Demultiplexes MPEG Program Streams", "Wim Taymans <wim@fluendo.com>");
 }
 
 static void
-gst_ps_demux_class_init (GstPsDemuxClass * klass)
+gst_flups_demux_class_init (GstFluPSDemuxClass * klass)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -244,45 +244,45 @@ gst_ps_demux_class_init (GstPsDemuxClass * klass)
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
 
-  gobject_class->finalize = (GObjectFinalizeFunc) gst_ps_demux_finalize;
+  gobject_class->finalize = (GObjectFinalizeFunc) gst_flups_demux_finalize;
 
-  gstelement_class->change_state = gst_ps_demux_change_state;
+  gstelement_class->change_state = gst_flups_demux_change_state;
 }
 
 static void
-gst_ps_demux_init (GstPsDemux * demux)
+gst_flups_demux_init (GstFluPSDemux * demux)
 {
-  GstPsDemuxClass *klass = GST_PS_DEMUX_GET_CLASS (demux);
+  GstFluPSDemuxClass *klass = GST_FLUPS_DEMUX_GET_CLASS (demux);
 
   demux->sinkpad = gst_pad_new_from_template (klass->sink_template, "sink");
   gst_pad_set_event_function (demux->sinkpad,
-      GST_DEBUG_FUNCPTR (gst_ps_demux_sink_event));
+      GST_DEBUG_FUNCPTR (gst_flups_demux_sink_event));
   gst_pad_set_chain_function (demux->sinkpad,
-      GST_DEBUG_FUNCPTR (gst_ps_demux_chain));
+      GST_DEBUG_FUNCPTR (gst_flups_demux_chain));
   gst_pad_set_activate_function (demux->sinkpad,
-      GST_DEBUG_FUNCPTR (gst_ps_demux_sink_activate));
+      GST_DEBUG_FUNCPTR (gst_flups_demux_sink_activate));
   gst_pad_set_activatemode_function (demux->sinkpad,
-      GST_DEBUG_FUNCPTR (gst_ps_demux_sink_activate_mode));
+      GST_DEBUG_FUNCPTR (gst_flups_demux_sink_activate_mode));
 
   gst_element_add_pad (GST_ELEMENT (demux), demux->sinkpad);
 
   demux->streams =
-      g_malloc0 (sizeof (GstPsStream *) * (GST_PS_DEMUX_MAX_STREAMS));
+      g_malloc0 (sizeof (GstFluPSStream *) * (GST_FLUPS_DEMUX_MAX_STREAMS));
   demux->streams_found =
-      g_malloc0 (sizeof (GstPsStream *) * (GST_PS_DEMUX_MAX_STREAMS));
+      g_malloc0 (sizeof (GstFluPSStream *) * (GST_FLUPS_DEMUX_MAX_STREAMS));
   demux->found_count = 0;
 
   demux->adapter = gst_adapter_new ();
   demux->rev_adapter = gst_adapter_new ();
   demux->flowcombiner = gst_flow_combiner_new ();
 
-  gst_ps_demux_reset (demux);
+  gst_flups_demux_reset (demux);
 }
 
 static void
-gst_ps_demux_finalize (GstPsDemux * demux)
+gst_flups_demux_finalize (GstFluPSDemux * demux)
 {
-  gst_ps_demux_reset (demux);
+  gst_flups_demux_reset (demux);
   g_free (demux->streams);
   g_free (demux->streams_found);
 
@@ -294,20 +294,18 @@ gst_ps_demux_finalize (GstPsDemux * demux)
 }
 
 static void
-gst_ps_demux_reset (GstPsDemux * demux)
+gst_flups_demux_reset (GstFluPSDemux * demux)
 {
   /* Clean up the streams and pads we allocated */
   gint i;
 
-  for (i = 0; i < GST_PS_DEMUX_MAX_STREAMS; i++) {
-    GstPsStream *stream = demux->streams[i];
+  for (i = 0; i < GST_FLUPS_DEMUX_MAX_STREAMS; i++) {
+    GstFluPSStream *stream = demux->streams[i];
 
     if (stream != NULL) {
       if (stream->pad && GST_PAD_PARENT (stream->pad)) {
         gst_flow_combiner_remove_pad (demux->flowcombiner, stream->pad);
         gst_element_remove_pad (GST_ELEMENT_CAST (demux), stream->pad);
-      } else {
-        gst_object_unref (stream->pad);
       }
 
       if (stream->pending_tags)
@@ -317,7 +315,7 @@ gst_ps_demux_reset (GstPsDemux * demux)
     }
   }
   memset (demux->streams_found, 0,
-      sizeof (GstPsStream *) * (GST_PS_DEMUX_MAX_STREAMS));
+      sizeof (GstFluPSStream *) * (GST_FLUPS_DEMUX_MAX_STREAMS));
   demux->found_count = 0;
 
   gst_adapter_clear (demux->adapter);
@@ -337,21 +335,21 @@ gst_ps_demux_reset (GstPsDemux * demux)
   demux->next_dts = G_MAXUINT64;
   demux->need_no_more_pads = TRUE;
   demux->adjust_segment = TRUE;
-  gst_ps_demux_reset_psm (demux);
+  gst_flups_demux_reset_psm (demux);
   gst_segment_init (&demux->sink_segment, GST_FORMAT_UNDEFINED);
   gst_segment_init (&demux->src_segment, GST_FORMAT_TIME);
-  gst_ps_demux_flush (demux);
+  gst_flups_demux_flush (demux);
   demux->have_group_id = FALSE;
   demux->group_id = G_MAXUINT;
 }
 
-static GstPsStream *
-gst_ps_demux_create_stream (GstPsDemux * demux, gint id, gint stream_type)
+static GstFluPSStream *
+gst_flups_demux_create_stream (GstFluPSDemux * demux, gint id, gint stream_type)
 {
-  GstPsStream *stream;
+  GstFluPSStream *stream;
   GstPadTemplate *template;
   gchar *name;
-  GstPsDemuxClass *klass = GST_PS_DEMUX_GET_CLASS (demux);
+  GstFluPSDemuxClass *klass = GST_FLUPS_DEMUX_GET_CLASS (demux);
   GstCaps *caps;
   GstClockTime threshold = SEGMENT_THRESHOLD;
   GstEvent *event;
@@ -417,8 +415,7 @@ gst_ps_demux_create_stream (GstPsDemux * demux, gint id, gint stream_type)
     case ST_VIDEO_H264:
       template = klass->video_template;
       name = g_strdup_printf ("video_%02x", id);
-      caps = gst_caps_new_simple ("video/x-h264",
-          "stream-format", G_TYPE_STRING, "byte-stream", NULL);
+      caps = gst_caps_new_empty_simple ("video/x-h264");
       threshold = VIDEO_SEGMENT_THRESHOLD;
       break;
     case ST_PS_AUDIO_AC3:
@@ -457,7 +454,7 @@ gst_ps_demux_create_stream (GstPsDemux * demux, gint id, gint stream_type)
     return FALSE;
   }
 
-  stream = g_new0 (GstPsStream, 1);
+  stream = g_new0 (GstFluPSStream, 1);
   stream->id = id;
   stream->discont = TRUE;
   stream->need_segment = TRUE;
@@ -467,9 +464,9 @@ gst_ps_demux_create_stream (GstPsDemux * demux, gint id, gint stream_type)
   stream->pad = gst_pad_new_from_template (template, name);
   stream->segment_thresh = threshold;
   gst_pad_set_event_function (stream->pad,
-      GST_DEBUG_FUNCPTR (gst_ps_demux_src_event));
+      GST_DEBUG_FUNCPTR (gst_flups_demux_src_event));
   gst_pad_set_query_function (stream->pad,
-      GST_DEBUG_FUNCPTR (gst_ps_demux_src_query));
+      GST_DEBUG_FUNCPTR (gst_flups_demux_src_query));
   gst_pad_use_fixed_caps (stream->pad);
 
   /* needed for set_caps to work */
@@ -514,13 +511,13 @@ gst_ps_demux_create_stream (GstPsDemux * demux, gint id, gint stream_type)
   return stream;
 }
 
-static GstPsStream *
-gst_ps_demux_get_stream (GstPsDemux * demux, gint id, gint type)
+static GstFluPSStream *
+gst_flups_demux_get_stream (GstFluPSDemux * demux, gint id, gint type)
 {
-  GstPsStream *stream = demux->streams[id];
+  GstFluPSStream *stream = demux->streams[id];
 
   if (stream == NULL) {
-    if (!(stream = gst_ps_demux_create_stream (demux, id, type)))
+    if (!(stream = gst_flups_demux_create_stream (demux, id, type)))
       goto unknown_stream;
 
     GST_DEBUG_OBJECT (demux, "adding pad for stream id 0x%02x type 0x%02x", id,
@@ -535,7 +532,6 @@ gst_ps_demux_get_stream (GstPsDemux * demux, gint id, gint type)
        * add a whole new set of pads, drop old and no-more-pads again */
       GST_DEBUG_OBJECT (demux,
           "but already signalled no-more-pads; not adding");
-      gst_object_ref_sink (stream->pad);
     }
 
     demux->streams[id] = stream;
@@ -551,25 +547,8 @@ unknown_stream:
   }
 }
 
-static GstPsStream *
-gst_ps_demux_get_stream_from_pad (GstPsDemux * demux, GstPad * srcpad)
-{
-  gint i, count;
-
-  count = demux->found_count;
-  for (i = 0; i < count; i++) {
-    GstPsStream *stream = demux->streams_found[i];
-
-    if (stream && stream->pad == srcpad)
-      return stream;
-  }
-
-  GST_DEBUG_OBJECT (srcpad, "no stream found for pad!");
-  return NULL;
-}
-
 static inline void
-gst_ps_demux_send_segment (GstPsDemux * demux, GstPsStream * stream,
+gst_flups_demux_send_segment (GstFluPSDemux * demux, GstFluPSStream * stream,
     GstClockTime pts)
 {
   /* discont */
@@ -625,7 +604,7 @@ gst_ps_demux_send_segment (GstPsDemux * demux, GstPsStream * stream,
 }
 
 static GstFlowReturn
-gst_ps_demux_send_data (GstPsDemux * demux, GstPsStream * stream,
+gst_flups_demux_send_data (GstFluPSDemux * demux, GstFluPSStream * stream,
     GstBuffer * buf)
 {
   GstFlowReturn result;
@@ -640,7 +619,7 @@ gst_ps_demux_send_data (GstPsDemux * demux, GstPsStream * stream,
   if (G_UNLIKELY (demux->next_dts != G_MAXUINT64))
     dts = MPEGTIME_TO_GSTTIME (demux->next_dts);
 
-  gst_ps_demux_send_segment (demux, stream, pts);
+  gst_flups_demux_send_segment (demux, stream, pts);
 
   /* OK, sent new segment now prepare the buffer for sending */
   GST_BUFFER_PTS (buf) = pts;
@@ -666,7 +645,7 @@ gst_ps_demux_send_data (GstPsDemux * demux, GstPsStream * stream,
       stream->last_ts = new_time;
     }
 
-    gst_ps_demux_send_gap_updates (demux, new_time);
+    gst_flups_demux_send_gap_updates (demux, new_time);
   }
 
   /* Set the buffer discont flag, and clear discont state on the stream */
@@ -702,14 +681,14 @@ no_stream:
 }
 
 static inline void
-gst_ps_demux_mark_discont (GstPsDemux * demux, gboolean discont,
+gst_flups_demux_mark_discont (GstFluPSDemux * demux, gboolean discont,
     gboolean need_segment)
 {
   gint i, count = demux->found_count;
 
   /* mark discont on all streams */
   for (i = 0; i < count; i++) {
-    GstPsStream *stream = demux->streams_found[i];
+    GstFluPSStream *stream = demux->streams_found[i];
 
     if (G_LIKELY (stream)) {
       stream->discont |= discont;
@@ -722,13 +701,13 @@ gst_ps_demux_mark_discont (GstPsDemux * demux, gboolean discont,
 }
 
 static gboolean
-gst_ps_demux_send_event (GstPsDemux * demux, GstEvent * event)
+gst_flups_demux_send_event (GstFluPSDemux * demux, GstEvent * event)
 {
   gint i, count = demux->found_count;
   gboolean ret = FALSE;
 
   for (i = 0; i < count; i++) {
-    GstPsStream *stream = demux->streams_found[i];
+    GstFluPSStream *stream = demux->streams_found[i];
 
     if (stream) {
       if (!gst_pad_push_event (stream->pad, gst_event_ref (event))) {
@@ -748,20 +727,20 @@ gst_ps_demux_send_event (GstPsDemux * demux, GstEvent * event)
 }
 
 static gboolean
-gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
+gst_flups_demux_handle_dvd_event (GstFluPSDemux * demux, GstEvent * event)
 {
   const GstStructure *structure = gst_event_get_structure (event);
   const char *type = gst_structure_get_string (structure, "event");
   gint i;
   gchar cur_stream_name[32];
-  GstPsStream *temp = NULL;
+  GstFluPSStream *temp = NULL;
   const gchar *lang_code;
 
   if (strcmp (type, "dvd-lang-codes") == 0) {
     GST_DEBUG_OBJECT (demux, "Handling language codes event");
 
     /* Create a video pad to ensure have it before emit no more pads */
-    (void) gst_ps_demux_get_stream (demux, 0xe0, ST_VIDEO_MPEG2);
+    (void) gst_flups_demux_get_stream (demux, 0xe0, ST_VIDEO_MPEG2);
 
     /* Read out the languages for audio streams and request each one that 
      * is present */
@@ -786,7 +765,7 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
           GST_DEBUG_OBJECT (demux,
               "Audio stream %d format %d ID 0x%02x - AC3", i,
               stream_format, stream_id);
-          temp = gst_ps_demux_get_stream (demux, stream_id, ST_PS_AUDIO_AC3);
+          temp = gst_flups_demux_get_stream (demux, stream_id, ST_PS_AUDIO_AC3);
           break;
         case 0x2:
         case 0x3:
@@ -796,7 +775,7 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
           GST_DEBUG_OBJECT (demux,
               "Audio stream %d format %d ID 0x%02x - MPEG audio", i,
               stream_format, stream_id);
-          temp = gst_ps_demux_get_stream (demux, stream_id, ST_AUDIO_MPEG1);
+          temp = gst_flups_demux_get_stream (demux, stream_id, ST_AUDIO_MPEG1);
           break;
         case 0x4:
           /* LPCM */
@@ -804,7 +783,8 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
           GST_DEBUG_OBJECT (demux,
               "Audio stream %d format %d ID 0x%02x - DVD LPCM", i,
               stream_format, stream_id);
-          temp = gst_ps_demux_get_stream (demux, stream_id, ST_PS_AUDIO_LPCM);
+          temp =
+              gst_flups_demux_get_stream (demux, stream_id, ST_PS_AUDIO_LPCM);
           break;
         case 0x6:
           /* DTS */
@@ -812,7 +792,7 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
           GST_DEBUG_OBJECT (demux,
               "Audio stream %d format %d ID 0x%02x - DTS", i,
               stream_format, stream_id);
-          temp = gst_ps_demux_get_stream (demux, stream_id, ST_PS_AUDIO_DTS);
+          temp = gst_flups_demux_get_stream (demux, stream_id, ST_PS_AUDIO_DTS);
           break;
         case 0x7:
           /* FIXME: What range is SDDS? */
@@ -823,9 +803,6 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
           temp = NULL;
           continue;
       }
-
-      if (temp == NULL)
-        continue;
 
       g_snprintf (cur_stream_name, 32, "audio-%d-language", i);
       lang_code = gst_structure_get_string (structure, cur_stream_name);
@@ -858,10 +835,8 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
           0x20 + stream_id);
 
       /* Retrieve the subpicture stream to force pad creation */
-      temp = gst_ps_demux_get_stream (demux, 0x20 + stream_id,
+      temp = gst_flups_demux_get_stream (demux, 0x20 + stream_id,
           ST_PS_DVD_SUBPICTURE);
-      if (temp == NULL)
-        continue;
 
       g_snprintf (cur_stream_name, 32, "subpicture-%d-language", i);
       lang_code = gst_structure_get_string (structure, cur_stream_name);
@@ -884,7 +859,7 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
   } else {
     /* forward to all pads, e.g. dvd clut event */
     gst_event_ref (event);
-    gst_ps_demux_send_event (demux, event);
+    gst_flups_demux_send_event (demux, event);
   }
 
   gst_event_unref (event);
@@ -892,27 +867,26 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
 }
 
 static void
-gst_ps_demux_flush (GstPsDemux * demux)
+gst_flups_demux_flush (GstFluPSDemux * demux)
 {
   GST_DEBUG_OBJECT (demux, "flushing demuxer");
   gst_adapter_clear (demux->adapter);
   gst_adapter_clear (demux->rev_adapter);
   gst_pes_filter_drain (&demux->filter);
-  gst_ps_demux_clear_times (demux);
+  gst_flups_demux_clear_times (demux);
   demux->adapter_offset = G_MAXUINT64;
   demux->current_scr = G_MAXUINT64;
   demux->bytes_since_scr = 0;
 }
 
 static inline void
-gst_ps_demux_clear_times (GstPsDemux * demux)
+gst_flups_demux_clear_times (GstFluPSDemux * demux)
 {
   gint i, count = demux->found_count;
 
-  gst_flow_combiner_reset (demux->flowcombiner);
   /* Clear the last ts for all streams */
   for (i = 0; i < count; i++) {
-    GstPsStream *stream = demux->streams_found[i];
+    GstFluPSStream *stream = demux->streams_found[i];
 
     if (G_LIKELY (stream)) {
       stream->last_ts = GST_CLOCK_TIME_NONE;
@@ -921,7 +895,7 @@ gst_ps_demux_clear_times (GstPsDemux * demux)
 }
 
 static inline void
-gst_ps_demux_send_gap_updates (GstPsDemux * demux, GstClockTime new_start)
+gst_flups_demux_send_gap_updates (GstFluPSDemux * demux, GstClockTime new_start)
 {
   GstClockTime base_time, stop;
   gint i, count = demux->found_count;
@@ -940,7 +914,7 @@ gst_ps_demux_send_gap_updates (GstPsDemux * demux, GstClockTime new_start)
 
   /* FIXME: Handle reverse playback */
   for (i = 0; i < count; i++) {
-    GstPsStream *stream = demux->streams_found[i];
+    GstFluPSStream *stream = demux->streams_found[i];
 
     if (stream) {
       if (stream->last_ts == GST_CLOCK_TIME_NONE ||
@@ -949,7 +923,7 @@ gst_ps_demux_send_gap_updates (GstPsDemux * demux, GstClockTime new_start)
 
       if (stream->last_ts + stream->segment_thresh < new_start) {
         /* should send segment info before gap event */
-        gst_ps_demux_send_segment (demux, stream, GST_CLOCK_TIME_NONE);
+        gst_flups_demux_send_segment (demux, stream, GST_CLOCK_TIME_NONE);
 
         GST_LOG_OBJECT (demux,
             "Sending gap update to pad %s time %" GST_TIME_FORMAT,
@@ -964,25 +938,25 @@ gst_ps_demux_send_gap_updates (GstPsDemux * demux, GstClockTime new_start)
 }
 
 static inline gboolean
-have_open_streams (GstPsDemux * demux)
+have_open_streams (GstFluPSDemux * demux)
 {
   return (demux->streams_found[0] != NULL);
 }
 
 static gboolean
-gst_ps_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
+gst_flups_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
 {
   gboolean res = TRUE;
-  GstPsDemux *demux = GST_PS_DEMUX (parent);
+  GstFluPSDemux *demux = GST_FLUPS_DEMUX (parent);
 
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_FLUSH_START:
-      gst_ps_demux_send_event (demux, event);
+      gst_flups_demux_send_event (demux, event);
       break;
     case GST_EVENT_FLUSH_STOP:
-      gst_ps_demux_send_event (demux, event);
+      gst_flups_demux_send_event (demux, event);
       gst_segment_init (&demux->sink_segment, GST_FORMAT_UNDEFINED);
-      gst_ps_demux_flush (demux);
+      gst_flups_demux_flush (demux);
       break;
     case GST_EVENT_SEGMENT:
     {
@@ -994,7 +968,7 @@ gst_ps_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       GST_INFO_OBJECT (demux, "received segment %" GST_SEGMENT_FORMAT, segment);
 
       /* we need to emit a new segment */
-      gst_ps_demux_mark_discont (demux, TRUE, TRUE);
+      gst_flups_demux_mark_discont (demux, TRUE, TRUE);
 
       if (segment->format == GST_FORMAT_BYTES
           && demux->scr_rate_n != G_MAXUINT64
@@ -1019,7 +993,7 @@ gst_ps_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
     }
     case GST_EVENT_EOS:
       GST_INFO_OBJECT (demux, "Received EOS");
-      if (!gst_ps_demux_send_event (demux, event)
+      if (!gst_flups_demux_send_event (demux, event)
           && !have_open_streams (demux)) {
         GST_WARNING_OBJECT (demux, "EOS and no streams open");
         GST_ELEMENT_ERROR (demux, STREAM, FAILED,
@@ -1033,9 +1007,9 @@ gst_ps_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
 
       if (structure != NULL
           && gst_structure_has_name (structure, "application/x-gst-dvd")) {
-        res = gst_ps_demux_handle_dvd_event (demux, event);
+        res = gst_flups_demux_handle_dvd_event (demux, event);
       } else {
-        gst_ps_demux_send_event (demux, event);
+        gst_flups_demux_send_event (demux, event);
       }
       break;
     }
@@ -1043,7 +1017,7 @@ gst_ps_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       gst_event_unref (event);
       break;
     default:
-      gst_ps_demux_send_event (demux, event);
+      gst_flups_demux_send_event (demux, event);
       break;
   }
 
@@ -1051,7 +1025,7 @@ gst_ps_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
 }
 
 static gboolean
-gst_ps_demux_handle_seek_push (GstPsDemux * demux, GstEvent * event)
+gst_flups_demux_handle_seek_push (GstFluPSDemux * demux, GstEvent * event)
 {
   gboolean res = FALSE;
   gdouble rate;
@@ -1121,13 +1095,14 @@ not_supported:
 
 /* Binary search for requested SCR */
 static inline guint64
-find_offset (GstPsDemux * demux, guint64 scr,
+find_offset (GstFluPSDemux * demux, guint64 scr,
     guint64 min_scr, guint64 min_scr_offset,
     guint64 max_scr, guint64 max_scr_offset, int recursion_count)
 {
   guint64 scr_rate_n = max_scr_offset - min_scr_offset;
   guint64 scr_rate_d = max_scr - min_scr;
   guint64 fscr = scr;
+  gboolean found;
   guint64 offset;
 
   if (recursion_count > MAX_RECURSION_COUNT) {
@@ -1138,8 +1113,11 @@ find_offset (GstPsDemux * demux, guint64 scr,
       MIN (gst_util_uint64_scale (scr - min_scr, scr_rate_n,
           scr_rate_d), demux->sink_segment.stop);
 
-  if (!gst_ps_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &fscr, 0)) {
-    gst_ps_demux_scan_backward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
+  found = gst_flups_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
+
+  if (!found) {
+    found =
+        gst_flups_demux_scan_backward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
   }
 
   if (fscr == scr || fscr == min_scr || fscr == max_scr) {
@@ -1156,9 +1134,9 @@ find_offset (GstPsDemux * demux, guint64 scr,
 }
 
 static inline gboolean
-gst_ps_demux_do_seek (GstPsDemux * demux, GstSegment * seeksegment)
+gst_flups_demux_do_seek (GstFluPSDemux * demux, GstSegment * seeksegment)
 {
-  gboolean found;
+  gboolean found = FALSE;
   guint64 fscr, offset;
   guint64 scr = GSTTIME_TO_MPEGTIME (seeksegment->position + demux->base_time);
 
@@ -1183,18 +1161,16 @@ gst_ps_demux_do_seek (GstPsDemux * demux, GstSegment * seeksegment)
     return FALSE;
   }
 
-  found = gst_ps_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
-  if (!found)
-    found = gst_ps_demux_scan_backward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
-
   while (found && fscr < scr) {
     offset++;
-    found = gst_ps_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
+    found =
+        gst_flups_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
   }
 
   while (found && fscr > scr && offset > 0) {
     offset--;
-    found = gst_ps_demux_scan_backward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
+    found =
+        gst_flups_demux_scan_backward_ts (demux, &offset, SCAN_SCR, &fscr, 0);
   }
 
   GST_INFO_OBJECT (demux, "doing seek at offset %" G_GUINT64_FORMAT
@@ -1207,7 +1183,7 @@ gst_ps_demux_do_seek (GstPsDemux * demux, GstSegment * seeksegment)
 }
 
 static gboolean
-gst_ps_demux_handle_seek_pull (GstPsDemux * demux, GstEvent * event)
+gst_flups_demux_handle_seek_pull (GstFluPSDemux * demux, GstEvent * event)
 {
   GstFormat format;
   GstSeekFlags flags;
@@ -1238,7 +1214,7 @@ gst_ps_demux_handle_seek_pull (GstPsDemux * demux, GstEvent * event)
     /* Flush start up and downstream to make sure data flow and loops are
        idle */
     demux->flushing = TRUE;
-    gst_ps_demux_send_event (demux, gst_event_new_flush_start ());
+    gst_flups_demux_send_event (demux, gst_event_new_flush_start ());
     gst_pad_push_event (demux->sinkpad, gst_event_new_flush_start ());
   } else {
     /* Pause the pulling task */
@@ -1270,13 +1246,13 @@ gst_ps_demux_handle_seek_pull (GstPsDemux * demux, GstEvent * event)
 
   if (flush || seeksegment.position != demux->src_segment.position) {
     /* Do the actual seeking */
-    if (!gst_ps_demux_do_seek (demux, &seeksegment)) {
+    if (!gst_flups_demux_do_seek (demux, &seeksegment)) {
       return FALSE;
     }
   }
 
   /* check the limits */
-  if (seeksegment.rate > 0.0 && first_pts != G_MAXUINT64) {
+  if (seeksegment.rate > 0.0) {
     if (seeksegment.start < first_pts - demux->base_time) {
       seeksegment.start = first_pts - demux->base_time;
       seeksegment.position = seeksegment.start;
@@ -1291,11 +1267,11 @@ gst_ps_demux_handle_seek_pull (GstPsDemux * demux, GstEvent * event)
 
   if (flush) {
     /* Stop flushing, the sinks are at time 0 now */
-    gst_ps_demux_send_event (demux, gst_event_new_flush_stop (TRUE));
+    gst_flups_demux_send_event (demux, gst_event_new_flush_stop (TRUE));
   }
 
   if (flush || seeksegment.position != demux->src_segment.position) {
-    gst_ps_demux_flush (demux);
+    gst_flups_demux_flush (demux);
   }
 
   /* Ok seek succeeded, take the newly configured segment */
@@ -1309,10 +1285,10 @@ gst_ps_demux_handle_seek_pull (GstPsDemux * demux, GstEvent * event)
   }
 
   /* Tell all the stream a new segment is needed */
-  gst_ps_demux_mark_discont (demux, TRUE, TRUE);
+  gst_flups_demux_mark_discont (demux, TRUE, TRUE);
 
   gst_pad_start_task (demux->sinkpad,
-      (GstTaskFunction) gst_ps_demux_loop, demux->sinkpad, NULL);
+      (GstTaskFunction) gst_flups_demux_loop, demux->sinkpad, NULL);
 
   GST_PAD_STREAM_UNLOCK (demux->sinkpad);
 
@@ -1342,30 +1318,19 @@ seek_error:
 }
 
 static gboolean
-gst_ps_demux_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
+gst_flups_demux_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
 {
   gboolean res = FALSE;
-  GstPsDemux *demux = GST_PS_DEMUX (parent);
+  GstFluPSDemux *demux = GST_FLUPS_DEMUX (parent);
 
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_SEEK:
       if (demux->random_access) {
-        res = gst_ps_demux_handle_seek_pull (demux, event);
+        res = gst_flups_demux_handle_seek_pull (demux, event);
       } else {
-        res = gst_ps_demux_handle_seek_push (demux, event);
+        res = gst_flups_demux_handle_seek_push (demux, event);
       }
       break;
-    case GST_EVENT_RECONFIGURE:{
-      GstPsStream *stream;
-
-      stream = gst_ps_demux_get_stream_from_pad (demux, pad);
-      if (stream != NULL)
-        stream->notlinked = FALSE;
-
-      gst_event_unref (event);
-      res = TRUE;
-      break;
-    }
     default:
       res = gst_pad_push_event (demux->sinkpad, event);
       break;
@@ -1375,10 +1340,10 @@ gst_ps_demux_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
 }
 
 static gboolean
-gst_ps_demux_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
+gst_flups_demux_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
 {
   gboolean res = FALSE;
-  GstPsDemux *demux = GST_PS_DEMUX (parent);
+  GstFluPSDemux *demux = GST_FLUPS_DEMUX (parent);
 
   GST_LOG_OBJECT (demux, "Have query of type %d on pad %" GST_PTR_FORMAT,
       GST_QUERY_TYPE (query), pad);
@@ -1558,7 +1523,7 @@ not_supported:
 }
 
 static void
-gst_ps_demux_reset_psm (GstPsDemux * demux)
+gst_flups_demux_reset_psm (GstFluPSDemux * demux)
 {
   gint i;
 
@@ -1567,7 +1532,7 @@ gst_ps_demux_reset_psm (GstPsDemux * demux)
     demux->psm[i] = type;
 
   /* Initialize all fields to -1 first */
-  FILL_TYPE (0x00, GST_PS_DEMUX_MAX_PSM - 1, -1);
+  FILL_TYPE (0x00, GST_FLUPS_DEMUX_MAX_PSM - 1, -1);
 
   FILL_TYPE (0x20, 0x3f, ST_PS_DVD_SUBPICTURE);
 
@@ -1609,7 +1574,7 @@ gst_ps_demux_reset_psm (GstPsDemux * demux)
 #define PACK_START_SIZE     21
 
 static GstFlowReturn
-gst_ps_demux_parse_pack_start (GstPsDemux * demux)
+gst_flups_demux_parse_pack_start (GstFluPSDemux * demux)
 {
   const guint8 *data;
   guint length;
@@ -1876,7 +1841,7 @@ need_more_data:
  */
 
 static GstFlowReturn
-gst_ps_demux_parse_sys_head (GstPsDemux * demux)
+gst_flups_demux_parse_sys_head (GstFluPSDemux * demux)
 {
   guint16 length;
   const guint8 *data;
@@ -2062,50 +2027,44 @@ need_more_data:
 }
 
 static GstFlowReturn
-gst_ps_demux_parse_psm (GstPsDemux * demux)
+gst_flups_demux_parse_psm (GstFluPSDemux * demux)
 {
-  guint16 psm_length, info_length = 0, es_map_length = 0;
+  guint16 length = 0, info_length = 0, es_map_length = 0;
   guint8 psm_version = 0;
-  GstByteReader br;
+  const guint8 *data, *es_map_base;
 #ifndef GST_DISABLE_GST_DEBUG
   gboolean applicable;
 #endif
 
-  /* Need at least 6 bytes for start code + length */
   if (gst_adapter_available (demux->adapter) < 6)
     goto need_more_data;
 
-  {
-    const guint8 *data;
+  /* start code + length */
+  data = gst_adapter_map (demux->adapter, 6);
 
-    /* start code + length */
-    data = gst_adapter_map (demux->adapter, 6);
-    /* skip start code */
-    data += 4;
-    psm_length = GST_READ_UINT16_BE (data);
-    GST_DEBUG_OBJECT (demux, "PSM length %u", psm_length);
+  /* skip start code */
+  data += 4;
 
-    if (G_UNLIKELY (psm_length > 0x3FA))
-      goto psm_len_error;
-    psm_length += 6;            /* Add start code + size to length */
+  length = GST_READ_UINT16_BE (data);
+  GST_DEBUG_OBJECT (demux, "length %u", length);
 
-    gst_adapter_unmap (demux->adapter);
+  if (G_UNLIKELY (length > 0x3FA))
+    goto psm_len_error;
 
-    if (gst_adapter_available (demux->adapter) < psm_length)
-      goto need_more_data;
+  length += 6;
 
-    data = gst_adapter_map (demux->adapter, psm_length);
+  gst_adapter_unmap (demux->adapter);
 
-    gst_byte_reader_init (&br, data, psm_length);
-  }
+  if (gst_adapter_available (demux->adapter) < length)
+    goto need_more_data;
+
+  data = gst_adapter_map (demux->adapter, length);
 
   /* skip start code and length */
-  if (!gst_byte_reader_skip (&br, 6))
-    goto fail_invalid;
+  data += 6;
 
   /* Read PSM applicable bit together with version */
-  if (!gst_byte_reader_get_uint8 (&br, &psm_version))
-    goto fail_invalid;
+  psm_version = GST_READ_UINT8 (data);
 #ifndef GST_DISABLE_GST_DEBUG
   applicable = (psm_version & 0x80) >> 7;
 #endif
@@ -2113,70 +2072,62 @@ gst_ps_demux_parse_psm (GstPsDemux * demux)
   GST_DEBUG_OBJECT (demux, "PSM version %u (applicable now %u)", psm_version,
       applicable);
 
-  /* Jump over the next byte (marker bit) */
-  if (!gst_byte_reader_skip (&br, 1))
-    goto fail_invalid;
+  /* Jump over version and marker bit */
+  data += 2;
 
   /* Read PS info length */
-  if (!gst_byte_reader_get_uint16_be (&br, &info_length))
-    goto fail_invalid;
+  info_length = GST_READ_UINT16_BE (data);
+  /* Cap it to PSM length - needed bytes for ES map length and CRC */
+  info_length = MIN (length - 16, info_length);
   GST_DEBUG_OBJECT (demux, "PS info length %u bytes", info_length);
-  /* Skip the PS info, we don't use it */
-  if (!gst_byte_reader_skip (&br, info_length))
-    goto fail_invalid;
+
+  /* Jump over that section */
+  data += (2 + info_length);
 
   /* Read ES map length */
-  if (!gst_byte_reader_get_uint16_be (&br, &es_map_length))
-    goto fail_invalid;
+  es_map_length = GST_READ_UINT16_BE (data);
+  /* Cap it to PSM remaining length -  CRC */
+  es_map_length = MIN (length - (16 + info_length), es_map_length);
   GST_DEBUG_OBJECT (demux, "ES map length %u bytes", es_map_length);
 
+  /* Jump over the size */
+  data += 2;
+
   /* Now read the ES map */
-  {
-    GstByteReader es_map_br;
-    if (!gst_byte_reader_get_sub_reader (&br, &es_map_br, es_map_length))
-      goto fail_invalid;
+  es_map_base = data;
+  while (es_map_base + 4 <= data + es_map_length) {
+    guint8 stream_type = 0, stream_id = 0;
+    guint16 stream_info_length = 0;
 
-    while (gst_byte_reader_get_remaining (&es_map_br) >= 4) {
-      guint8 stream_type = 0, stream_id = 0;
-      guint16 stream_info_length = 0;
+    stream_type = GST_READ_UINT8 (es_map_base);
+    es_map_base++;
+    stream_id = GST_READ_UINT8 (es_map_base);
+    es_map_base++;
+    stream_info_length = GST_READ_UINT16_BE (es_map_base);
+    es_map_base += 2;
+    /* Cap stream_info_length */
+    stream_info_length = MIN (data + es_map_length - es_map_base,
+        stream_info_length);
 
-      if (!gst_byte_reader_get_uint8 (&es_map_br, &stream_type) ||
-          !gst_byte_reader_get_uint8 (&es_map_br, &stream_id) ||
-          !gst_byte_reader_get_uint16_be (&es_map_br, &stream_info_length))
-        break;
-
-      GST_DEBUG_OBJECT (demux,
-          "Stream type %02X with id %02X and %u bytes info", stream_type,
-          stream_id, stream_info_length);
-
-      if (G_LIKELY (stream_id != 0xbd))
-        demux->psm[stream_id] = stream_type;
-      else {
-        /* Ignore stream type for private_stream_1 and discover it looking at
-         * the stream data.
-         * Fixes demuxing some clips with lpcm that was wrongly declared as
-         * mpeg audio */
-        GST_DEBUG_OBJECT (demux, "stream type for private_stream_1 ignored");
-      }
-
-      /* FIXME: We could use the descriptors instead of skipping them */
-      if (!gst_byte_reader_skip (&es_map_br, stream_info_length))
-        break;
+    GST_DEBUG_OBJECT (demux, "Stream type %02X with id %02X and %u bytes info",
+        stream_type, stream_id, stream_info_length);
+    if (G_LIKELY (stream_id != 0xbd))
+      demux->psm[stream_id] = stream_type;
+    else {
+      /* Ignore stream type for private_stream_1 and discover it looking at
+       * the stream data.
+       * Fixes demuxing some clips with lpcm that was wrongly declared as
+       * mpeg audio */
+      GST_DEBUG_OBJECT (demux, "stream type for private_stream_1 ignored");
     }
+    es_map_base += stream_info_length;
   }
-  /* We ignore the 4-byte CRC at the end */
 
   gst_adapter_unmap (demux->adapter);
-  gst_adapter_flush (demux->adapter, psm_length);
-  ADAPTER_OFFSET_FLUSH (psm_length);
+  gst_adapter_flush (demux->adapter, length);
+  ADAPTER_OFFSET_FLUSH (length);
   return GST_FLOW_OK;
 
-fail_invalid:
-  GST_DEBUG_OBJECT (demux, "Failed to parse PSM. Skipping");
-  gst_adapter_unmap (demux->adapter);
-  gst_adapter_flush (demux->adapter, psm_length);
-  ADAPTER_OFFSET_FLUSH (psm_length);
-  return GST_FLOW_LOST_SYNC;
 psm_len_error:
   {
     GST_DEBUG_OBJECT (demux, "error in PSM length");
@@ -2191,13 +2142,13 @@ need_more_data:
 }
 
 static void
-gst_ps_demux_resync_cb (GstPESFilter * filter, GstPsDemux * demux)
+gst_flups_demux_resync_cb (GstPESFilter * filter, GstFluPSDemux * demux)
 {
 }
 
 static GstFlowReturn
-gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
-    GstBuffer * buffer, GstPsDemux * demux)
+gst_flups_demux_data_cb (GstPESFilter * filter, gboolean first,
+    GstBuffer * buffer, GstFluPSDemux * demux)
 {
   GstBuffer *out_buf;
   GstFlowReturn ret = GST_FLOW_OK;
@@ -2207,10 +2158,13 @@ gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
   GstMapInfo map;
   gsize datalen;
   guint offset = 0;
+
   gst_buffer_map (buffer, &map, GST_MAP_READ);
   datalen = map.size;
+
   start_code = filter->start_code;
   id = filter->id;
+
   if (first) {
     /* find the stream type */
     stream_type = demux->psm[id];
@@ -2221,6 +2175,7 @@ gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
          * (see ftp://ftp.mplayerhq.hu/MPlayer/samples/MPEG-VOB/vdr-AC3) */
         if (datalen >= 4) {
           guint hdr = GST_READ_UINT32_BE (map.data);
+
           if (G_UNLIKELY ((hdr & 0xffff0000) == AC3_SYNC_WORD)) {
             id = 0x80;
             stream_type = demux->psm[id] = ST_GST_AUDIO_RAWA52;
@@ -2232,8 +2187,10 @@ gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
           /* new id is in the first byte */
           id = map.data[offset++];
           datalen--;
+
           /* and remap */
           stream_type = demux->psm[id];
+
           /* Now, if it's a subpicture stream - no more, otherwise
            * take the first byte too, since it's the frame count in audio
            * streams and our backwards compat convention is to strip it off */
@@ -2241,6 +2198,7 @@ gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
             /* Number of audio frames in this packet */
 #ifndef GST_DISABLE_GST_DEBUG
             guint8 nframes;
+
             nframes = map.data[offset];
             GST_LOG_OBJECT (demux, "private type 0x%02x, %d frames", id,
                 nframes);
@@ -2248,8 +2206,8 @@ gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
             offset++;
             datalen--;
           } else {
-            GST_LOG_OBJECT (demux, "private type 0x%02x, stream type %d",
-                id, stream_type);
+            GST_LOG_OBJECT (demux, "private type 0x%02x, stream type %d", id,
+                stream_type);
           }
         }
       }
@@ -2258,19 +2216,20 @@ gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
     }
     if (filter->pts != -1) {
       demux->next_pts = filter->pts + demux->scr_adjust;
-      GST_LOG_OBJECT (demux, "stream 0x%02x PTS = orig %" G_GUINT64_FORMAT
-          " (%" G_GUINT64_FORMAT ")", id, filter->pts, demux->next_pts);
+      GST_LOG_OBJECT (demux, "PTS = %" G_GUINT64_FORMAT
+          "(%" G_GUINT64_FORMAT ")", filter->pts, demux->next_pts);
     } else
       demux->next_pts = G_MAXUINT64;
+
     if (filter->dts != -1) {
       demux->next_dts = filter->dts + demux->scr_adjust;
-      GST_LOG_OBJECT (demux, "stream 0x%02x DTS = orig %" G_GUINT64_FORMAT
-          " (%" G_GUINT64_FORMAT ")", id, filter->dts, demux->next_dts);
     } else {
       demux->next_dts = demux->next_pts;
     }
+    GST_LOG_OBJECT (demux, "DTS = orig %" G_GUINT64_FORMAT
+        " (%" G_GUINT64_FORMAT ")", filter->dts, demux->next_dts);
 
-    demux->current_stream = gst_ps_demux_get_stream (demux, id, stream_type);
+    demux->current_stream = gst_flups_demux_get_stream (demux, id, stream_type);
   }
 
   if (G_UNLIKELY (demux->current_stream == NULL)) {
@@ -2298,7 +2257,8 @@ gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
   if (demux->current_stream->notlinked == FALSE) {
     out_buf =
         gst_buffer_copy_region (buffer, GST_BUFFER_COPY_ALL, offset, datalen);
-    ret = gst_ps_demux_send_data (demux, demux->current_stream, out_buf);
+
+    ret = gst_flups_demux_send_data (demux, demux->current_stream, out_buf);
     if (ret == GST_FLOW_NOT_LINKED) {
       demux->current_stream->notlinked = TRUE;
     }
@@ -2307,7 +2267,9 @@ gst_ps_demux_data_cb (GstPESFilter * filter, gboolean first,
 done:
   gst_buffer_unmap (buffer, &map);
   gst_buffer_unref (buffer);
+
   return ret;
+
   /* ERRORS */
 unknown_stream_type:
   {
@@ -2318,20 +2280,24 @@ unknown_stream_type:
 }
 
 static gboolean
-gst_ps_demux_resync (GstPsDemux * demux, gboolean save)
+gst_flups_demux_resync (GstFluPSDemux * demux, gboolean save)
 {
   const guint8 *data;
   gint avail;
   guint32 code;
   gint offset;
   gboolean found;
+
   avail = gst_adapter_available (demux->adapter);
   if (G_UNLIKELY (avail < 4))
     goto need_data;
+
   /* Common case, read 4 bytes an check it */
   data = gst_adapter_map (demux->adapter, 4);
+
   /* read currect code */
   code = GST_READ_UINT32_BE (data);
+
   /* The common case is that the sync code is at 0 bytes offset */
   if (G_LIKELY ((code & 0xffffff00) == 0x100L)) {
     GST_LOG_OBJECT (demux, "Found resync code %08x after 0 bytes", code);
@@ -2345,12 +2311,16 @@ gst_ps_demux_resync (GstPsDemux * demux, gboolean save)
   offset = 4;
   if (offset >= avail)
     goto need_data;             /* Not enough data to find sync */
+
   data = gst_adapter_map (demux->adapter, avail);
+
   do {
     code = (code << 8) | data[offset++];
     found = (code & 0xffffff00) == 0x100L;
   } while (offset < avail && !found);
+
   gst_adapter_unmap (demux->adapter);
+
   if (!save || demux->sink_segment.rate >= 0.0) {
     GST_LOG_OBJECT (demux, "flushing %d bytes", offset - 4);
     /* forward playback, we can discard and flush the skipped bytes */
@@ -2381,6 +2351,7 @@ gst_ps_demux_resync (GstPsDemux * demux, gboolean save)
   }
 
   return found;
+
 need_data:
   {
     GST_LOG_OBJECT (demux, "we need more data for resync %d", avail);
@@ -2389,78 +2360,81 @@ need_data:
 }
 
 static inline gboolean
-gst_ps_demux_is_pes_sync (guint32 sync)
+gst_flups_demux_is_pes_sync (guint32 sync)
 {
   return ((sync & 0xfc) == 0xbc) ||
       ((sync & 0xe0) == 0xc0) || ((sync & 0xf0) == 0xe0);
 }
 
 static inline gboolean
-gst_ps_demux_scan_ts (GstPsDemux * demux, const guint8 * data,
-    SCAN_MODE mode, guint64 * rts, const guint8 * end)
+gst_flups_demux_scan_ts (GstFluPSDemux * demux, const guint8 * data,
+    SCAN_MODE mode, guint64 * rts)
 {
   gboolean ret = FALSE;
   guint32 scr1, scr2;
   guint64 scr;
   guint64 pts, dts;
   guint32 code;
-  guint16 len;
+
   /* read the 4 bytes for the sync code */
   code = GST_READ_UINT32_BE (data);
   if (G_LIKELY (code != ID_PS_PACK_START_CODE))
     goto beach;
-  if (data + 12 > end)
-    goto beach;
+
   /* skip start code */
   data += 4;
+
   scr1 = GST_READ_UINT32_BE (data);
   scr2 = GST_READ_UINT32_BE (data + 4);
+
   /* start parsing the stream */
   if ((*data & 0xc0) == 0x40) {
-    /* MPEG-2 PACK header */
     guint32 scr_ext;
     guint32 next32;
     guint8 stuffing_bytes;
+
     /* :2=01 ! scr:3 ! marker:1==1 ! scr:15 ! marker:1==1 ! scr:15 */
+
     /* check markers */
     if ((scr1 & 0xc4000400) != 0x44000400)
       goto beach;
+
     scr = ((guint64) scr1 & 0x38000000) << 3;
     scr |= ((guint64) scr1 & 0x03fff800) << 4;
     scr |= ((guint64) scr1 & 0x000003ff) << 5;
     scr |= ((guint64) scr2 & 0xf8000000) >> 27;
+
     /* marker:1==1 ! scr_ext:9 ! marker:1==1 */
     if ((scr2 & 0x04010000) != 0x04010000)
       goto beach;
+
     scr_ext = (scr2 & 0x03fe0000) >> 17;
+
     if (scr_ext) {
       scr = (scr * 300 + scr_ext % 300) / 300;
     }
     /* SCR has been converted into units of 90Khz ticks to make it comparable
        to DTS/PTS, that also implies 1 tick rounding error */
     data += 6;
-
-    if (data + 4 > end)
-      goto beach;
     /* PMR:22 ! :2==11 ! reserved:5 ! stuffing_len:3 */
     next32 = GST_READ_UINT32_BE (data);
     if ((next32 & 0x00000300) != 0x00000300)
       goto beach;
+
     stuffing_bytes = (next32 & 0x07);
     data += 4;
-    if (data + stuffing_bytes > end)
-      goto beach;
     while (stuffing_bytes--) {
       if (*data++ != 0xff)
         goto beach;
     }
   } else {
-    /* MPEG-1 pack header */
     /* check markers */
     if ((scr1 & 0xf1000100) != 0x21000100)
       goto beach;
+
     if ((scr2 & 0x01800001) != 0x01800001)
       goto beach;
+
     /* :4=0010 ! scr:3 ! marker:1==1 ! scr:15 ! marker:1==1 ! scr:15 ! marker:1==1 */
     scr = ((guint64) scr1 & 0x0e000000) << 5;
     scr |= ((guint64) scr1 & 0x00fffe00) << 6;
@@ -2472,32 +2446,13 @@ gst_ps_demux_scan_ts (GstPsDemux * demux, const guint8 * data,
   if (mode == SCAN_SCR) {
     *rts = scr;
     ret = TRUE;
-    goto beach;
   }
 
-  /* Possible optional System header here */
-  if (data + 8 > end)
-    goto beach;
-
+  /* read the 4 bytes for the PES sync code */
   code = GST_READ_UINT32_BE (data);
-  len = GST_READ_UINT16_BE (data + 4);
-  if (code == ID_PS_SYSTEM_HEADER_START_CODE) {
-    /* Found a system header, skip it */
-    /* Check for sufficient data - system header, plus enough
-     * left over for the PES packet header */
-    if (data + 6 + len + 6 > end)
-      return FALSE;
-    data += len + 6;
-    /* read the 4 bytes for the PES sync code */
-    code = GST_READ_UINT32_BE (data);
-    len = GST_READ_UINT16_BE (data + 4);
-  }
-
-  /* Check we have enough data left for reading the PES packet */
-  if (data + 6 + len > end)
-    return FALSE;
-  if (!gst_ps_demux_is_pes_sync (code))
+  if (!gst_flups_demux_is_pes_sync (code))
     goto beach;
+
   switch (code) {
     case ID_PS_PROGRAM_STREAM_MAP:
     case ID_PRIVATE_STREAM_2:
@@ -2514,7 +2469,9 @@ gst_ps_demux_scan_ts (GstPsDemux * demux, const guint8 * data,
 
   /* skip sync code and size */
   data += 6;
+
   pts = dts = -1;
+
   /* stuffing bits, first two bits are '10' for mpeg2 pes so this code is
    * not triggered. */
   while (TRUE) {
@@ -2526,6 +2483,7 @@ gst_ps_demux_scan_ts (GstPsDemux * demux, const guint8 * data,
   /* STD buffer size, never for mpeg2 */
   if ((*data & 0xc0) == 0x40)
     data += 2;
+
   /* PTS but no DTS, never for mpeg2 */
   if ((*data & 0xf0) == 0x20) {
     READ_TS (data, pts, beach);
@@ -2537,6 +2495,7 @@ gst_ps_demux_scan_ts (GstPsDemux * demux, const guint8 * data,
   } else if ((*data & 0xc0) == 0x80) {
     /* mpeg2 case */
     guchar flags;
+
     /* 2: '10'
      * 2: PES_scrambling_control
      * 1: PES_priority
@@ -2545,8 +2504,10 @@ gst_ps_demux_scan_ts (GstPsDemux * demux, const guint8 * data,
      * 1: original_or_copy
      */
     flags = *data++;
+
     if ((flags & 0xc0) != 0x80)
       goto beach;
+
     /* 2: PTS_DTS_flags
      * 1: ESCR_flag
      * 1: ES_rate_flag
@@ -2556,11 +2517,14 @@ gst_ps_demux_scan_ts (GstPsDemux * demux, const guint8 * data,
      * 1: PES_extension_flag
      */
     flags = *data++;
+
     /* 8: PES_header_data_length */
     data++;
+
     /* only DTS: this is invalid */
     if ((flags & 0xc0) == 0x40)
       goto beach;
+
     /* check for PTS */
     if ((flags & 0x80)) {
       READ_TS (data, pts, beach);
@@ -2585,7 +2549,7 @@ beach:
 }
 
 static inline gboolean
-gst_ps_demux_scan_forward_ts (GstPsDemux * demux, guint64 * pos,
+gst_flups_demux_scan_forward_ts (GstFluPSDemux * demux, guint64 * pos,
     SCAN_MODE mode, guint64 * rts, gint limit)
 {
   GstFlowReturn ret = GST_FLOW_OK;
@@ -2597,21 +2561,24 @@ gst_ps_demux_scan_forward_ts (GstPsDemux * demux, guint64 * pos,
   guint cursor, to_read = BLOCK_SZ;
   guint end_scan;
   GstMapInfo map;
+
   do {
-    /* Check we can get at least scan_sz bytes */
     if (offset + scan_sz > demux->sink_segment.stop)
       return FALSE;
-    /* Don't go further than 'limit' bytes */
+
     if (limit && offset > *pos + limit)
       return FALSE;
+
     if (offset + to_read > demux->sink_segment.stop)
       to_read = demux->sink_segment.stop - offset;
+
     /* read some data */
     buffer = NULL;
     ret = gst_pad_pull_range (demux->sinkpad, offset, to_read, &buffer);
     if (G_UNLIKELY (ret != GST_FLOW_OK))
       return FALSE;
     gst_buffer_map (buffer, &map, GST_MAP_READ);
+
     /* may get a short buffer at the end of the file */
     if (G_UNLIKELY (map.size <= scan_sz)) {
       gst_buffer_unmap (buffer, &map);
@@ -2620,15 +2587,16 @@ gst_ps_demux_scan_forward_ts (GstPsDemux * demux, guint64 * pos,
     }
 
     end_scan = map.size - scan_sz;
+
     /* scan the block */
     for (cursor = 0; !found && cursor <= end_scan; cursor++) {
-      found = gst_ps_demux_scan_ts (demux, map.data + cursor, mode, &ts,
-          map.data + map.size);
+      found = gst_flups_demux_scan_ts (demux, map.data + cursor, mode, &ts);
     }
 
     /* done with the buffer, unref it */
     gst_buffer_unmap (buffer, &map);
     gst_buffer_unref (buffer);
+
     if (found) {
       *rts = ts;
       *pos = offset + cursor - 1;
@@ -2636,11 +2604,12 @@ gst_ps_demux_scan_forward_ts (GstPsDemux * demux, guint64 * pos,
       offset += cursor;
     }
   } while (!found && offset < demux->sink_segment.stop);
+
   return found;
 }
 
 static inline gboolean
-gst_ps_demux_scan_backward_ts (GstPsDemux * demux, guint64 * pos,
+gst_flups_demux_scan_backward_ts (GstFluPSDemux * demux, guint64 * pos,
     SCAN_MODE mode, guint64 * rts, gint limit)
 {
   GstFlowReturn ret = GST_FLOW_OK;
@@ -2653,13 +2622,14 @@ gst_ps_demux_scan_backward_ts (GstPsDemux * demux, guint64 * pos,
   guint start_scan;
   guint8 *data;
   GstMapInfo map;
+
   do {
-    /* Check we have at least scan_sz bytes available */
     if (offset < scan_sz - 1)
       return FALSE;
-    /* Don't go backward past the start or 'limit' bytes */
-    if (limit && offset + limit < *pos)
+
+    if (limit && offset < *pos - limit)
       return FALSE;
+
     if (offset > BLOCK_SZ)
       offset -= BLOCK_SZ;
     else {
@@ -2671,7 +2641,9 @@ gst_ps_demux_scan_backward_ts (GstPsDemux * demux, guint64 * pos,
     ret = gst_pad_pull_range (demux->sinkpad, offset, to_read, &buffer);
     if (G_UNLIKELY (ret != GST_FLOW_OK))
       return FALSE;
+
     gst_buffer_map (buffer, &map, GST_MAP_READ);
+
     /* may get a short buffer at the end of the file */
     if (G_UNLIKELY (map.size <= scan_sz)) {
       gst_buffer_unmap (buffer, &map);
@@ -2681,26 +2653,28 @@ gst_ps_demux_scan_backward_ts (GstPsDemux * demux, guint64 * pos,
 
     start_scan = map.size - scan_sz;
     data = map.data + start_scan;
+
     /* scan the block */
     for (cursor = (start_scan + 1); !found && cursor > 0; cursor--) {
-      found = gst_ps_demux_scan_ts (demux, data--, mode, &ts,
-          map.data + map.size);
+      found = gst_flups_demux_scan_ts (demux, data--, mode, &ts);
     }
 
     /* done with the buffer, unref it */
     gst_buffer_unmap (buffer, &map);
     gst_buffer_unref (buffer);
+
     if (found) {
       *rts = ts;
       *pos = offset + cursor;
     }
 
   } while (!found && offset > 0);
+
   return found;
 }
 
 static inline gboolean
-gst_ps_sink_get_duration (GstPsDemux * demux)
+gst_flups_sink_get_duration (GstFluPSDemux * demux)
 {
   gboolean res = FALSE;
   GstPad *peer;
@@ -2709,51 +2683,58 @@ gst_ps_sink_get_duration (GstPsDemux * demux)
   guint64 offset;
   guint i;
   guint64 scr = 0;
+
   /* init the sink segment */
   gst_segment_init (&demux->sink_segment, format);
+
   /* get peer to figure out length */
   if ((peer = gst_pad_get_peer (demux->sinkpad)) == NULL)
     goto beach;
+
   res = gst_pad_query_duration (peer, format, &length);
   gst_object_unref (peer);
+
   if (!res || length <= 0)
     goto beach;
+
   GST_DEBUG_OBJECT (demux, "file length %" G_GINT64_FORMAT, length);
+
   /* update the sink segment */
   demux->sink_segment.stop = length;
   gst_segment_set_duration (&demux->sink_segment, format, length);
   gst_segment_set_position (&demux->sink_segment, format, 0);
+
   /* Scan for notorious SCR and PTS to calculate the duration */
   /* scan for first SCR in the stream */
   offset = demux->sink_segment.start;
-  gst_ps_demux_scan_forward_ts (demux, &offset, SCAN_SCR,
-      &demux->first_scr, DURATION_SCAN_LIMIT);
-  GST_DEBUG_OBJECT (demux,
-      "First SCR: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
-      " in packet starting at %" G_GUINT64_FORMAT, demux->first_scr,
-      GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->first_scr)), offset);
+  gst_flups_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &demux->first_scr,
+      DURATION_SCAN_LIMIT);
+  GST_DEBUG_OBJECT (demux, "First SCR: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
+      " in packet starting at %" G_GUINT64_FORMAT,
+      demux->first_scr, GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->first_scr)),
+      offset);
   demux->first_scr_offset = offset;
   /* scan for last SCR in the stream */
   offset = demux->sink_segment.stop;
-  gst_ps_demux_scan_backward_ts (demux, &offset, SCAN_SCR,
-      &demux->last_scr, DURATION_SCAN_LIMIT);
-  GST_DEBUG_OBJECT (demux,
-      "Last SCR: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
-      " in packet starting at %" G_GUINT64_FORMAT, demux->last_scr,
-      GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->last_scr)), offset);
+  gst_flups_demux_scan_backward_ts (demux, &offset, SCAN_SCR,
+      &demux->last_scr, 0);
+  GST_DEBUG_OBJECT (demux, "Last SCR: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
+      " in packet starting at %" G_GUINT64_FORMAT,
+      demux->last_scr, GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->last_scr)),
+      offset);
   demux->last_scr_offset = offset;
   /* scan for first PTS in the stream */
   offset = demux->sink_segment.start;
-  gst_ps_demux_scan_forward_ts (demux, &offset, SCAN_PTS,
-      &demux->first_pts, DURATION_SCAN_LIMIT);
-  GST_DEBUG_OBJECT (demux,
-      "First PTS: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
-      " in packet starting at %" G_GUINT64_FORMAT, demux->first_pts,
-      GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->first_pts)), offset);
+  gst_flups_demux_scan_forward_ts (demux, &offset, SCAN_PTS, &demux->first_pts,
+      DURATION_SCAN_LIMIT);
+  GST_DEBUG_OBJECT (demux, "First PTS: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
+      " in packet starting at %" G_GUINT64_FORMAT,
+      demux->first_pts, GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->first_pts)),
+      offset);
   if (demux->first_pts != G_MAXUINT64) {
     /* scan for last PTS in the stream */
     offset = demux->sink_segment.stop;
-    gst_ps_demux_scan_backward_ts (demux, &offset, SCAN_PTS,
+    gst_flups_demux_scan_backward_ts (demux, &offset, SCAN_PTS,
         &demux->last_pts, DURATION_SCAN_LIMIT);
     GST_DEBUG_OBJECT (demux,
         "Last PTS: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
@@ -2767,15 +2748,15 @@ gst_ps_sink_get_duration (GstPsDemux * demux)
     offset = demux->first_scr_offset;
     for (i = 0; i < 10; i++) {
       offset++;
-      gst_ps_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &scr, 0);
+      gst_flups_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &scr, 0);
       if (scr < demux->last_scr) {
         demux->first_scr = scr;
         demux->first_scr_offset = offset;
         /* Start demuxing from the right place */
         demux->sink_segment.position = offset;
         GST_DEBUG_OBJECT (demux, "Replaced First SCR: %" G_GINT64_FORMAT
-            " %" GST_TIME_FORMAT " in packet starting at %"
-            G_GUINT64_FORMAT, demux->first_scr,
+            " %" GST_TIME_FORMAT " in packet starting at %" G_GUINT64_FORMAT,
+            demux->first_scr,
             GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->first_scr)), offset);
         break;
       }
@@ -2785,6 +2766,7 @@ gst_ps_sink_get_duration (GstPsDemux * demux)
   demux->base_time = MPEGTIME_TO_GSTTIME (demux->first_scr);
   demux->scr_rate_n = demux->last_scr_offset - demux->first_scr_offset;
   demux->scr_rate_d = demux->last_scr - demux->first_scr;
+
   if (G_LIKELY (demux->first_pts != G_MAXUINT64 &&
           demux->last_pts != G_MAXUINT64)) {
     /* update the src segment */
@@ -2801,17 +2783,20 @@ gst_ps_sink_get_duration (GstPsDemux * demux)
       &demux->sink_segment);
   GST_INFO_OBJECT (demux, "src segment configured %" GST_SEGMENT_FORMAT,
       &demux->src_segment);
+
   res = TRUE;
+
 beach:
   return res;
 }
 
 static inline GstFlowReturn
-gst_ps_demux_pull_block (GstPad * pad, GstPsDemux * demux,
+gst_flups_demux_pull_block (GstPad * pad, GstFluPSDemux * demux,
     guint64 offset, guint size)
 {
-  GstFlowReturn ret;
+  GstFlowReturn ret = GST_FLOW_OK;
   GstBuffer *buffer = NULL;
+
   ret = gst_pad_pull_range (pad, offset, size, &buffer);
   if (G_UNLIKELY (ret != GST_FLOW_OK)) {
     GST_DEBUG_OBJECT (demux, "pull range at %" G_GUINT64_FORMAT
@@ -2820,29 +2805,34 @@ gst_ps_demux_pull_block (GstPad * pad, GstPsDemux * demux,
   } else
     GST_LOG_OBJECT (demux, "pull range at %" G_GUINT64_FORMAT
         " size %u done", offset, size);
+
   if (demux->sink_segment.rate < 0) {
     GST_LOG_OBJECT (demux, "setting discont flag on backward rate");
     GST_BUFFER_FLAG_SET (buffer, GST_BUFFER_FLAG_DISCONT);
   }
-  ret = gst_ps_demux_chain (pad, GST_OBJECT (demux), buffer);
+  ret = gst_flups_demux_chain (pad, GST_OBJECT (demux), buffer);
+
 beach:
   return ret;
 }
 
 static void
-gst_ps_demux_loop (GstPad * pad)
+gst_flups_demux_loop (GstPad * pad)
 {
-  GstPsDemux *demux;
+  GstFluPSDemux *demux;
   GstFlowReturn ret = GST_FLOW_OK;
   guint64 offset = 0;
-  demux = GST_PS_DEMUX (gst_pad_get_parent (pad));
+
+  demux = GST_FLUPS_DEMUX (gst_pad_get_parent (pad));
+
   if (G_UNLIKELY (demux->flushing)) {
     ret = GST_FLOW_FLUSHING;
     goto pause;
   }
 
   if (G_UNLIKELY (demux->sink_segment.format == GST_FORMAT_UNDEFINED))
-    gst_ps_sink_get_duration (demux);
+    gst_flups_sink_get_duration (demux);
+
   offset = demux->sink_segment.position;
   if (demux->sink_segment.rate >= 0) {
     guint size = BLOCK_SZ;
@@ -2850,23 +2840,25 @@ gst_ps_demux_loop (GstPad * pad)
       size = MIN (size, demux->sink_segment.stop - offset);
     }
     /* pull in data */
-    ret = gst_ps_demux_pull_block (pad, demux, offset, size);
+    ret = gst_flups_demux_pull_block (pad, demux, offset, size);
+
     /* pause if something went wrong */
     if (G_UNLIKELY (ret != GST_FLOW_OK))
       goto pause;
+
     /* update our position */
     offset += size;
     gst_segment_set_position (&demux->sink_segment, GST_FORMAT_BYTES, offset);
+
     /* check EOS condition */
     if ((demux->src_segment.flags & GST_SEEK_FLAG_SEGMENT) &&
         ((demux->sink_segment.position >= demux->sink_segment.stop) ||
             (demux->src_segment.stop != (guint64) - 1 &&
                 demux->src_segment.position >= demux->src_segment.stop))) {
-      GST_DEBUG_OBJECT (demux,
-          "forward mode using segment reached end of " "segment pos %"
-          GST_TIME_FORMAT " stop %" GST_TIME_FORMAT " pos in bytes %"
-          G_GUINT64_FORMAT " stop in bytes %" G_GUINT64_FORMAT,
-          GST_TIME_ARGS (demux->src_segment.position),
+      GST_DEBUG_OBJECT (demux, "forward mode using segment reached end of "
+          "segment pos %" GST_TIME_FORMAT " stop %" GST_TIME_FORMAT
+          " pos in bytes %" G_GUINT64_FORMAT " stop in bytes %"
+          G_GUINT64_FORMAT, GST_TIME_ARGS (demux->src_segment.position),
           GST_TIME_ARGS (demux->src_segment.stop),
           demux->sink_segment.position, demux->sink_segment.stop);
       ret = GST_FLOW_EOS;
@@ -2874,22 +2866,25 @@ gst_ps_demux_loop (GstPad * pad)
     }
   } else {                      /* Reverse playback */
     guint64 size = MIN (offset, BLOCK_SZ);
+
     /* pull in data */
-    ret = gst_ps_demux_pull_block (pad, demux, offset - size, size);
+    ret = gst_flups_demux_pull_block (pad, demux, offset - size, size);
+
     /* pause if something went wrong */
     if (G_UNLIKELY (ret != GST_FLOW_OK))
       goto pause;
+
     /* update our position */
     offset -= size;
     gst_segment_set_position (&demux->sink_segment, GST_FORMAT_BYTES, offset);
+
     /* check EOS condition */
     if (demux->sink_segment.position <= demux->sink_segment.start ||
         demux->src_segment.position <= demux->src_segment.start) {
-      GST_DEBUG_OBJECT (demux,
-          "reverse mode using segment reached end of " "segment pos %"
-          GST_TIME_FORMAT " stop %" GST_TIME_FORMAT " pos in bytes %"
-          G_GUINT64_FORMAT " stop in bytes %" G_GUINT64_FORMAT,
-          GST_TIME_ARGS (demux->src_segment.position),
+      GST_DEBUG_OBJECT (demux, "reverse mode using segment reached end of "
+          "segment pos %" GST_TIME_FORMAT " stop %" GST_TIME_FORMAT
+          " pos in bytes %" G_GUINT64_FORMAT " stop in bytes %"
+          G_GUINT64_FORMAT, GST_TIME_ARGS (demux->src_segment.position),
           GST_TIME_ARGS (demux->src_segment.start),
           demux->sink_segment.position, demux->sink_segment.start);
       ret = GST_FLOW_EOS;
@@ -2898,35 +2893,41 @@ gst_ps_demux_loop (GstPad * pad)
   }
 
   gst_object_unref (demux);
+
   return;
+
 pause:
   {
     const gchar *reason = gst_flow_get_name (ret);
+
     GST_LOG_OBJECT (demux, "pausing task, reason %s", reason);
     gst_pad_pause_task (pad);
+
     if (ret == GST_FLOW_EOS) {
       /* perform EOS logic */
       gst_element_no_more_pads (GST_ELEMENT_CAST (demux));
       if (demux->src_segment.flags & GST_SEEK_FLAG_SEGMENT) {
         gint64 stop;
+
         /* for segment playback we need to post when (in stream time)
          * we stopped, this is either stop (when set) or the duration. */
         if ((stop = demux->src_segment.stop) == -1)
           stop = demux->src_segment.duration;
+
         if (demux->sink_segment.rate >= 0) {
           GST_LOG_OBJECT (demux, "Sending segment done, at end of segment");
           gst_element_post_message (GST_ELEMENT_CAST (demux),
               gst_message_new_segment_done (GST_OBJECT_CAST (demux),
                   GST_FORMAT_TIME, stop));
-          gst_ps_demux_send_event (demux,
+          gst_flups_demux_send_event (demux,
               gst_event_new_segment_done (GST_FORMAT_TIME, stop));
         } else {                /* Reverse playback */
-          GST_LOG_OBJECT (demux,
-              "Sending segment done, at beginning of " "segment");
+          GST_LOG_OBJECT (demux, "Sending segment done, at beginning of "
+              "segment");
           gst_element_post_message (GST_ELEMENT_CAST (demux),
               gst_message_new_segment_done (GST_OBJECT_CAST (demux),
                   GST_FORMAT_TIME, demux->src_segment.start));
-          gst_ps_demux_send_event (demux,
+          gst_flups_demux_send_event (demux,
               gst_event_new_segment_done (GST_FORMAT_TIME,
                   demux->src_segment.start));
         }
@@ -2934,7 +2935,7 @@ pause:
         /* normal playback, send EOS to all linked pads */
         gst_element_no_more_pads (GST_ELEMENT (demux));
         GST_LOG_OBJECT (demux, "Sending EOS, at end of stream");
-        if (!gst_ps_demux_send_event (demux, gst_event_new_eos ())
+        if (!gst_flups_demux_send_event (demux, gst_event_new_eos ())
             && !have_open_streams (demux)) {
           GST_WARNING_OBJECT (demux, "EOS and no streams open");
           GST_ELEMENT_ERROR (demux, STREAM, FAILED,
@@ -2942,8 +2943,10 @@ pause:
         }
       }
     } else if (ret == GST_FLOW_NOT_LINKED || ret < GST_FLOW_EOS) {
-      GST_ELEMENT_FLOW_ERROR (demux, ret);
-      gst_ps_demux_send_event (demux, gst_event_new_eos ());
+      GST_ELEMENT_ERROR (demux, STREAM, FAILED,
+          ("Internal data stream error."),
+          ("stream stopped, reason %s", reason));
+      gst_flups_demux_send_event (demux, gst_event_new_eos ());
     }
 
     gst_object_unref (demux);
@@ -2953,10 +2956,11 @@ pause:
 
 /* If we can pull that's prefered */
 static gboolean
-gst_ps_demux_sink_activate (GstPad * sinkpad, GstObject * parent)
+gst_flups_demux_sink_activate (GstPad * sinkpad, GstObject * parent)
 {
   gboolean res = FALSE;
   GstQuery *query = gst_query_new_scheduling ();
+
   if (gst_pad_peer_query (sinkpad, query)) {
     if (gst_query_has_scheduling_mode_with_flags (query,
             GST_PAD_MODE_PULL, GST_SCHEDULING_FLAG_SEEKABLE)) {
@@ -2969,16 +2973,19 @@ gst_ps_demux_sink_activate (GstPad * sinkpad, GstObject * parent)
   }
 
   gst_query_unref (query);
+
   return res;
 }
 
 /* This function gets called when we activate ourselves in push mode. */
 static gboolean
-gst_ps_demux_sink_activate_push (GstPad * sinkpad, GstObject * parent,
+gst_flups_demux_sink_activate_push (GstPad * sinkpad, GstObject * parent,
     gboolean active)
 {
-  GstPsDemux *demux = GST_PS_DEMUX (parent);
+  GstFluPSDemux *demux = GST_FLUPS_DEMUX (parent);
+
   demux->random_access = FALSE;
+
   return TRUE;
 }
 
@@ -2986,15 +2993,16 @@ gst_ps_demux_sink_activate_push (GstPad * sinkpad, GstObject * parent,
  * We can perform  random access to the resource and we start a task
  * to start reading */
 static gboolean
-gst_ps_demux_sink_activate_pull (GstPad * sinkpad, GstObject * parent,
+gst_flups_demux_sink_activate_pull (GstPad * sinkpad, GstObject * parent,
     gboolean active)
 {
-  GstPsDemux *demux = GST_PS_DEMUX (parent);
+  GstFluPSDemux *demux = GST_FLUPS_DEMUX (parent);
+
   if (active) {
     GST_DEBUG ("pull mode activated");
     demux->random_access = TRUE;
-    return gst_pad_start_task (sinkpad,
-        (GstTaskFunction) gst_ps_demux_loop, sinkpad, NULL);
+    return gst_pad_start_task (sinkpad, (GstTaskFunction) gst_flups_demux_loop,
+        sinkpad, NULL);
   } else {
     demux->random_access = FALSE;
     return gst_pad_stop_task (sinkpad);
@@ -3002,13 +3010,13 @@ gst_ps_demux_sink_activate_pull (GstPad * sinkpad, GstObject * parent,
 }
 
 static gboolean
-gst_ps_demux_sink_activate_mode (GstPad * pad, GstObject * parent,
+gst_flups_demux_sink_activate_mode (GstPad * pad, GstObject * parent,
     GstPadMode mode, gboolean active)
 {
   if (mode == GST_PAD_MODE_PUSH) {
-    return gst_ps_demux_sink_activate_push (pad, parent, active);
+    return gst_flups_demux_sink_activate_push (pad, parent, active);
   } else if (mode == GST_PAD_MODE_PULL) {
-    return gst_ps_demux_sink_activate_pull (pad, parent, active);
+    return gst_flups_demux_sink_activate_pull (pad, parent, active);
   }
   return FALSE;
 }
@@ -3019,45 +3027,52 @@ gst_ps_demux_sink_activate_mode (GstPad * pad, GstObject * parent,
 *  GST_FLOW_EOS: when all pads EOS or NOT_LINKED.
 */
 static GstFlowReturn
-gst_ps_demux_combine_flows (GstPsDemux * demux, GstFlowReturn ret)
+gst_flups_demux_combine_flows (GstFluPSDemux * demux, GstFlowReturn ret)
 {
   GST_LOG_OBJECT (demux, "flow return: %s", gst_flow_get_name (ret));
+
   ret = gst_flow_combiner_update_flow (demux->flowcombiner, ret);
+
   if (G_UNLIKELY (demux->need_no_more_pads && ret == GST_FLOW_NOT_LINKED))
     ret = GST_FLOW_OK;
+
   GST_LOG_OBJECT (demux, "combined flow return: %s", gst_flow_get_name (ret));
   return ret;
 }
 
 static GstFlowReturn
-gst_ps_demux_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
+gst_flups_demux_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
 {
-  GstPsDemux *demux = GST_PS_DEMUX (parent);
+  GstFluPSDemux *demux = GST_FLUPS_DEMUX (parent);
   GstFlowReturn ret = GST_FLOW_OK;
   guint32 avail;
   gboolean save, discont;
+
   discont = GST_BUFFER_IS_DISCONT (buffer);
+
   if (discont) {
-    GST_LOG_OBJECT (demux,
-        "Received buffer with discont flag and" " offset %"
-        G_GUINT64_FORMAT, GST_BUFFER_OFFSET (buffer));
+    GST_LOG_OBJECT (demux, "Received buffer with discont flag and"
+        " offset %" G_GUINT64_FORMAT, GST_BUFFER_OFFSET (buffer));
+
     gst_pes_filter_drain (&demux->filter);
-    gst_ps_demux_mark_discont (demux, TRUE, FALSE);
+    gst_flups_demux_mark_discont (demux, TRUE, FALSE);
+
     /* mark discont on all streams */
     if (demux->sink_segment.rate >= 0.0) {
       demux->current_scr = G_MAXUINT64;
       demux->bytes_since_scr = 0;
     }
   } else {
-    GST_LOG_OBJECT (demux,
-        "Received buffer with offset %" G_GUINT64_FORMAT,
+    GST_LOG_OBJECT (demux, "Received buffer with offset %" G_GUINT64_FORMAT,
         GST_BUFFER_OFFSET (buffer));
   }
 
   /* We keep the offset to interpolate SCR */
   demux->adapter_offset = GST_BUFFER_OFFSET (buffer);
+
   gst_adapter_push (demux->adapter, buffer);
   demux->bytes_since_scr += gst_buffer_get_size (buffer);
+
   avail = gst_adapter_available (demux->rev_adapter);
   if (avail > 0) {
     GST_LOG_OBJECT (demux, "appending %u saved bytes", avail);
@@ -3070,6 +3085,7 @@ gst_ps_demux_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
 
   avail = gst_adapter_available (demux->adapter);
   GST_LOG_OBJECT (demux, "avail now: %d, state %d", avail, demux->filter.state);
+
   switch (demux->filter.state) {
     case STATE_DATA_SKIP:
     case STATE_DATA_PUSH:
@@ -3100,7 +3116,7 @@ gst_ps_demux_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
   /* align adapter data to sync boundary, we keep the data up to the next sync
    * point. */
   save = TRUE;
-  while (gst_ps_demux_resync (demux, save)) {
+  while (gst_flups_demux_resync (demux, save)) {
     gboolean ps_sync = TRUE;
     if (G_UNLIKELY (demux->flushing)) {
       ret = GST_FLOW_FLUSHING;
@@ -3110,10 +3126,10 @@ gst_ps_demux_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
     /* now switch on last synced byte */
     switch (demux->last_sync_code) {
       case ID_PS_PACK_START_CODE:
-        ret = gst_ps_demux_parse_pack_start (demux);
+        ret = gst_flups_demux_parse_pack_start (demux);
         break;
       case ID_PS_SYSTEM_HEADER_START_CODE:
-        ret = gst_ps_demux_parse_sys_head (demux);
+        ret = gst_flups_demux_parse_sys_head (demux);
         break;
       case ID_PS_END_CODE:
         /* Skip final 4 bytes */
@@ -3122,10 +3138,10 @@ gst_ps_demux_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
         ret = GST_FLOW_OK;
         goto done;
       case ID_PS_PROGRAM_STREAM_MAP:
-        ret = gst_ps_demux_parse_psm (demux);
+        ret = gst_flups_demux_parse_psm (demux);
         break;
       default:
-        if (gst_ps_demux_is_pes_sync (demux->last_sync_code)) {
+        if (gst_flups_demux_is_pes_sync (demux->last_sync_code)) {
           ret = gst_pes_filter_process (&demux->filter);
         } else {
           GST_DEBUG_OBJECT (demux, "sync_code=%08x, non PES sync found"
@@ -3139,6 +3155,7 @@ gst_ps_demux_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
      * saved up to the next ps sync. */
     if (ps_sync)
       save = FALSE;
+
     switch (ret) {
       case GST_FLOW_NEED_MORE_DATA:
         GST_DEBUG_OBJECT (demux, "need more data");
@@ -3157,7 +3174,7 @@ gst_ps_demux_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
         ret = GST_FLOW_OK;
         break;
       default:
-        ret = gst_ps_demux_combine_flows (demux, ret);
+        ret = gst_flups_demux_combine_flows (demux, ret);
         if (ret != GST_FLOW_OK)
           goto done;
         break;
@@ -3168,17 +3185,18 @@ done:
 }
 
 static GstStateChangeReturn
-gst_ps_demux_change_state (GstElement * element, GstStateChange transition)
+gst_flups_demux_change_state (GstElement * element, GstStateChange transition)
 {
-  GstPsDemux *demux = GST_PS_DEMUX (element);
+  GstFluPSDemux *demux = GST_FLUPS_DEMUX (element);
   GstStateChangeReturn result;
+
   switch (transition) {
     case GST_STATE_CHANGE_NULL_TO_READY:
       gst_pes_filter_init (&demux->filter, demux->adapter,
           &demux->adapter_offset);
       gst_pes_filter_set_callbacks (&demux->filter,
-          (GstPESFilterData) gst_ps_demux_data_cb,
-          (GstPESFilterResync) gst_ps_demux_resync_cb, demux);
+          (GstPESFilterData) gst_flups_demux_data_cb,
+          (GstPESFilterResync) gst_flups_demux_resync_cb, demux);
       demux->filter.gather_pes = TRUE;
       break;
     case GST_STATE_CHANGE_READY_TO_PAUSED:
@@ -3188,9 +3206,10 @@ gst_ps_demux_change_state (GstElement * element, GstStateChange transition)
   }
 
   result = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+
   switch (transition) {
     case GST_STATE_CHANGE_PAUSED_TO_READY:
-      gst_ps_demux_reset (demux);
+      gst_flups_demux_reset (demux);
       break;
     case GST_STATE_CHANGE_READY_TO_NULL:
       gst_pes_filter_uninit (&demux->filter);

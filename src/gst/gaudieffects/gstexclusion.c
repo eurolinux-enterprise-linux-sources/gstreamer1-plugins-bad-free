@@ -1,6 +1,6 @@
 /*
  * GStreamer
- * Copyright (C) <2010-2015> Luis de Bethencourt <luis@debethencourt.com>
+ * Copyright (C) <2010-2012> Luis de Bethencourt <luis@debethencourt.com>
  *
  * Exclusion - color exclusion video effect.
  * Based on Pete Warden's FreeFrame plugin with the same name.
@@ -52,7 +52,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! exclusion ! videoconvert ! autovideosink
+ * gst-launch -v videotestsrc ! exclusion ! videoconvert ! autovideosink
  * ]| This pipeline shows the effect of exclusion on a test stream
  * </refsect2>
  */
@@ -88,6 +88,7 @@ enum
 {
   PROP_0 = 0,
   PROP_FACTOR,
+  PROP_SILENT
 };
 
 /* Initializations */
@@ -140,10 +141,10 @@ gst_exclusion_class_init (GstExclusionClass * klass)
       "Exclusion exclodes the colors in the video signal.",
       "Luis de Bethencourt <luis@debethencourt.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_exclusion_sink_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_exclusion_src_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_exclusion_sink_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_exclusion_src_template));
 
   gobject_class->set_property = gst_exclusion_set_property;
   gobject_class->get_property = gst_exclusion_get_property;
@@ -151,8 +152,12 @@ gst_exclusion_class_init (GstExclusionClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_FACTOR,
       g_param_spec_uint ("factor", "Factor",
-          "Exclusion factor parameter", 1, 175, DEFAULT_FACTOR,
+          "Exclusion factor parameter", 0, 175, DEFAULT_FACTOR,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE));
+
+  g_object_class_install_property (gobject_class, PROP_SILENT,
+      g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
+          FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   vfilter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_exclusion_transform_frame);
@@ -167,6 +172,7 @@ static void
 gst_exclusion_init (GstExclusion * filter)
 {
   filter->factor = DEFAULT_FACTOR;
+  filter->silent = FALSE;
 }
 
 static void
@@ -176,6 +182,9 @@ gst_exclusion_set_property (GObject * object, guint prop_id,
   GstExclusion *filter = GST_EXCLUSION (object);
 
   switch (prop_id) {
+    case PROP_SILENT:
+      filter->silent = g_value_get_boolean (value);
+      break;
     case PROP_FACTOR:
       filter->factor = g_value_get_uint (value);
       break;
@@ -193,6 +202,9 @@ gst_exclusion_get_property (GObject * object, guint prop_id,
 
   GST_OBJECT_LOCK (filter);
   switch (prop_id) {
+    case PROP_SILENT:
+      g_value_set_boolean (value, filter->silent);
+      break;
     case PROP_FACTOR:
       g_value_set_uint (value, filter->factor);
       break;
@@ -217,13 +229,16 @@ gst_exclusion_transform_frame (GstVideoFilter * vfilter,
     GstVideoFrame * in_frame, GstVideoFrame * out_frame)
 {
   GstExclusion *filter = GST_EXCLUSION (vfilter);
-  gint video_size, factor;
+  gint video_size, factor, width, height;
   guint32 *src, *dest;
   GstClockTime timestamp;
   gint64 stream_time;
 
   src = GST_VIDEO_FRAME_PLANE_DATA (in_frame, 0);
   dest = GST_VIDEO_FRAME_PLANE_DATA (out_frame, 0);
+
+  width = GST_VIDEO_FRAME_WIDTH (in_frame);
+  height = GST_VIDEO_FRAME_HEIGHT (in_frame);
 
   /* GstController: update the properties */
   timestamp = GST_BUFFER_TIMESTAMP (in_frame->buffer);
@@ -241,8 +256,7 @@ gst_exclusion_transform_frame (GstVideoFilter * vfilter,
   factor = filter->factor;
   GST_OBJECT_UNLOCK (filter);
 
-  video_size = GST_VIDEO_FRAME_WIDTH (in_frame) *
-      GST_VIDEO_FRAME_HEIGHT (in_frame);
+  video_size = width * height;
   transform (src, dest, video_size, factor);
 
   return GST_FLOW_OK;

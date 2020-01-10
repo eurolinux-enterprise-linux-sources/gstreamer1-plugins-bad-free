@@ -25,7 +25,7 @@ DOC_SOURCE_DIR = $(top_srcdir)/gst $(top_srcdir)/ext $(top_srcdir)/sys
 SCAN_OPTIONS=
 
 # Extra options to supply to gtkdoc-mkdb.
-MKDB_OPTIONS=--sgml-mode --source-suffixes=c,h,cc,cpp,m
+MKDB_OPTIONS=--sgml-mode --source-suffixes=c,h,cc,m
 
 # Extra options to supply to gtkdoc-fixref.
 FIXXREF_OPTIONS=--extra-dir=$(GLIB_PREFIX)/share/gtk-doc/html \
@@ -38,8 +38,7 @@ HFILE_GLOB= \
   $(top_srcdir)/ext/*/*.hh
 CFILE_GLOB= \
   $(top_srcdir)/gst/*/*.c $(top_srcdir)/ext/*/*.c $(top_srcdir)/sys/*/*.c \
-  $(top_srcdir)/ext/*/*.cc $(top_srcdir)/ext/*/*.cpp  $(top_srcdir)/sys/*/*.cpp \
-  $(top_srcdir)/ext/*/*.m $(top_srcdir)/sys/*/*.m
+  $(top_srcdir)/ext/*/*.cc $(top_srcdir)/sys/*/*.m
 
 # Header files to ignore when scanning.
 IGNORE_HFILES =
@@ -70,7 +69,7 @@ EXTRA_HFILES = \
 	$(top_srcdir)/ext/curl/gstcurlhttpsink.h \
 	$(top_srcdir)/ext/curl/gstcurlsmtpsink.h \
 	$(top_srcdir)/ext/curl/gstcurltlssink.h \
-	$(top_srcdir)/ext/dc1394/gstdc1394src.h \
+	$(top_srcdir)/ext/dc1394/gstdc1394.h \
 	$(top_srcdir)/ext/directfb/dfbvideosink.h \
 	$(top_srcdir)/ext/dts/gstdtsdec.h \
 	$(top_srcdir)/ext/faac/gstfaac.h \
@@ -86,6 +85,7 @@ EXTRA_HFILES = \
 	$(top_srcdir)/ext/modplug/gstmodplug.h \
 	$(top_srcdir)/ext/mpeg2enc/gstmpeg2enc.hh \
 	$(top_srcdir)/ext/mplex/gstmplex.hh \
+	$(top_srcdir)/ext/mythtv/gstmythtvsrc.h \
 	$(top_srcdir)/ext/opencv/gstcvdilate.h \
 	$(top_srcdir)/ext/opencv/gstcverode.h \
 	$(top_srcdir)/ext/opencv/gstcvequalizehist.h \
@@ -95,13 +95,12 @@ EXTRA_HFILES = \
 	$(top_srcdir)/ext/opencv/gstedgedetect.h \
 	$(top_srcdir)/ext/opencv/gstfaceblur.h \
 	$(top_srcdir)/ext/opencv/gstfacedetect.h \
+	$(top_srcdir)/ext/opencv/gstpyramidsegment.h \
 	$(top_srcdir)/ext/opencv/gsttemplatematch.h \
 	$(top_srcdir)/ext/opencv/gsttextoverlay.h \
 	$(top_srcdir)/ext/openni2/gstopenni2src.h \
 	$(top_srcdir)/ext/rsvg/gstrsvgdec.h \
 	$(top_srcdir)/ext/rsvg/gstrsvgoverlay.h \
-	$(top_srcdir)/ext/rtmp/gstrtmpsrc.h \
-	$(top_srcdir)/ext/rtmp/gstrtmpsink.h \
 	$(top_srcdir)/ext/spandsp/gstspanplc.h \
 	$(top_srcdir)/ext/spandsp/gstdtmfdetect.h \
 	$(top_srcdir)/ext/sdl/sdlaudiosink.h \
@@ -110,12 +109,11 @@ EXTRA_HFILES = \
 	$(top_srcdir)/ext/timidity/gstwildmidi.h \
 	$(top_srcdir)/ext/voaacenc/gstvoaacenc.h \
 	$(top_srcdir)/ext/voamrwbenc/gstvoamrwbenc.h \
-	$(top_srcdir)/ext/webrtcdsp/gstwebrtcdsp.h \
-	$(top_srcdir)/ext/webrtcdsp/gstwebrtcechoprobe.h \
 	$(top_srcdir)/ext/zbar/gstzbar.h \
 	$(top_srcdir)/gst/aiff/aiffparse.h \
 	$(top_srcdir)/gst/aiff/aiffmux.h \
 	$(top_srcdir)/gst/autoconvert/gstautoconvert.h \
+	$(top_srcdir)/gst/audiovisualizers/gstaudiovisualizer.h \
 	$(top_srcdir)/gst/audiovisualizers/gstspacescope.h \
 	$(top_srcdir)/gst/audiovisualizers/gstspectrascope.h \
 	$(top_srcdir)/gst/audiovisualizers/gstsynaescope.h \
@@ -153,8 +151,7 @@ EXTRA_HFILES = \
 	$(top_srcdir)/gst/geometrictransform/gstwaterripple.h \
 	$(top_srcdir)/gst/ivfparse/gstivfparse.h \
 	$(top_srcdir)/gst/jpegformat/gstjpegparse.h \
-	$(top_srcdir)/gst/mpegtsdemux/tsdemux.h \
-	$(top_srcdir)/gst/mpegtsmux/mpegtsmux.h \
+	$(top_srcdir)/gst/liveadder/liveadder.h \
 	$(top_srcdir)/gst/mxf/mxfdemux.h \
 	$(top_srcdir)/gst/mxf/mxfmux.h \
 	$(top_srcdir)/gst/nuvdemux/gstnuvdemux.h \
@@ -165,9 +162,11 @@ EXTRA_HFILES = \
 	$(top_srcdir)/gst/speed/gstspeed.h \
 	$(top_srcdir)/gst/stereo/gststereo.h \
 	$(top_srcdir)/gst/videosignal/gstvideoanalyse.h \
+	$(top_srcdir)/sys/directdraw/gstdirectdrawsink.h \
 	$(top_srcdir)/sys/dvb/gstdvbsrc.h \
 	$(top_srcdir)/sys/shm/gstshmsink.h \
-	$(top_srcdir)/sys/shm/gstshmsrc.h
+	$(top_srcdir)/sys/shm/gstshmsrc.h \
+	$(top_srcdir)/gst-libs/gst/interfaces/photography.h
 
 # Images to copy into HTML directory.
 HTML_IMAGES = camerabin.png
@@ -182,7 +181,11 @@ extra_files =
 # contains GtkObjects/GObjects and you want to document signals and properties.
 GTKDOC_CFLAGS = -DGST_USE_UNSTABLE_API $(GST_PLUGINS_BAD_CFLAGS) $(GST_BASE_CFLAGS) -I$(top_builddir)
 GTKDOC_LIBS = \
+	$(top_builddir)/gst-libs/gst/interfaces/libgstphotography-@GST_API_VERSION@.la \
 	$(GST_BASE_LIBS)
+
+GTKDOC_CC=$(LIBTOOL) --tag=CC --mode=compile $(CC)
+GTKDOC_LD=$(LIBTOOL) --tag=CC --mode=link $(CC)
 
 # If you need to override some of the declarations, place them in this file
 # and uncomment this line.

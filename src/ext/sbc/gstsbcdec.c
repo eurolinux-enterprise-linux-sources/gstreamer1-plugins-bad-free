@@ -159,14 +159,13 @@ gst_sbc_dec_set_format (GstAudioDecoder * audio_dec, GstCaps * caps)
     return FALSE;
 
   if (strcmp (channel_mode, "mono") == 0) {
-    dec->frame_len = 4 + (subbands * 1) / 2 + ((blocks * 1 * bitpool) + 7) / 8;
+    dec->frame_len = 4 + (subbands * 1) / 2 + (blocks * 1 * bitpool) / 8;
   } else if (strcmp (channel_mode, "dual") == 0) {
-    dec->frame_len = 4 + (subbands * 2) / 2 + ((blocks * 2 * bitpool) + 7) / 8;
+    dec->frame_len = 4 + (subbands * 2) / 2 + (blocks * 2 * bitpool) / 8;
   } else if (strcmp (channel_mode, "stereo") == 0) {
-    dec->frame_len = 4 + (subbands * 2) / 2 + ((blocks * bitpool) + 7) / 8;
+    dec->frame_len = 4 + (subbands * 2) / 2 + (blocks * bitpool) / 8;
   } else if (strcmp (channel_mode, "joint") == 0) {
-    dec->frame_len =
-        4 + (subbands * 2) / 2 + ((subbands + blocks * bitpool) + 7) / 8;
+    dec->frame_len = 4 + (subbands * 2) / 2 + (subbands + blocks * bitpool) / 8;
   } else {
     return FALSE;
   }
@@ -220,10 +219,11 @@ gst_sbc_dec_class_init (GstSbcDecClass * klass)
   audio_decoder_class->handle_frame =
       GST_DEBUG_FUNCPTR (gst_sbc_dec_handle_frame);
 
-  gst_element_class_add_static_pad_template (element_class,
-      &sbc_dec_sink_factory);
-  gst_element_class_add_static_pad_template (element_class,
-      &sbc_dec_src_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sbc_dec_sink_factory));
+
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sbc_dec_src_factory));
 
   gst_element_class_set_static_metadata (element_class,
       "Bluetooth SBC audio decoder", "Codec/Decoder/Audio",
@@ -236,9 +236,6 @@ static void
 gst_sbc_dec_init (GstSbcDec * dec)
 {
   gst_audio_decoder_set_needs_format (GST_AUDIO_DECODER (dec), TRUE);
-  gst_audio_decoder_set_use_default_pad_acceptcaps (GST_AUDIO_DECODER_CAST
-      (dec), TRUE);
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_DECODER_SINK_PAD (dec));
 
   dec->samples_per_frame = 0;
   dec->frame_len = 0;

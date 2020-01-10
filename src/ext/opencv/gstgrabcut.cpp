@@ -1,7 +1,7 @@
 /*
  * GStreamer
  * Copyright (C) 2013 Miguel Casas-Sanchez <miguelecasassanchez@gmail.com>
- *
+ * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -48,23 +48,23 @@
  * This element is a wrapper around OpenCV grabcut implementation. GrabCut is an
  * image segmentation method based on graph cuts technique. It can be seen as a
  * way of fine-grain segmenting the image from some FG and BG "seed" areas. The
- * OpenCV implementation follows the article [1].
+ * OpenCV implementation follows the article [1]. 
  * The "seed" areas are taken in this element from either an input bounding box
  * coming from a face detection, or from alpha channel values. The input box is
- * taken from a "face" event such as the one generated from the 'facedetect'
- * element. The Alpha channel values should be one of the following (cv.hpp):
- * enum{
+ * taken from a "face" event such as the one generated from the 'facedetect' 
+ * element. The Alpha channel values should be one of the following (cv.hpp): 
+ * enum{  
  *  GC_BGD    = 0,  //!< background
  *  GC_FGD    = 1,  //!< foreground
  *  GC_PR_BGD = 2,  //!< most probably background
  *  GC_PR_FGD = 3   //!< most probably foreground
  * };
  * with values over GC_PR_FGD interpreted as GC_PR_FGD. IN CASE OF no alpha mask
- * input (all 0's or all 1's), the 'GstOpenCvFaceDetect-face' downstream event
+ * input (all 0's or all 1's), the 'GstOpenCvFaceDetect-face' downstream event 
  * is used to create a bbox of PR_FG elements. If both foreground alpha
  * is not specified and there is no face detection, nothing is done.
  *
- * [1] C. Rother, V. Kolmogorov, and A. Blake, "GrabCut: Interactive foreground
+ * [1] C. Rother, V. Kolmogorov, and A. Blake, "GrabCut: Interactive foreground 
  * extraction using iterated graph cuts, ACM Trans. Graph., vol. 23, pp. 309–314,
  * 2004.
  *
@@ -84,16 +84,15 @@
 #include <config.h>
 #endif
 
+#include <gst/gst.h>
 #include "gstgrabcut.h"
 extern "C"
 {
-#include <opencv2/imgproc/imgproc_c.h>
+#include <gst/video/gstvideometa.h>
 }
-#include <opencv2/imgproc/imgproc.hpp>
 GST_DEBUG_CATEGORY_STATIC (gst_grabcut_debug);
 #define GST_CAT_DEFAULT gst_grabcut_debug
 
-using namespace cv;
 /* Filter signals and args */
 enum
 {
@@ -185,8 +184,10 @@ IN CASE OF no alpha mask input (all 0's or all 1's), the 'face' \
 downstream event is used to create a bbox of PR_FG elements.\n\
 IF nothing is present, then nothing is done.", "Miguel Casas-Sanchez <miguelecasassanchez@gmail.com>");
 
-  gst_element_class_add_static_pad_template (element_class, &src_factory);
-  gst_element_class_add_static_pad_template (element_class, &sink_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_factory));
 }
 
 
@@ -323,8 +324,8 @@ gst_grabcut_transform_ip (GstVideoFilter * btrans, GstVideoFrame * frame)
   cvCvtColor (gc->cvRGBAin, gc->cvRGBin, CV_BGRA2BGR);
   compose_matrix_from_image (gc->grabcut_mask, gc->cvD);
 
-  /*  Pass cvD to grabcut_mask for the graphcut stuff but that only if
-     really there is something in the mask! otherwise -->input bbox is
+  /*  Pass cvD to grabcut_mask for the graphcut stuff but that only if 
+     really there is something in the mask! otherwise -->input bbox is 
      what we use */
   alphapixels = cvCountNonZero (gc->cvD);
   if ((0 < alphapixels) && (alphapixels < (gc->width * gc->height))) {
@@ -393,8 +394,8 @@ compose_matrix_from_image (CvMat * output, IplImage * input)
   for (x = 0; x < output->cols; x++) {
     for (y = 0; y < output->rows; y++) {
       CV_MAT_ELEM (*output, uchar, y, x) =
-          (cvGetReal2D (input, y, x) <= GC_PR_FGD) ? cvGetReal2D (input, y,
-          x) : GC_PR_FGD;
+          (cvGetReal2D (input, y, x) <= cv::GC_PR_FGD) ? cvGetReal2D (input, y,
+          x) : cv::GC_PR_FGD;
     }
   }
 }
@@ -404,10 +405,10 @@ int
 initialise_grabcut (struct grabcut_params *GC, IplImage * image_c,
     CvMat * mask_c)
 {
-  GC->image = (void *) new Mat (cvarrToMat (image_c, false));    /*  "true" refers to copydata */
-  GC->mask = (void *) new Mat (cvarrToMat (mask_c, false));
-  GC->bgdModel = (void *) new Mat ();       /*  "true" refers to copydata */
-  GC->fgdModel = (void *) new Mat ();
+  GC->image = (void *) new cv::Mat (image_c, false);    /*  "true" refers to copydata */
+  GC->mask = (void *) new cv::Mat (mask_c, false);
+  GC->bgdModel = (void *) new cv::Mat ();       /*  "true" refers to copydata */
+  GC->fgdModel = (void *) new cv::Mat ();
 
   return (0);
 }
@@ -416,13 +417,13 @@ int
 run_grabcut_iteration (struct grabcut_params *GC, IplImage * image_c,
     CvMat * mask_c, CvRect * bbox)
 {
-  ((Mat *) GC->image)->data = (uchar *) image_c->imageData;
-  ((Mat *) GC->mask)->data = mask_c->data.ptr;
+  ((cv::Mat *) GC->image)->data = (uchar *) image_c->imageData;
+  ((cv::Mat *) GC->mask)->data = mask_c->data.ptr;
 
   if (cvCountNonZero (mask_c))
-    grabCut (*((Mat *) GC->image), *((Mat *) GC->mask), Rect (),
-        *((Mat *) GC->bgdModel), *((Mat *) GC->fgdModel), 1,
-        GC_INIT_WITH_MASK);
+    grabCut (*((cv::Mat *) GC->image), *((cv::Mat *) GC->mask), cv::Rect (),
+        *((cv::Mat *) GC->bgdModel), *((cv::Mat *) GC->fgdModel), 1,
+        cv::GC_INIT_WITH_MASK);
 
   return (0);
 }
@@ -431,11 +432,12 @@ int
 run_grabcut_iteration2 (struct grabcut_params *GC, IplImage * image_c,
     CvMat * mask_c, CvRect * bbox)
 {
-  ((Mat *) GC->image)->data = (uchar *) image_c->imageData;
-  ((Mat *) GC->mask)->data = mask_c->data.ptr;
-  grabCut (*((Mat *) GC->image), *((Mat *) GC->mask), *(bbox),
-      *((Mat *) GC->bgdModel), *((Mat *) GC->fgdModel), 1,
-      GC_INIT_WITH_RECT);
+  ((cv::Mat *) GC->image)->data = (uchar *) image_c->imageData;
+  ((cv::Mat *) GC->mask)->data = mask_c->data.ptr;
+
+  grabCut (*((cv::Mat *) GC->image), *((cv::Mat *) GC->mask), *(bbox),
+      *((cv::Mat *) GC->bgdModel), *((cv::Mat *) GC->fgdModel), 1,
+      cv::GC_INIT_WITH_RECT);
 
   return (0);
 }
@@ -443,10 +445,10 @@ run_grabcut_iteration2 (struct grabcut_params *GC, IplImage * image_c,
 int
 finalise_grabcut (struct grabcut_params *GC)
 {
-  delete ((Mat *) GC->image);
-  delete ((Mat *) GC->mask);
-  delete ((Mat *) GC->bgdModel);
-  delete ((Mat *) GC->fgdModel);
+  delete ((cv::Mat *) GC->image);
+  delete ((cv::Mat *) GC->mask);
+  delete ((cv::Mat *) GC->bgdModel);
+  delete ((cv::Mat *) GC->fgdModel);
 
   return (0);
 }

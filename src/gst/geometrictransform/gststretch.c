@@ -41,20 +41,6 @@
  * Boston, MA 02110-1301, USA.
  */
 
-/**
- * SECTION:element-stretch
- * @see_also: geometrictransform
- *
- * The stretch element stretches the image in a circle around the center point.
- *
- * <refsect2>
- * <title>Example launch line</title>
- * |[
- * gst-launch-1.0 -v videotestsrc ! stretch ! videoconvert ! autovideosink
- * ]|
- * </refsect2>
- */
-
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
@@ -159,8 +145,8 @@ stretch_map (GstGeometricTransform * gt, gint x, gint y, gdouble * in_x,
   a = 1.0 + (MAX_SHRINK_AMOUNT - 1.0) * stretch->intensity;
   b = a - 1.0;
 
-  norm_x *= a - b * gst_gm_smoothstep (0.0, cgt->radius, r);
-  norm_y *= a - b * gst_gm_smoothstep (0.0, cgt->radius, r);
+  norm_x *= a - b * smoothstep (0.0, cgt->radius, r);
+  norm_y *= a - b * smoothstep (0.0, cgt->radius, r);
 
   /* unnormalize */
   *in_x = (0.5 * norm_x + cgt->x_center) * width;

@@ -66,11 +66,6 @@ struct _GstGDPDepay
   guint8 *header;
   guint32 payload_length;
   GstDPPayloadType payload_type;
-
-  gint64 ts_offset;
-
-  GstAllocator *allocator;
-  GstAllocationParams allocation_params;
 };
 
 struct _GstGDPDepayClass

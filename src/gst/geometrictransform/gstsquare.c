@@ -41,20 +41,6 @@
  * Boston, MA 02110-1301, USA.
  */
 
-/**
- * SECTION:element-square
- * @see_also: geometrictransform
- *
- * The square element distorts the center part of the image into a square.
- *
- * <refsect2>
- * <title>Example launch line</title>
- * |[
- * gst-launch-1.0 -v videotestsrc ! square zoom=100 ! videoconvert ! autovideosink
- * ]|
- * </refsect2>
- */
-
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
@@ -171,12 +157,12 @@ square_map (GstGeometricTransform * gt, gint x, gint y, gdouble * in_x,
   /* zoom at the center, smoothstep around half quadrant and get back to normal */
   norm_x *=
       (1.0 / square->zoom) * (1.0 + (square->zoom -
-          1.0) * gst_gm_smoothstep (square->width - 0.125,
-          square->width + 0.125, ABS (norm_x)));
+          1.0) * smoothstep (square->width - 0.125, square->width + 0.125,
+          ABS (norm_x)));
   norm_y *=
       (1.0 / square->zoom) * (1.0 + (square->zoom -
-          1.0) * gst_gm_smoothstep (square->height - 0.125,
-          square->height + 0.125, ABS (norm_y)));
+          1.0) * smoothstep (square->height - 0.125, square->height + 0.125,
+          ABS (norm_y)));
 
   /* unnormalize */
   *in_x = 0.5 * (norm_x + 1.0) * width;

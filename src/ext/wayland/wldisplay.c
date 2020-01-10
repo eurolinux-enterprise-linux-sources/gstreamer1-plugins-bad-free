@@ -23,7 +23,6 @@
 #endif
 
 #include "wldisplay.h"
-#include "wlbuffer.h"
 
 #include <errno.h>
 
@@ -44,10 +43,8 @@ gst_wl_display_class_init (GstWlDisplayClass * klass)
 static void
 gst_wl_display_init (GstWlDisplay * self)
 {
-  self->shm_formats = g_array_new (FALSE, FALSE, sizeof (uint32_t));
+  self->formats = g_array_new (FALSE, FALSE, sizeof (uint32_t));
   self->wl_fd_poll = gst_poll_new (TRUE);
-  self->buffers = g_hash_table_new (g_direct_hash, g_direct_equal);
-  g_mutex_init (&self->buffers_mutex);
 }
 
 static void
@@ -56,27 +53,12 @@ gst_wl_display_finalize (GObject * gobject)
   GstWlDisplay *self = GST_WL_DISPLAY (gobject);
 
   gst_poll_set_flushing (self->wl_fd_poll, TRUE);
+
   if (self->thread)
     g_thread_join (self->thread);
 
-  /* to avoid buffers being unregistered from another thread
-   * at the same time, take their ownership */
-  g_mutex_lock (&self->buffers_mutex);
-  self->shutting_down = TRUE;
-  g_hash_table_foreach (self->buffers, (GHFunc) g_object_ref, NULL);
-  g_mutex_unlock (&self->buffers_mutex);
-
-  g_hash_table_foreach (self->buffers,
-      (GHFunc) gst_wl_buffer_force_release_and_unref, NULL);
-  g_hash_table_remove_all (self->buffers);
-
-  g_array_unref (self->shm_formats);
+  g_array_unref (self->formats);
   gst_poll_free (self->wl_fd_poll);
-  g_hash_table_unref (self->buffers);
-  g_mutex_clear (&self->buffers_mutex);
-
-  if (self->viewporter)
-    wp_viewporter_destroy (self->viewporter);
 
   if (self->shm)
     wl_shm_destroy (self->shm);
@@ -140,7 +122,7 @@ shm_format (void *data, struct wl_shm *wl_shm, uint32_t format)
 {
   GstWlDisplay *self = data;
 
-  g_array_append_val (self->shm_formats, format);
+  g_array_append_val (self->formats, format);
 }
 
 static const struct wl_shm_listener shm_listener = {
@@ -164,9 +146,8 @@ registry_handle_global (void *data, struct wl_registry *registry,
   } else if (g_strcmp0 (interface, "wl_shm") == 0) {
     self->shm = wl_registry_bind (registry, id, &wl_shm_interface, 1);
     wl_shm_add_listener (self->shm, &shm_listener, self);
-  } else if (g_strcmp0 (interface, "wp_viewporter") == 0) {
-    self->viewporter =
-        wl_registry_bind (registry, id, &wp_viewporter_interface, 1);
+  } else if (g_strcmp0 (interface, "wl_scaler") == 0) {
+    self->scaler = wl_registry_bind (registry, id, &wl_scaler_interface, 2);
   }
 }
 
@@ -270,16 +251,9 @@ gst_wl_display_new_existing (struct wl_display * display,
   VERIFY_INTERFACE_EXISTS (subcompositor, "wl_subcompositor");
   VERIFY_INTERFACE_EXISTS (shell, "wl_shell");
   VERIFY_INTERFACE_EXISTS (shm, "wl_shm");
+  VERIFY_INTERFACE_EXISTS (scaler, "wl_scaler");
 
 #undef VERIFY_INTERFACE_EXISTS
-
-  /* We make the viewporter optional even though it may cause bad display.
-   * This is so one can test wayland display on older compositor or on
-   * compositor that don't implement this extension. */
-  if (!self->viewporter) {
-    g_warning ("Wayland compositor is missing the ability to scale, video "
-        "display may not work properly.");
-  }
 
   self->thread = g_thread_try_new ("GstWlDisplay", gst_wl_display_thread_run,
       self, &err);
@@ -291,27 +265,4 @@ gst_wl_display_new_existing (struct wl_display * display,
   }
 
   return self;
-}
-
-void
-gst_wl_display_register_buffer (GstWlDisplay * self, gpointer buf)
-{
-  g_assert (!self->shutting_down);
-
-  GST_TRACE_OBJECT (self, "registering GstWlBuffer %p", buf);
-
-  g_mutex_lock (&self->buffers_mutex);
-  g_hash_table_add (self->buffers, buf);
-  g_mutex_unlock (&self->buffers_mutex);
-}
-
-void
-gst_wl_display_unregister_buffer (GstWlDisplay * self, gpointer buf)
-{
-  GST_TRACE_OBJECT (self, "unregistering GstWlBuffer %p", buf);
-
-  g_mutex_lock (&self->buffers_mutex);
-  if (G_LIKELY (!self->shutting_down))
-    g_hash_table_remove (self->buffers, buf);
-  g_mutex_unlock (&self->buffers_mutex);
 }

@@ -99,8 +99,8 @@ gst_linsys_sdi_sink_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_linsys_sdi_sink_sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_linsys_sdi_sink_sink_template));
 
   gst_element_class_set_static_metadata (element_class, "SDI video sink",
       "Sink/Video", "Writes video from SDI transmit device",
@@ -318,7 +318,7 @@ gst_linsys_sdi_sink_preroll (GstBaseSink * sink, GstBuffer * buffer)
 static int
 get_av (int f, int v, int h)
 {
-  static const int table[] = {
+  static int table[] = {
     0x80, 0x9d, 0xab, 0xb6, 0xc7, 0xda, 0xec, 0xf1
   };
 

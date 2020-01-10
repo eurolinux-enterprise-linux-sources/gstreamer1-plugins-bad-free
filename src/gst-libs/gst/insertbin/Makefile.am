@@ -29,13 +29,11 @@ gir_sources=$(patsubst %,$(srcdir)/%, $(libgstinsertbin_@GST_API_VERSION@_la_SOU
 gir_sources+=$(patsubst %,$(builddir)/%, $(built_sources))
 
 GstInsertBin-@GST_API_VERSION@.gir: $(INTROSPECTION_SCANNER) libgstinsertbin-@GST_API_VERSION@.la
-	$(AM_V_GEN)PKG_CONFIG_PATH="$(GST_PKG_CONFIG_PATH)"  GI_SCANNER_DISABLE_CACHE=yes\
+	$(AM_V_GEN)PKG_CONFIG_PATH="$(GST_PKG_CONFIG_PATH)" \
 		GST_PLUGIN_SYSTEM_PATH_1_0="" GST_PLUGIN_PATH_1_0="" GST_REGISTRY_UPDATE=no \
-		CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CC="$(CC)" PKG_CONFIG="$(PKG_CONFIG)" DLLTOOL="$(DLLTOOL)" \
 		$(INTROSPECTION_SCANNER) -v --namespace GstInsertBin \
 		--nsversion=@GST_API_VERSION@ \
-		--identifier-prefix=Gst \
-		--symbol-prefix=gst \
+		--strip-prefix=Gst \
 		--warn-all \
 		--c-include "gst/insertbin/gstinsertbin.h" \
 		-I$(top_srcdir)/gst-libs \
@@ -49,7 +47,7 @@ GstInsertBin-@GST_API_VERSION@.gir: $(INTROSPECTION_SCANNER) libgstinsertbin-@GS
 		--pkg gstreamer-@GST_API_VERSION@ \
 		--pkg gstreamer-base-@GST_API_VERSION@ \
 		--pkg-export gstreamer-insertbin-@GST_API_VERSION@ \
-		--add-init-section="$(INTROSPECTION_INIT)" \
+		--add-init-section="gst_init(NULL,NULL);" \
 		-DGST_USE_UNSTABLE_API \
 		--output $@ \
 		$(gir_headers) \
@@ -75,3 +73,19 @@ typelibs_DATA = $(BUILT_GIRSOURCES:.gir=.typelib)
 
 CLEANFILES = $(BUILT_GIRSOURCES) $(typelibs_DATA)
 endif
+
+Android.mk:  $(BUILT_SOURCES) Makefile.am
+	androgenizer -:PROJECT libgstinsertbin -:STATIC libgstinsertbin-@GST_API_VERSION@ \
+	 -:TAGS eng debug \
+         -:REL_TOP $(top_srcdir) -:ABS_TOP $(abs_top_srcdir) \
+	 -:SOURCES $(libgstinsertbin_@GST_API_VERSION@_la_SOURCES) \
+         $(built_sources) \
+	 -:CFLAGS $(DEFS) $(libgstinsertbin_@GST_API_VERSION@_la_CFLAGS) \
+	 -:LDFLAGS $(libgstinsertbin_@GST_API_VERSION@_la_LDFLAGS) \
+	           $(libgstinsertbin@GST_API_VERSION@_la_LIBADD) \
+	           -ldl \
+	 -:HEADER_TARGET gstreamer-@GST_API_VERSION@/gst/insertbin \
+	 -:HEADERS $(libgstinsertbininclude_HEADERS) \
+         $(built_headers) \
+	 -:PASSTHROUGH LOCAL_ARM_MODE:=arm \
+	> $@

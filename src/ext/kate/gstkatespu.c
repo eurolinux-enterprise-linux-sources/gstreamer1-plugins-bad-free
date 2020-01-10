@@ -911,6 +911,7 @@ gst_kate_spu_encode_spu (GstKateDec * kd, const kate_event * ev)
 
 error:
   kate_tracker_clear (&kin);
-  g_free (bytes);
+  if (bytes)
+    g_free (bytes);
   return NULL;
 }

@@ -156,7 +156,8 @@ gst_d3dvideosink_class_init (GstD3DVideoSinkClass * klass)
       "Display data using a Direct3D video renderer",
       "David Hoyt <dhoyt@hoytsoft.org>, Roland Krikava <info@bluedigits.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class, &sink_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sink_template));
 
   g_rec_mutex_init (&klass->lock);
 }
@@ -276,11 +277,14 @@ gst_d3dvideosink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   gint video_par_n, video_par_d;        /* video's PAR */
   gint display_par_n = 1, display_par_d = 1;    /* display's PAR */
   guint num, den;
+  gchar *tmp = NULL;
   GstBufferPool *newpool, *oldpool;
   GstBufferPool *newfbpool, *oldfbpool;
   GstStructure *config;
 
-  GST_DEBUG_OBJECT (bsink, "Caps: %" GST_PTR_FORMAT, caps);
+  GST_DEBUG_OBJECT (bsink, " ");
+
+  GST_DEBUG_OBJECT (bsink, "Caps: %s", (tmp = gst_caps_to_string (caps)));
   sink = GST_D3DVIDEOSINK (bsink);
 
   sink_caps = d3d_supported_caps (sink);
@@ -353,7 +357,9 @@ gst_d3dvideosink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   sink->width = video_width;
   sink->height = video_height;
 
-  GST_DEBUG_OBJECT (bsink, "Selected caps: %" GST_PTR_FORMAT, caps);
+  GST_DEBUG_OBJECT (bsink, "Selected caps: %s", (tmp =
+          gst_caps_to_string (caps)));
+  g_free (tmp);
 
   if (!d3d_set_render_format (sink))
     goto incompatible_caps;
@@ -392,10 +398,8 @@ gst_d3dvideosink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 
   if (oldpool)
     gst_object_unref (oldpool);
-  if (oldfbpool) {
-    gst_buffer_pool_set_active (oldfbpool, FALSE);
+  if (oldfbpool)
     gst_object_unref (oldfbpool);
-  }
 
   return TRUE;
   /* ERRORS */
@@ -407,8 +411,10 @@ incompatible_caps:
   }
 invalid_format:
   {
+    gchar *caps_txt = gst_caps_to_string (caps);
     GST_DEBUG_OBJECT (sink,
-        "Could not locate image format from caps %" GST_PTR_FORMAT, caps);
+        "Could not locate image format from caps %s", caps_txt);
+    g_free (caps_txt);
     return FALSE;
   }
 no_disp_ratio:
@@ -590,13 +596,7 @@ gst_d3dvideosink_navigation_send_event (GstNavigation * navigation,
   if ((e = gst_event_new_navigation (structure))) {
     GstPad *pad;
     if ((pad = gst_pad_get_peer (GST_VIDEO_SINK_PAD (sink)))) {
-      if (!gst_pad_send_event (pad, gst_event_ref (e))) {
-        /* If upstream didn't handle the event we'll post a message with it
-         * for the application in case it wants to do something with it */
-        gst_element_post_message (GST_ELEMENT_CAST (sink),
-            gst_navigation_message_new_event (GST_OBJECT_CAST (sink), e));
-      }
-      gst_event_unref (e);
+      gst_pad_send_event (pad, e);
       gst_object_unref (pad);
     }
   }

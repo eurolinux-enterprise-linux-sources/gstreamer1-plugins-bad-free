@@ -643,14 +643,11 @@ mxf_metadata_aes3_audio_essence_descriptor_handle_tag (MXFMetadataBase *
       tag_data += 8;
       tag_size -= 8;
 
-      if (tag_size / 24 != len)
-        goto error;
-
-      if (G_MAXINT / (24 + sizeof (guint8 *)) < len)
+      if (tag_size != len * 24)
         goto error;
 
       self->fixed_channel_status_data =
-          g_malloc0 (len * (sizeof (guint8 *) + 24));
+          g_malloc0 (len * sizeof (guint8 *) + len * 24);
 
       for (i = 0; i < len; i++) {
         self->fixed_channel_status_data[i] =
@@ -741,13 +738,10 @@ mxf_metadata_aes3_audio_essence_descriptor_handle_tag (MXFMetadataBase *
       tag_data += 8;
       tag_size -= 8;
 
-      if (tag_size / 24 != len)
+      if (tag_size != len * 24)
         goto error;
 
-      if (G_MAXINT / (24 + sizeof (guint8 *)) < len)
-        goto error;
-
-      self->fixed_user_data = g_malloc0 (len * (sizeof (guint8 *) + 24));
+      self->fixed_user_data = g_malloc0 (len * sizeof (guint8 *) + len * 24);
 
       for (i = 0; i < len; i++) {
         self->fixed_user_data[i] =
@@ -1272,8 +1266,7 @@ mxf_bwf_create_caps (MXFMetadataTimelineTrack * track,
           descriptor->channel_count) / 8;
 
     audio_format =
-        gst_audio_format_build_integer (block_align !=
-        descriptor->channel_count, G_LITTLE_ENDIAN,
+        gst_audio_format_build_integer (block_align != 1, G_LITTLE_ENDIAN,
         (block_align / descriptor->channel_count) * 8,
         (block_align / descriptor->channel_count) * 8);
     ret =
@@ -1304,8 +1297,7 @@ mxf_bwf_create_caps (MXFMetadataTimelineTrack * track,
           descriptor->channel_count) / 8;
 
     audio_format =
-        gst_audio_format_build_integer (block_align !=
-        descriptor->channel_count, G_BIG_ENDIAN,
+        gst_audio_format_build_integer (block_align != 1, G_BIG_ENDIAN,
         (block_align / descriptor->channel_count) * 8,
         (block_align / descriptor->channel_count) * 8);
     ret =
@@ -1382,8 +1374,8 @@ mxf_aes3_create_caps (MXFMetadataTimelineTrack * track,
         descriptor->channel_count) / 8;
 
   audio_format =
-      gst_audio_format_build_integer (block_align != descriptor->channel_count,
-      G_LITTLE_ENDIAN, (block_align / descriptor->channel_count) * 8,
+      gst_audio_format_build_integer (block_align != 1, G_LITTLE_ENDIAN,
+      (block_align / descriptor->channel_count) * 8,
       (block_align / descriptor->channel_count) * 8);
   ret =
       mxf_metadata_generic_sound_essence_descriptor_create_caps (descriptor,

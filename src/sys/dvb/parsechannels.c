@@ -40,420 +40,20 @@
 GST_DEBUG_CATEGORY_EXTERN (dvb_base_bin_debug);
 #define GST_CAT_DEFAULT dvb_base_bin_debug
 
-typedef enum
-{
-  CHANNEL_CONF_FORMAT_NONE,
-  CHANNEL_CONF_FORMAT_DVBV5,
-  CHANNEL_CONF_FORMAT_ZAP
-} GstDvbChannelConfFormat;
-
-typedef gboolean (*GstDvbV5ChannelsConfPropSetFunction) (GstElement *
-    dvbbasebin, const gchar * property, GKeyFile * kf,
-    const gchar * channel_name, const gchar * key);
-
-typedef struct
-{
-  const gchar *conf_property;
-  const gchar *elem_property;
-  GstDvbV5ChannelsConfPropSetFunction set_func;
-} GstDvbV5ChannelsConfToPropertyMap;
-
-static gboolean parse_and_configure_from_v5_conf_file (GstElement * dvbbasebin,
-    const gchar * filename, const gchar * channel_name, GError ** error);
-static gboolean parse_and_configure_from_zap_conf_file (GstElement * dvbbasebin,
-    const gchar * filename, const gchar * channel_name, GError ** error);
-static GstDvbChannelConfFormat detect_file_format (const gchar * filename);
-
-static gboolean gst_dvb_base_bin_conf_set_string (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_uint (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_int (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_inversion (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_guard (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_trans_mode (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_code_rate (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_delsys (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_hierarchy (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static gboolean gst_dvb_base_bin_conf_set_modulation (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key);
-static GHashTable *parse_channels_conf_from_zap_file (GstElement * dvbbasebin,
-    const gchar * filename, GError ** error);
-static gboolean remove_channel_from_hash (gpointer key, gpointer value,
-    gpointer user_data);
-static void destroy_channels_hash (GHashTable * channels);
-
-GstDvbV5ChannelsConfToPropertyMap dvbv5_prop_map[] = {
-  {"SERVICE_ID", "program-numbers", gst_dvb_base_bin_conf_set_string},
-  {"FREQUENCY", "frequency", gst_dvb_base_bin_conf_set_uint},
-  {"BANDWIDTH_HZ", "bandwidth-hz", gst_dvb_base_bin_conf_set_uint},
-  {"INVERSION", "inversion", gst_dvb_base_bin_conf_set_inversion},
-  {"GUARD_INTERVAL", "guard", gst_dvb_base_bin_conf_set_guard},
-  {"TRANSMISSION_MODE", "trans-mode", gst_dvb_base_bin_conf_set_trans_mode},
-  {"HIERARCHY", "hierarchy", gst_dvb_base_bin_conf_set_hierarchy},
-  {"MODULATION", "modulation", gst_dvb_base_bin_conf_set_modulation},
-  {"CODE_RATE_HP", "code-rate-hp", gst_dvb_base_bin_conf_set_code_rate},
-  {"CODE_RATE_LP", "code-rate-lp", gst_dvb_base_bin_conf_set_code_rate},
-  {"ISDBT_LAYER_ENABLED", "isdbt-layer-enabled",
-      gst_dvb_base_bin_conf_set_uint},
-  {"ISDBT_PARTIAL_RECEPTION", "isdbt-partial-reception",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_SOUND_BROADCASTING", "isdbt-sound-broadcasting",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_SB_SUBCHANNEL_ID", "isdbt-sb-subchannel-id",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_SB_SEGMENT_IDX", "isdbt-sb-segment-idx",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_SB_SEGMENT_COUNT", "isdbt-sb-segment-count", gst_dvb_base_bin_conf_set_int},  /* Range in files start from 0, property starts from 1 */
-  {"ISDBT_LAYERA_FEC", "isdbt-layera-fec", gst_dvb_base_bin_conf_set_code_rate},
-  {"ISDBT_LAYERA_MODULATION", "isdbt-layera-modulation",
-      gst_dvb_base_bin_conf_set_modulation},
-  {"ISDBT_LAYERA_SEGMENT_COUNT", "isdbt-layera-segment-count",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_LAYERA_TIME_INTERLEAVING", "isdbt-layera-time-interleaving",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_LAYERB_FEC", "isdbt-layerb-fec", gst_dvb_base_bin_conf_set_code_rate},
-  {"ISDBT_LAYERB_MODULATION", "isdbt-layerb-modulation",
-      gst_dvb_base_bin_conf_set_modulation},
-  {"ISDBT_LAYERB_SEGMENT_COUNT", "isdbt-layerb-segment-count",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_LAYERB_TIME_INTERLEAVING", "isdbt-layerb-time-interleaving",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_LAYERC_FEC", "isdbt-layerc-fec", gst_dvb_base_bin_conf_set_code_rate},
-  {"ISDBT_LAYERC_MODULATION", "isdbt-layerc-modulation",
-      gst_dvb_base_bin_conf_set_modulation},
-  {"ISDBT_LAYERC_SEGMENT_COUNT", "isdbt-layerc-segment-count",
-      gst_dvb_base_bin_conf_set_int},
-  {"ISDBT_LAYERC_TIME_INTERLEAVING", "isdbt-layerc-time-interleaving",
-      gst_dvb_base_bin_conf_set_int},
-  {"DELIVERY_SYSTEM", "delsys", gst_dvb_base_bin_conf_set_delsys},
-  {NULL,}
-};
-
 /* TODO:
  * Store the channels hash table around instead of constantly parsing it
  * Detect when the file changed on disk
  */
 
-static gint
-gst_dvb_base_bin_find_string_in_array (const gchar ** array, const gchar * str)
-{
-  gint i = 0;
-  const gchar *cur;
-  while ((cur = array[i])) {
-    if (strcmp (cur, str) == 0)
-      return i;
-
-    i++;
-  }
-
-  return -1;
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_property_from_string_array (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key, const gchar ** strings, gint default_value)
-{
-  gchar *str;
-  gint v;
-
-  str = g_key_file_get_string (kf, channel_name, key, NULL);
-  v = gst_dvb_base_bin_find_string_in_array (strings, str);
-  if (v == -1) {
-    GST_WARNING_OBJECT (dvbbasebin, "Unexpected value '%s' for property "
-        "'%s', using default: '%d'", str, property, default_value);
-    v = default_value;
-  }
-
-  g_free (str);
-  g_object_set (dvbbasebin, property, v, NULL);
-  return TRUE;
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_string (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key)
-{
-  gchar *str;
-
-  str = g_key_file_get_string (kf, channel_name, key, NULL);
-  if (!str) {
-    GST_WARNING_OBJECT (dvbbasebin,
-        "Could not get value for '%s' on channel '%s'", key, channel_name);
-    return FALSE;
-  }
-
-  g_object_set (dvbbasebin, property, str, NULL);
-  g_free (str);
-  return TRUE;
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_uint (GstElement * dvbbasebin, const gchar * property,
-    GKeyFile * kf, const gchar * channel_name, const gchar * key)
-{
-  guint64 v;
-
-  v = g_key_file_get_uint64 (kf, channel_name, key, NULL);
-  if (!v) {
-    GST_WARNING_OBJECT (dvbbasebin,
-        "Could not get value for '%s' on channel '%s'", key, channel_name);
-    return FALSE;
-  }
-
-  g_object_set (dvbbasebin, property, (guint) v, NULL);
-  return TRUE;
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_int (GstElement * dvbbasebin, const gchar * property,
-    GKeyFile * kf, const gchar * channel_name, const gchar * key)
-{
-  gint v;
-
-  v = g_key_file_get_integer (kf, channel_name, key, NULL);
-  if (!v) {
-    GST_WARNING_OBJECT (dvbbasebin,
-        "Could not get value for '%s' on channel '%s'", key, channel_name);
-    return FALSE;
-  }
-
-  g_object_set (dvbbasebin, property, v, NULL);
-  return TRUE;
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_inversion (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key)
-{
-  gchar *str;
-  gint v;
-
-  str = g_key_file_get_string (kf, channel_name, key, NULL);
-  if (!str) {
-    GST_WARNING_OBJECT (dvbbasebin,
-        "Could not get value for '%s' on channel '%s'", key, channel_name);
-    return FALSE;
-  }
-
-  if (strcmp (str, "AUTO") == 0)
-    v = 2;
-  else if (strcmp (str, "ON") == 0)
-    v = 1;
-  else
-    v = 0;                      /* OFF */
-
-  g_free (str);
-  g_object_set (dvbbasebin, property, v, NULL);
-  return TRUE;
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_guard (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key)
-{
-  const gchar *guards[] = {
-    "1/32", "1/16", "1/8", "1/4", "auto",
-    "1/128", "19/128", "19/256",
-    "PN420", "PN595", "PN945", NULL
-  };
-  return gst_dvb_base_bin_conf_set_property_from_string_array (dvbbasebin,
-      property, kf, channel_name, key, guards, 4);
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_trans_mode (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key)
-{
-  const gchar *trans_modes[] = {
-    "2K", "8K", "AUTO", "4K", "1K",
-    "16K", "32K", "C1", "C3780", NULL
-  };
-  return gst_dvb_base_bin_conf_set_property_from_string_array (dvbbasebin,
-      property, kf, channel_name, key, trans_modes, 2);
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_code_rate (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key)
-{
-  const gchar *code_rates[] = {
-    "NONE", "1/2", "2/3", "3/4", "4/5",
-    "5/6", "6/7", "7/8", "8/9", "AUTO",
-    "3/5", "9/10", "2/5", NULL
-  };
-  return gst_dvb_base_bin_conf_set_property_from_string_array (dvbbasebin,
-      property, kf, channel_name, key, code_rates, 9);
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_delsys (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key)
-{
-  const gchar *delsys[] = {
-    "UNDEFINED", "DVBCA", "DVBCB", "DVBT", "DSS",
-    "DVBS", "DVBS2", "DVBH", "ISDBT", "ISDBS",
-    "ISDBC", "ATSC", "ATSCMH", "DTMB", "CMMB",
-    "DAB", "DVBT2", "TURBO", "DVBCC", NULL
-  };
-  return gst_dvb_base_bin_conf_set_property_from_string_array (dvbbasebin,
-      property, kf, channel_name, key, delsys, 0);
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_hierarchy (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key)
-{
-  const gchar *hierarchies[] = {
-    "NONE", "1", "2", "4", "AUTO", NULL
-  };
-  return gst_dvb_base_bin_conf_set_property_from_string_array (dvbbasebin,
-      property, kf, channel_name, key, hierarchies, 4);
-}
-
-static gboolean
-gst_dvb_base_bin_conf_set_modulation (GstElement * dvbbasebin,
-    const gchar * property, GKeyFile * kf, const gchar * channel_name,
-    const gchar * key)
-{
-  const gchar *modulations[] = {
-    "QPSK", "QAM/16", "QAM/32", "QAM/64",
-    "QAM/128", "QAM/256", "QAM/AUTO", "VSB/8",
-    "VSB/16", "PSK/8", "APSK/16", "APSK/32",
-    "DQPSK", "QAM/4_NR", NULL
-  };
-  return gst_dvb_base_bin_conf_set_property_from_string_array (dvbbasebin,
-      property, kf, channel_name, key, modulations, 6);
-}
-
-/* FIXME: is channel_name guaranteed to be ASCII or UTF-8? */
-static gboolean
-parse_and_configure_from_v5_conf_file (GstElement * dvbbasebin,
-    const gchar * filename, const gchar * channel_name, GError ** error)
-{
-  GKeyFile *keyfile;
-  gchar **keys, **keys_p;
-  GError *err = NULL;
-
-  keyfile = g_key_file_new ();
-  if (!g_key_file_load_from_file (keyfile, filename, G_KEY_FILE_NONE, &err))
-    goto load_error;
-
-  if (!g_key_file_has_group (keyfile, channel_name))
-    goto unknown_channel;
-
-  keys = g_key_file_get_keys (keyfile, channel_name, NULL, &err);
-  if (!keys)
-    goto no_properties;
-
-  keys_p = keys;
-  while (*keys_p) {
-    const gchar *k = *keys_p;
-    const GstDvbV5ChannelsConfToPropertyMap *map_entry = dvbv5_prop_map;
-    gboolean property_found = FALSE;
-
-    GST_LOG_OBJECT (dvbbasebin, "Setting property %s", k);
-
-    while (map_entry->conf_property) {
-      if (strcmp (map_entry->conf_property, k) == 0) {
-        if (!map_entry->set_func (dvbbasebin, map_entry->elem_property, keyfile,
-                channel_name, k))
-          goto property_error;
-        property_found = TRUE;
-        break;
-      }
-      map_entry++;
-    }
-
-    if (!property_found)
-      GST_WARNING_OBJECT (dvbbasebin, "Failed to map property '%s'", k);
-
-    keys_p++;
-  }
-
-  GST_DEBUG_OBJECT (dvbbasebin, "Successfully parsed channel configuration "
-      "file '%s'", filename);
-  g_strfreev (keys);
-  g_key_file_unref (keyfile);
-  return TRUE;
-
-load_error:
-  if ((err->domain == G_FILE_ERROR && err->code == G_FILE_ERROR_NOENT) ||
-      (err->domain == G_KEY_FILE_ERROR
-          && err->code == G_KEY_FILE_ERROR_NOT_FOUND)) {
-    g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND,
-        _("Couldn't find channel configuration file"));
-  } else {
-    g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ,
-        _("Couldn't load channel configuration file: '%s'"), err->message);
-  }
-  g_clear_error (&err);
-  return FALSE;
-
-unknown_channel:
-  {
-    g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND,
-        _("Couldn't find details for channel '%s'"), channel_name);
-    g_key_file_unref (keyfile);
-    g_clear_error (&err);
-    return FALSE;
-  }
-
-no_properties:
-  {
-    g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND,
-        _("No properties for channel '%s'"), channel_name);
-    g_key_file_unref (keyfile);
-    g_clear_error (&err);
-    return FALSE;
-  }
-
-property_error:
-  {
-    g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_FAILED,
-        _("Failed to set properties for channel '%s'"), channel_name);
-    g_key_file_unref (keyfile);
-    g_clear_error (&err);
-    return FALSE;
-  }
-}
-
+/* this will do zap style channels.conf only for the moment */
 static GHashTable *
-parse_channels_conf_from_zap_file (GstElement * dvbbasebin,
-    const gchar * filename, GError ** error)
+parse_channels_conf_from_file (GstElement * dvbbasebin, const gchar * filename,
+    GError ** error)
 {
   gchar *contents;
   gchar **lines;
   gchar *line;
   gchar **fields;
-  int i, parsedchannels = 0;
-  GHashTable *res;
-  GError *err = NULL;
   const gchar *terrestrial[] = { "inversion", "bandwidth",
     "code-rate-hp", "code-rate-lp", "modulation", "transmission-mode",
     "guard", "hierarchy"
@@ -464,6 +64,9 @@ parse_channels_conf_from_zap_file (GstElement * dvbbasebin,
   const gchar *cable[] = { "inversion", "symbol-rate", "code-rate-hp",
     "modulation"
   };
+  int i, parsedchannels = 0;
+  GHashTable *res;
+  GError *err = NULL;
 
   GST_INFO_OBJECT (dvbbasebin, "parsing '%s'", filename);
 
@@ -476,18 +79,30 @@ parse_channels_conf_from_zap_file (GstElement * dvbbasebin,
   i = 0;
   line = lines[0];
   while (line != NULL) {
-    GHashTable *params;
-    int j, numfields;
+    if (line[0] != '#') {
+      int numfields;
+      gboolean parsed = FALSE;
+      GHashTable *params = g_hash_table_new_full (g_str_hash, g_str_equal,
+          g_free, g_free);
 
-    if (line[0] == '#')
-      goto next_line;
+      fields = g_strsplit (line, ":", 0);
+      numfields = g_strv_length (fields);
+      if (numfields == 8) {
+        /* satellite */
+        int j;
 
-    params = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-    fields = g_strsplit (line, ":", 0);
-    numfields = g_strv_length (fields);
+        g_hash_table_insert (params, g_strdup ("type"), g_strdup ("satellite"));
+        for (j = 2; j <= 4; j++) {
+          g_hash_table_insert (params, g_strdup (satellite[j - 2]),
+              g_strdup (fields[j]));
+        }
+        g_hash_table_insert (params, g_strdup ("frequency"),
+            g_strdup_printf ("%d", atoi (fields[1]) * 1000));
+        parsed = TRUE;
+      } else if (numfields == 13) {
+        /* terrestrial */
+        int j;
 
-    switch (numfields) {
-      case 13:                 /* terrestrial */
         g_hash_table_insert (params, g_strdup ("type"),
             g_strdup ("terrestrial"));
         for (j = 2; j <= 9; j++) {
@@ -496,8 +111,11 @@ parse_channels_conf_from_zap_file (GstElement * dvbbasebin,
         }
         g_hash_table_insert (params, g_strdup ("frequency"),
             g_strdup (fields[1]));
-        break;
-      case 9:                  /* cable */
+        parsed = TRUE;
+      } else if (numfields == 9) {
+        /* cable */
+        int j;
+
         g_hash_table_insert (params, g_strdup ("type"), g_strdup ("cable"));
         for (j = 2; j <= 5; j++) {
           g_hash_table_insert (params, g_strdup (cable[j - 2]),
@@ -505,47 +123,27 @@ parse_channels_conf_from_zap_file (GstElement * dvbbasebin,
         }
         g_hash_table_insert (params, g_strdup ("frequency"),
             g_strdup (fields[1]));
-        break;
-      case 8:                  /* satellite */
-        g_hash_table_insert (params, g_strdup ("type"), g_strdup ("satellite"));
-        for (j = 2; j <= 4; j++) {
-          g_hash_table_insert (params, g_strdup (satellite[j - 2]),
-              g_strdup (fields[j]));
-        }
-        /* Some ZAP format variations store freqs in MHz
-         * but we internally use kHz for DVB-S/S2. */
-        if (strlen (fields[1]) < 6) {
-          g_hash_table_insert (params, g_strdup ("frequency"),
-              g_strdup_printf ("%d", atoi (fields[1]) * 1000));
-        } else {
-          g_hash_table_insert (params, g_strdup ("frequency"),
-              g_strdup_printf ("%d", atoi (fields[1])));
-        }
-        break;
-      case 6:                  /* atsc (vsb/qam) */
+        parsed = TRUE;
+      } else if (numfields == 6) {
+        /* atsc (vsb/qam) */
         g_hash_table_insert (params, g_strdup ("type"), g_strdup ("atsc"));
         g_hash_table_insert (params, g_strdup ("modulation"),
             g_strdup (fields[2]));
 
         g_hash_table_insert (params, g_strdup ("frequency"),
             g_strdup (fields[1]));
-        break;
-      default:
-        goto not_parsed;
+        parsed = TRUE;
+      }
+      if (parsed) {
+        g_hash_table_insert (params, g_strdup ("sid"),
+            g_strdup (fields[numfields - 1]));
+        g_hash_table_insert (res, g_strdup (fields[0]), params);
+        parsedchannels++;
+      }
+      g_strfreev (fields);
     }
-
-    /* parsed */
-    g_hash_table_insert (params, g_strdup ("sid"),
-        g_strdup (fields[numfields - 1]));
-    g_hash_table_insert (res, g_strdup (fields[0]), params);
-    parsedchannels++;
-
-  not_parsed:
-    g_strfreev (fields);
-  next_line:
     line = lines[++i];
   }
-
   g_strfreev (lines);
   g_free (contents);
 
@@ -555,27 +153,32 @@ parse_channels_conf_from_zap_file (GstElement * dvbbasebin,
   return res;
 
 open_fail:
-  if (err->code == G_FILE_ERROR_NOENT) {
-    g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND,
-        _("Couldn't find channel configuration file: '%s'"), err->message);
-  } else {
-    g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ,
-        _("Couldn't load channel configuration file: '%s'"), err->message);
+  {
+    if (err->code == G_FILE_ERROR_NOENT) {
+      g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND,
+          _("Couldn't find DVB channel configuration file"));
+    } else {
+      g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ,
+          _("Couldn't load DVB channel configuration file: %s"), err->message);
+    }
+    g_clear_error (&err);
+    return NULL;
   }
-  g_clear_error (&err);
-  return NULL;
 
 no_channels:
-  g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_FAILED,
-      _("Channel configuration file doesn't contain any channels"));
-  g_hash_table_unref (res);
-  return NULL;
+  {
+    g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_FAILED,
+        _("DVB channel configuration file doesn't contain any channels"));
+    g_hash_table_unref (res);
+    return NULL;
+  }
 }
 
 static gboolean
 remove_channel_from_hash (gpointer key, gpointer value, gpointer user_data)
 {
-  g_free (key);
+  if (key)
+    g_free (key);
   if (value)
     g_hash_table_destroy ((GHashTable *) value);
   return TRUE;
@@ -587,25 +190,23 @@ destroy_channels_hash (GHashTable * channels)
   g_hash_table_foreach_remove (channels, remove_channel_from_hash, NULL);
 }
 
-/* FIXME: is channel_name guaranteed to be ASCII or UTF-8? */
-static gboolean
-parse_and_configure_from_zap_conf_file (GstElement * dvbbasebin,
-    const gchar * filename, const gchar * channel_name, GError ** error)
+gboolean
+set_properties_for_channel (GstElement * dvbbasebin,
+    const gchar * channel_name, GError ** error)
 {
   gboolean ret = FALSE;
   GHashTable *channels, *params;
+  gchar *filename;
   gchar *type;
+  const gchar *adapter;
 
-  /* Assumptions are made here about a format that is loosely
-   * defined. Particularly, we assume a given delivery system
-   * out of counting the number of fields per line. dvbsrc has
-   * smarter code to auto-detect a delivery system based on
-   * known-correct combinations of parameters so if you ever
-   * encounter cases where the delivery system is being
-   * wrongly set here, just remove the offending
-   * g_object_set line and let dvbsrc work his magic out. */
-
-  channels = parse_channels_conf_from_zap_file (dvbbasebin, filename, error);
+  filename = g_strdup (g_getenv ("GST_DVB_CHANNELS_CONF"));
+  if (filename == NULL) {
+    filename = g_build_filename (g_get_user_config_dir (),
+        "gstreamer-" GST_API_VERSION, "dvb-channels.conf", NULL);
+  }
+  channels = parse_channels_conf_from_file (dvbbasebin, filename, error);
+  g_free (filename);
 
   if (!channels)
     goto beach;
@@ -618,19 +219,24 @@ parse_and_configure_from_zap_conf_file (GstElement * dvbbasebin,
   g_object_set (dvbbasebin, "program-numbers",
       g_hash_table_lookup (params, "sid"), NULL);
   /* check if it is terrestrial or satellite */
+  adapter = g_getenv ("GST_DVB_ADAPTER");
+  if (adapter)
+    g_object_set (dvbbasebin, "adapter", atoi (adapter), NULL);
   g_object_set (dvbbasebin, "frequency",
       atoi (g_hash_table_lookup (params, "frequency")), NULL);
   type = g_hash_table_lookup (params, "type");
   if (strcmp (type, "terrestrial") == 0) {
     gchar *val;
 
+    g_object_set (dvbbasebin, "delsys", SYS_DVBT, NULL);
+
     val = g_hash_table_lookup (params, "inversion");
     if (strcmp (val, "INVERSION_OFF") == 0)
-      g_object_set (dvbbasebin, "inversion", INVERSION_OFF, NULL);
+      g_object_set (dvbbasebin, "inversion", 0, NULL);
     else if (strcmp (val, "INVERSION_ON") == 0)
-      g_object_set (dvbbasebin, "inversion", INVERSION_ON, NULL);
+      g_object_set (dvbbasebin, "inversion", 1, NULL);
     else
-      g_object_set (dvbbasebin, "inversion", INVERSION_AUTO, NULL);
+      g_object_set (dvbbasebin, "inversion", 2, NULL);
 
     val = g_hash_table_lookup (params, "bandwidth");
     if (strcmp (val, "BANDWIDTH_8_MHZ") == 0)
@@ -639,12 +245,6 @@ parse_and_configure_from_zap_conf_file (GstElement * dvbbasebin,
       g_object_set (dvbbasebin, "bandwidth", 1, NULL);
     else if (strcmp (val, "BANDWIDTH_6_MHZ") == 0)
       g_object_set (dvbbasebin, "bandwidth", 2, NULL);
-    else if (strcmp (val, "BANDWIDTH_5_MHZ") == 0)
-      g_object_set (dvbbasebin, "bandwidth", 4, NULL);
-    else if (strcmp (val, "BANDWIDTH_10_MHZ") == 0)
-      g_object_set (dvbbasebin, "bandwidth", 5, NULL);
-    else if (strcmp (val, "BANDWIDTH_1_712_MHZ") == 0)
-      g_object_set (dvbbasebin, "bandwidth", 6, NULL);
     else
       g_object_set (dvbbasebin, "bandwidth", 3, NULL);
 
@@ -842,88 +442,10 @@ beach:
 
 unknown_channel:
   {
+    /* FIXME: is channel name guaranteed to be ASCII or UTF-8? */
     g_set_error (error, GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND,
-        _("Couldn't find details for channel '%s'"), channel_name);
+        _("Couldn't find details for DVB channel %s"), channel_name);
     destroy_channels_hash (channels);
     return FALSE;
   }
-}
-
-static GstDvbChannelConfFormat
-detect_file_format (const gchar * filename)
-{
-  gchar *contents;
-  gchar **lines;
-  gchar **line;
-  GstDvbChannelConfFormat ret = CHANNEL_CONF_FORMAT_NONE;
-
-  if (!g_file_get_contents (filename, &contents, NULL, NULL))
-    return ret;
-
-  lines = g_strsplit (contents, "\n", 0);
-  line = lines;
-
-  while (*line) {
-    if (g_str_has_prefix (*line, "[") && g_str_has_suffix (*line, "]")) {
-      ret = CHANNEL_CONF_FORMAT_DVBV5;
-      break;
-    } else if (g_strrstr (*line, ":")) {
-      ret = CHANNEL_CONF_FORMAT_ZAP;
-      break;
-    }
-    line++;
-  }
-
-  g_strfreev (lines);
-  g_free (contents);
-  return ret;
-}
-
-gboolean
-set_properties_for_channel (GstElement * dvbbasebin,
-    const gchar * channel_name, GError ** error)
-{
-  gboolean ret = FALSE;
-  gchar *filename;
-  const gchar *adapter;
-
-  filename = g_strdup (g_getenv ("GST_DVB_CHANNELS_CONF"));
-  if (filename == NULL) {
-    filename = g_build_filename (g_get_user_config_dir (),
-        "gstreamer-" GST_API_VERSION, "dvb-channels.conf", NULL);
-  }
-
-  adapter = g_getenv ("GST_DVB_ADAPTER");
-  if (adapter)
-    g_object_set (dvbbasebin, "adapter", atoi (adapter), NULL);
-
-  switch (detect_file_format (filename)) {
-    case CHANNEL_CONF_FORMAT_DVBV5:
-      if (!parse_and_configure_from_v5_conf_file (dvbbasebin, filename,
-              channel_name, error)) {
-        GST_WARNING_OBJECT (dvbbasebin, "Could not parse libdvbv5 channel "
-            "configuration file '%s'", filename);
-      } else {
-        GST_INFO_OBJECT (dvbbasebin, "Parsed libdvbv5 channel configuration "
-            "file");
-        ret = TRUE;
-      }
-      break;
-    case CHANNEL_CONF_FORMAT_ZAP:
-      if (!parse_and_configure_from_zap_conf_file (dvbbasebin, filename,
-              channel_name, error)) {
-        GST_WARNING_OBJECT (dvbbasebin, "Could not parse ZAP channel "
-            "configuration file '%s'", filename);
-      } else {
-        GST_INFO_OBJECT (dvbbasebin, "Parsed ZAP channel configuration file");
-        ret = TRUE;
-      }
-      break;
-    default:
-      GST_WARNING_OBJECT (dvbbasebin, "Unknown configuration file format. "
-          "Can not get parameters for channel");
-  }
-
-  g_free (filename);
-  return ret;
 }

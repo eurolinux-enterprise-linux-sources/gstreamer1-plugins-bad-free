@@ -29,7 +29,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 iosassetsrc uri=assets-library://asset/asset.M4V?id=11&ext=M4V ! decodebin ! autoaudiosink
+ * gst-launch iosassetsrc uri=assets-library://asset/asset.M4V?id=11&ext=M4V ! decodebin2 ! autoaudiosink
  * ]| Plays asset with id a song.ogg from local dir.
  * </refsect2>
  */
@@ -129,7 +129,8 @@ gst_ios_asset_src_class_init (GstIOSAssetSrcClass * klass)
       "Read from arbitrary point in a iOS asset",
       "Andoni Morales Alastruey <amorales@fluendo.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&srctemplate));
 
   gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_ios_asset_src_start);
   gstbasesrc_class->stop = GST_DEBUG_FUNCPTR (gst_ios_asset_src_stop);
@@ -206,9 +207,9 @@ gst_ios_asset_src_set_uri (GstIOSAssetSrc * src, const gchar * uri, GError **err
   url = [[NSURL alloc] initWithString:nsuristr];
 
   if (url == NULL) {
-    GST_ERROR_OBJECT (src, "Invalid URI: %s", uri);
+    GST_ERROR_OBJECT (src, "Invalid URI: %s", src->uri);
     g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
-        "Invalid URI: %s", uri);
+        "Invalid URI: %s", src->uri);
     return FALSE;
   }
 

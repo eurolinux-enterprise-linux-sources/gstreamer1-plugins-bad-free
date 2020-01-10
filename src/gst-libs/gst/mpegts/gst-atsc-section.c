@@ -193,6 +193,7 @@ _parse_atsc_vct (GstMpegtsSection * section)
       gst_mpegts_parse_descriptors (data, descriptors_loop_length);
   if (vct->descriptors == NULL)
     goto error;
+  data += descriptors_loop_length;
 
   return (gpointer) vct;
 
@@ -360,6 +361,7 @@ _parse_atsc_mgt (GstMpegtsSection * section)
   }
   mgt->descriptors =
       gst_mpegts_parse_descriptors (data, descriptors_loop_length);
+  data += descriptors_loop_length;
 
   return (gpointer) mgt;
 

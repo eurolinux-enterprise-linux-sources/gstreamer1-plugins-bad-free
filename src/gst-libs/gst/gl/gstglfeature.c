@@ -27,21 +27,6 @@
 #include "gl.h"
 #include "gstglfeature.h"
 
-#define GST_CAT_DEFAULT gl_feature
-GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
-
-static void
-_init_debug (void)
-{
-  static volatile gsize _init = 0;
-
-  if (g_once_init_enter (&_init)) {
-    GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "glfeature", 0,
-        "OpenGL feature detection");
-    g_once_init_leave (&_init, 1);
-  }
-}
-
 gboolean
 gst_gl_check_extension (const char *name, const gchar * ext)
 {
@@ -204,7 +189,8 @@ _gst_gl_feature_check (GstGLContext * context,
   for (func_num = 0; data->functions[func_num].name; func_num++) {
     void *func;
 
-    g_free (full_function_name);
+    if (full_function_name)
+      g_free (full_function_name);
 
     full_function_name = g_strconcat ("gl", data->functions[func_num].name,
         suffix, NULL);
@@ -264,8 +250,6 @@ _gst_gl_feature_check_ext_functions (GstGLContext * context,
     int gl_major, int gl_minor, const char *gl_extensions)
 {
   int i;
-
-  _init_debug ();
 
   for (i = 0; i < G_N_ELEMENTS (gst_gl_feature_ext_functions_data); i++) {
     _gst_gl_feature_check (context, "GL",

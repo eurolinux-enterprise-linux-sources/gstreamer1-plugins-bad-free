@@ -42,8 +42,7 @@ struct _RfbDecoder
 
   gpointer buffer_handler_data;
 
-  GSocketClient *socket_client;
-  GSocketConnection *connection;
+  GSocket *socket;
   GCancellable *cancellable;
 
   guint8 *data;
@@ -56,6 +55,7 @@ struct _RfbDecoder
 
   /* settable properties */
   gboolean shared_flag;
+  gboolean disconnected;
 
   /* readable properties */
   gboolean inited;
@@ -93,16 +93,27 @@ struct _RfbDecoder
   /* some many used values */
   guint bytespp;
   guint line_size;
-
-  /* Seriliaze writes operations */
-  GMutex write_lock;
 };
+
+#if 0
+typedef struct _RfbRect
+{
+  RfbConnection *connection;
+
+  guint x_pos;
+  guint y_pos;
+  guint width;
+  guint height;
+  guint encoding_type;
+
+  gchar *data;
+} RfbRect;
+#endif
 
 RfbDecoder *rfb_decoder_new (void);
 void rfb_decoder_free (RfbDecoder * decoder);
 gboolean rfb_decoder_connect_tcp (RfbDecoder * decoder,
     gchar * host, guint port);
-void rfb_decoder_disconnect (RfbDecoder * decoder);
 gboolean rfb_decoder_iterate (RfbDecoder * decoder);
 void rfb_decoder_send_update_request (RfbDecoder * decoder,
     gboolean incremental, gint x, gint y, gint width, gint height);

@@ -483,7 +483,7 @@ struct _GstMpegtsExtendedEventItem
 
 /**
  * GstMpegtsExtendedEventDescriptor:
- * @descriptor_number:
+ * @desctiptor_number:
  * @last_descriptor_number:
  * @language_code: NULL terminated language code.
  * @items: (element-type GstMpegtsExtendedEventItem): the #GstMpegtsExtendedEventItem

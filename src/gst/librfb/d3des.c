@@ -26,13 +26,8 @@
  * (GEnie : OUTER; CIS : [71755,204]) Graven Imagery, 1992.
  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
-
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#endif
+#include "_stdint.h"
 
 #include "d3des.h"
 
@@ -41,12 +36,12 @@ static void unscrun (unsigned long *, unsigned char *);
 static void desfunc (unsigned long *, unsigned long *);
 static void cookey (DESContext * ctx, unsigned long *);
 
-//static const unsigned long KnL[32] = { 0L };
+//static unsigned long KnL[32] = { 0L };
 
-//static const unsigned long KnR[32] = { 0L };
-//static const unsigned long Kn3[32] = { 0L };
+//static unsigned long KnR[32] = { 0L };
+//static unsigned long Kn3[32] = { 0L };
 /* 
- * static const unsigned char Df_Key[24] = {
+ * static unsigned char Df_Key[24] = {
  * 	0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,
  * 	0xfe,0xdc,0xba,0x98,0x76,0x54,0x32,0x10,
  * 	0x89,0xab,0xcd,0xef,0x01,0x23,0x45,0x67 };

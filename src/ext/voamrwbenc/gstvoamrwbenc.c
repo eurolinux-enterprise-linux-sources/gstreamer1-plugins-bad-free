@@ -57,7 +57,7 @@ static GType
 gst_voamrwbenc_bandmode_get_type (void)
 {
   static GType gst_voamrwbenc_bandmode_type = 0;
-  static const GEnumValue gst_voamrwbenc_bandmode[] = {
+  static GEnumValue gst_voamrwbenc_bandmode[] = {
     {MR660, "MR660", "MR660"},
     {MR885, "MR885", "MR885"},
     {MR1265, "MR1265", "MR1265"},
@@ -162,8 +162,10 @@ gst_voamrwbenc_class_init (GstVoAmrWbEncClass * klass)
   object_class->set_property = gst_voamrwbenc_set_property;
   object_class->get_property = gst_voamrwbenc_get_property;
 
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
-  gst_element_class_add_static_pad_template (element_class, &src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
 
   gst_element_class_set_static_metadata (element_class, "AMR-WB audio encoder",
       "Codec/Encoder/Audio",
@@ -188,8 +190,6 @@ gst_voamrwbenc_class_init (GstVoAmrWbEncClass * klass)
 static void
 gst_voamrwbenc_init (GstVoAmrWbEnc * amrwbenc)
 {
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_ENCODER_SINK_PAD (amrwbenc));
-
   /* init rest */
   amrwbenc->handle = NULL;
   amrwbenc->channels = 0;

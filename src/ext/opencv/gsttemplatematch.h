@@ -3,7 +3,7 @@
  * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
  * Copyright (C) 2008 Michael Sheldon <mike@mikeasoft.com>
- *
+ * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -46,8 +46,8 @@
 #ifndef __GST_TEMPLATE_MATCH_H__
 #define __GST_TEMPLATE_MATCH_H__
 
-#include <gstopencvvideofilter.h>
-
+#include <gst/gst.h>
+#include <cv.h>
 #ifdef HAVE_HIGHGUI_H
 #include <highgui.h>            // includes highGUI definitions
 #endif
@@ -72,19 +72,21 @@ typedef struct _GstTemplateMatchClass GstTemplateMatchClass;
 
 struct _GstTemplateMatch
 {
-  GstOpencvVideoFilter element;
+  GstElement element;
+
+  GstPad *sinkpad, *srcpad;
 
   gint method;
   gboolean display;
 
-  gchar *templ;
+  gchar *template;
 
-  IplImage *cvGray, *cvTemplateImage, *cvDistImage;
+  IplImage *cvImage, *cvGray, *cvTemplateImage, *cvDistImage;
 };
 
 struct _GstTemplateMatchClass
 {
-  GstOpencvVideoFilterClass parent_class;
+  GstElementClass parent_class;
 };
 
 GType gst_template_match_get_type (void);

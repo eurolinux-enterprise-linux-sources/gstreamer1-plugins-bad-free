@@ -32,8 +32,8 @@ G_BEGIN_DECLS
 #define GST_GL_TYPE_WINDOW_WAYLAND_EGL         (gst_gl_window_wayland_egl_get_type())
 #define GST_GL_WINDOW_WAYLAND_EGL(o)           (G_TYPE_CHECK_INSTANCE_CAST((o), GST_GL_TYPE_WINDOW_WAYLAND_EGL, GstGLWindowWaylandEGL))
 #define GST_GL_WINDOW_WAYLAND_EGL_CLASS(k)     (G_TYPE_CHECK_CLASS((k), GST_GL_TYPE_WINDOW_WAYLAND_EGL, GstGLWindowWaylandEGLClass))
-#define GST_IS_GL_WINDOW_WAYLAND_EGL(o)        (G_TYPE_CHECK_INSTANCE_TYPE((o), GST_GL_TYPE_WINDOW_WAYLAND_EGL))
-#define GST_IS_GL_WINDOW_WAYLAND_EGL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE((k), GST_GL_TYPE_WINDOW_WAYLAND_EGL))
+#define GST_GL_IS_WINDOW_WAYLAND_EGL(o)        (G_TYPE_CHECK_INSTANCE_TYPE((o), GST_GL_TYPE_WINDOW_WAYLAND_EGL))
+#define GST_GL_IS_WINDOW_WAYLAND_EGL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE((k), GST_GL_TYPE_WINDOW_WAYLAND_EGL))
 #define GST_GL_WINDOW_WAYLAND_EGL_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS((o), GST_GL_TYPE_WINDOW_WAYLAND_EGL, GstGLWindowWaylandEGL_Class))
 
 typedef struct _GstGLWindowWaylandEGL        GstGLWindowWaylandEGL;
@@ -55,24 +55,17 @@ struct display {
   struct wl_surface      *cursor_surface;
   struct window          *window;
   guint32                 serial;
-
-  gdouble pointer_x;
-  gdouble pointer_y;
 };
 
 struct window {
   struct display *display;
 
-  struct wl_event_queue     *queue;
+  struct wl_egl_window      *native;
   struct wl_surface         *surface;
   struct wl_shell_surface   *shell_surface;
-  struct wl_egl_window      *native;
-  struct wl_surface         *foreign_surface;
-  struct wl_subsurface      *subsurface;
   struct wl_callback        *callback;
   int fullscreen, configured;
   int window_width, window_height;
-  int window_x, window_y;
 };
 
 struct _GstGLWindowWaylandEGL {
@@ -83,6 +76,8 @@ struct _GstGLWindowWaylandEGL {
   struct window  window;
 
   GSource *wl_source;
+  GMainContext *main_context;
+  GMainLoop *loop;
 
   gpointer _reserved[GST_PADDING];
 };
@@ -97,10 +92,8 @@ struct _GstGLWindowWaylandEGLClass {
 
 GType gst_gl_window_wayland_egl_get_type     (void);
 
-GstGLWindowWaylandEGL * gst_gl_window_wayland_egl_new  (GstGLDisplay * display);
-
-void gst_gl_window_wayland_egl_create_window (GstGLWindowWaylandEGL * window_egl);
+GstGLWindowWaylandEGL * gst_gl_window_wayland_egl_new  (void);
 
 G_END_DECLS
 
-#endif /* __GST_GL_WINDOW_WAYLAND_EGL_H__ */
+#endif /* __GST_GL_WINDOW_X11_H__ */

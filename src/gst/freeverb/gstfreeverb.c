@@ -36,8 +36,8 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 audiotestsrc wave=saw ! freeverb ! autoaudiosink
- * gst-launch-1.0 filesrc location="melo1.ogg" ! decodebin ! audioconvert ! freeverb ! autoaudiosink
+ * gst-launch audiotestsrc wave=saw ! freeverb ! autoaudiosink
+ * gst-launch filesrc location="melo1.ogg" ! decodebin ! audioconvert ! freeverb ! autoaudiosink
  * ]|
  * </refsect2>
  */
@@ -120,7 +120,7 @@ static gboolean gst_freeverb_transform_s2s_float (GstFreeverb * filter,
 
 
 /* Table with processing functions: [channels][format] */
-static const GstFreeverbProcessFunc process_functions[2][2] = {
+static GstFreeverbProcessFunc process_functions[2][2] = {
   {
         (GstFreeverbProcessFunc) gst_freeverb_transform_m2s_int,
         (GstFreeverbProcessFunc) gst_freeverb_transform_m2s_float,
@@ -181,7 +181,7 @@ freeverb_allpass_init (freeverb_allpass * allpass)
   gfloat *buf = allpass->buffer;
 
   for (i = 0; i < len; i++) {
-    buf[i] = (gfloat) DC_OFFSET;         /* this is not 100 % correct. */
+    buf[i] = DC_OFFSET;         /* this is not 100 % correct. */
   }
 }
 
@@ -246,7 +246,7 @@ freeverb_comb_init (freeverb_comb * comb)
   gfloat *buf = comb->buffer;
 
   for (i = 0; i < len; i++) {
-    buf[i] = (gfloat) DC_OFFSET;         /* This is not 100 % correct. */
+    buf[i] = DC_OFFSET;         /* This is not 100 % correct. */
   }
 }
 
@@ -406,7 +406,7 @@ gst_freeverb_class_init (GstFreeverbClass * klass)
           G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_DAMPING,
       g_param_spec_float ("damping", "Damping", "Damping of high frequencies",
-          0.0, 1.0, 0.2f,
+          0.0, 1.0, 0.2,
           G_PARAM_CONSTRUCT | G_PARAM_READWRITE | GST_PARAM_CONTROLLABLE |
           G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_PAN_WIDTH,
@@ -424,8 +424,10 @@ gst_freeverb_class_init (GstFreeverbClass * klass)
       "Add reverberation to audio streams",
       "Stefan Sauer <ensonic@users.sf.net>");
 
-  gst_element_class_add_static_pad_template (element_class, &src_template);
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
 
   GST_BASE_TRANSFORM_CLASS (klass)->get_unit_size =
       GST_DEBUG_FUNCPTR (gst_freeverb_get_unit_size);
@@ -720,8 +722,8 @@ gst_freeverb_transform_m2s_int (GstFreeverb * filter,
     }
 
     /* Remove the DC offset */
-    out_l1 -= (gfloat) DC_OFFSET;
-    out_r1 -= (gfloat) DC_OFFSET;
+    out_l1 -= DC_OFFSET;
+    out_r1 -= DC_OFFSET;
 
     /* Calculate output */
     out_l2 = out_l1 * priv->wet1 + out_r1 * priv->wet2 + input_2 * priv->dry;
@@ -767,8 +769,8 @@ gst_freeverb_transform_s2s_int (GstFreeverb * filter,
     }
 
     /* Remove the DC offset */
-    out_l1 -= (gfloat) DC_OFFSET;
-    out_r1 -= (gfloat) DC_OFFSET;
+    out_l1 -= DC_OFFSET;
+    out_r1 -= DC_OFFSET;
 
     /* Calculate output */
     out_l2 = out_l1 * priv->wet1 + out_r1 * priv->wet2 + input_2l * priv->dry;
@@ -816,8 +818,8 @@ gst_freeverb_transform_m2s_float (GstFreeverb * filter,
     }
 
     /* Remove the DC offset */
-    out_l1 -= (gfloat) DC_OFFSET;
-    out_r1 -= (gfloat) DC_OFFSET;
+    out_l1 -= DC_OFFSET;
+    out_r1 -= DC_OFFSET;
 
     /* Calculate output */
     out_l2 = out_l1 * priv->wet1 + out_r1 * priv->wet2 + input_2 * priv->dry;
@@ -861,8 +863,8 @@ gst_freeverb_transform_s2s_float (GstFreeverb * filter,
     }
 
     /* Remove the DC offset */
-    out_l1 -= (gfloat) DC_OFFSET;
-    out_r1 -= (gfloat) DC_OFFSET;
+    out_l1 -= DC_OFFSET;
+    out_r1 -= DC_OFFSET;
 
     /* Calculate output */
     out_l2 = out_l1 * priv->wet1 + out_r1 * priv->wet2 + input_2l * priv->dry;

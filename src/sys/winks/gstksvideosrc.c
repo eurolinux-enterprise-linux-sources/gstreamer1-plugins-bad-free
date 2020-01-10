@@ -26,11 +26,11 @@
  * <refsect2>
  * <title>Example pipelines</title>
  * |[
- * gst-launch-1.0 -v ksvideosrc do-stats=TRUE ! videoconvert ! dshowvideosink
+ * gst-launch -v ksvideosrc do-stats=TRUE ! ffmpegcolorspace ! dshowvideosink
  * ]| Capture from a camera and render using dshowvideosink.
  * |[
- * gst-launch-1.0 -v ksvideosrc do-stats=TRUE ! image/jpeg, width=640, height=480
- * ! jpegdec ! videoconvert ! dshowvideosink
+ * gst-launch -v ksvideosrc do-stats=TRUE ! image/jpeg, width=640, height=480
+ * ! jpegdec ! ffmpegcolorspace ! dshowvideosink
  * ]| Capture from an MJPEG camera and render using dshowvideosink.
  * </refsect2>
  */
@@ -45,7 +45,6 @@
 #include "gstksvideodevice.h"
 #include "kshelpers.h"
 #include "ksvideohelpers.h"
-#include "ksdeviceprovider.h"
 
 #define DEFAULT_DEVICE_PATH     NULL
 #define DEFAULT_DEVICE_NAME     NULL
@@ -98,6 +97,8 @@ struct _GstKsVideoSrcPrivate
   GstKsClock *ksclock;
   GstKsVideoDevice *device;
 
+  guint64 offset;
+  GstClockTime prev_ts;
   gboolean running;
 
   /* Worker thread */
@@ -221,6 +222,9 @@ gst_ks_video_src_class_init (GstKsVideoSrcClass * klass)
       g_param_spec_boolean ("enable-quirks", "Enable quirks",
           "Enable driver-specific quirks", DEFAULT_ENABLE_QUIRKS,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  GST_DEBUG_CATEGORY_INIT (gst_ks_debug, "ksvideosrc",
+      0, "Kernel streaming video source");
 }
 
 static void
@@ -341,6 +345,10 @@ gst_ks_video_src_reset (GstKsVideoSrc * self)
   priv->count = 0;
   priv->fps = -1;
 
+  /* Reset timestamping state */
+  priv->offset = 0;
+  priv->prev_ts = GST_CLOCK_TIME_NONE;
+
   priv->running = FALSE;
 }
 
@@ -386,7 +394,7 @@ gst_ks_video_src_get_device_name_values (GstKsVideoSrc * self)
   GList *devices, *cur;
   GArray *array = g_array_new (TRUE, TRUE, sizeof (GValue));
 
-  devices = ks_enumerate_devices (&KSCATEGORY_VIDEO, &KSCATEGORY_CAPTURE);
+  devices = ks_enumerate_devices (&KSCATEGORY_VIDEO);
   if (devices == NULL)
     return array;
 
@@ -417,7 +425,7 @@ gst_ks_video_src_open_device (GstKsVideoSrc * self)
 
   g_assert (priv->device == NULL);
 
-  devices = ks_enumerate_devices (&KSCATEGORY_VIDEO, &KSCATEGORY_CAPTURE);
+  devices = ks_enumerate_devices (&KSCATEGORY_VIDEO);
   if (devices == NULL)
     goto error_no_devices;
 
@@ -430,14 +438,10 @@ gst_ks_video_src_open_device (GstKsVideoSrc * self)
         entry->index, entry->name, entry->path);
   }
 
-  for (cur = devices; cur != NULL; cur = cur->next) {
+  for (cur = devices; cur != NULL && device == NULL; cur = cur->next) {
     KsDeviceEntry *entry = cur->data;
     gboolean match;
 
-    if (device != NULL) {
-      ks_device_entry_free (entry);
-      continue;
-    }
     if (priv->device_path != NULL) {
       match = g_ascii_strcasecmp (entry->path, priv->device_path) == 0;
     } else if (priv->device_name != NULL) {
@@ -807,13 +811,7 @@ gst_ks_video_src_timestamp_buffer (GstKsVideoSrc * self, GstBuffer * buf,
   GstKsVideoSrcPrivate *priv = GST_KS_VIDEO_SRC_GET_PRIVATE (self);
   GstClockTime duration;
   GstClock *clock;
-  GstClockTime timestamp, base_time;
-
-  /* Don't timestamp muxed streams */
-  if (gst_ks_video_device_stream_is_muxed (priv->device)) {
-    duration = timestamp = GST_CLOCK_TIME_NONE;
-    goto timestamp;
-  }
+  GstClockTime timestamp;
 
   duration = gst_ks_video_device_get_duration (priv->device);
 
@@ -821,27 +819,88 @@ gst_ks_video_src_timestamp_buffer (GstKsVideoSrc * self, GstBuffer * buf,
   clock = GST_ELEMENT_CLOCK (self);
   if (clock != NULL) {
     gst_object_ref (clock);
-    base_time = GST_ELEMENT (self)->base_time;
+    timestamp = GST_ELEMENT (self)->base_time;
+
+    if (GST_CLOCK_TIME_IS_VALID (presentation_time)) {
+      if (presentation_time > GST_ELEMENT (self)->base_time)
+        presentation_time -= GST_ELEMENT (self)->base_time;
+      else
+        presentation_time = 0;
+    }
   } else {
     timestamp = GST_CLOCK_TIME_NONE;
   }
   GST_OBJECT_UNLOCK (self);
 
   if (clock != NULL) {
+
     /* The time according to the current clock */
-    timestamp = gst_clock_get_time (clock) - base_time;
+    timestamp = gst_clock_get_time (clock) - timestamp;
     if (timestamp > duration)
       timestamp -= duration;
     else
       timestamp = 0;
 
+    if (GST_CLOCK_TIME_IS_VALID (presentation_time)) {
+      /*
+       * We don't use this for anything yet, need to ponder how to deal
+       * with pins that use an internal clock and timestamp from 0.
+       */
+      GstClockTimeDiff diff = GST_CLOCK_DIFF (presentation_time, timestamp);
+      GST_DEBUG_OBJECT (self, "diff between gst and driver timestamp: %"
+          G_GINT64_FORMAT, diff);
+    }
+
     gst_object_unref (clock);
     clock = NULL;
+
+    /* Unless it's the first frame, align the current timestamp on a multiple
+     * of duration since the previous */
+    if (GST_CLOCK_TIME_IS_VALID (priv->prev_ts)) {
+      GstClockTime delta;
+      guint delta_remainder, delta_offset;
+
+      /* REVISIT: I've seen this happen with the GstSystemClock on Windows,
+       *          scary... */
+      if (timestamp < priv->prev_ts) {
+        GST_INFO_OBJECT (self, "clock is ticking backwards");
+        return FALSE;
+      }
+
+      /* Round to a duration boundary */
+      delta = timestamp - priv->prev_ts;
+      delta_remainder = delta % duration;
+
+      if (delta_remainder < duration / 3)
+        timestamp -= delta_remainder;
+      else
+        timestamp += duration - delta_remainder;
+
+      /* How many frames are we off then? */
+      delta = timestamp - priv->prev_ts;
+      delta_offset = delta / duration;
+
+      if (delta_offset == 1)    /* perfect */
+        GST_BUFFER_FLAG_UNSET (buf, GST_BUFFER_FLAG_DISCONT);
+      else if (delta_offset > 1) {
+        guint lost = delta_offset - 1;
+        GST_INFO_OBJECT (self, "lost %d frame%s, setting discont flag",
+            lost, (lost > 1) ? "s" : "");
+        GST_BUFFER_FLAG_SET (buf, GST_BUFFER_FLAG_DISCONT);
+      } else if (delta_offset == 0) {   /* overproduction, skip this frame */
+        GST_INFO_OBJECT (self, "skipping frame");
+        return FALSE;
+      }
+
+      priv->offset += delta_offset;
+    }
+
+    priv->prev_ts = timestamp;
   }
 
-timestamp:
-  GST_BUFFER_PTS (buf) = timestamp;
-  GST_BUFFER_DTS (buf) = GST_CLOCK_TIME_NONE;
+  GST_BUFFER_OFFSET (buf) = priv->offset;
+  GST_BUFFER_OFFSET_END (buf) = GST_BUFFER_OFFSET (buf) + 1;
+  GST_BUFFER_TIMESTAMP (buf) = timestamp;
   GST_BUFFER_DURATION (buf) = duration;
 
   return TRUE;
@@ -891,6 +950,7 @@ gst_ks_video_src_create (GstPushSrc * pushsrc, GstBuffer ** buf)
   GstClockTime presentation_time;
   gulong error_code;
   gchar *error_str;
+  GstMapInfo info;
 
   g_assert (priv->device != NULL);
 
@@ -927,11 +987,9 @@ gst_ks_video_src_create (GstPushSrc * pushsrc, GstBuffer ** buf)
   if (G_UNLIKELY (priv->do_stats))
     gst_ks_video_src_update_statistics (self);
 
-  if (!gst_ks_video_device_postprocess_frame (priv->device, buf)) {
-    GST_ELEMENT_ERROR (self, RESOURCE, FAILED, ("Postprocessing failed"),
-        ("Postprocessing failed"));
-    return GST_FLOW_ERROR;
-  }
+  gst_buffer_map (*buf, &info, GST_MAP_WRITE);
+  gst_ks_video_device_postprocess_frame (priv->device, info.data, info.size);
+  gst_buffer_unmap (*buf, &info);
 
   return GST_FLOW_OK;
 
@@ -1009,18 +1067,8 @@ error_alloc_buffer:
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-  GST_DEBUG_CATEGORY_INIT (gst_ks_debug, "ksvideosrc",
-      0, "Kernel streaming video source");
-
-  if (!gst_element_register (plugin, "ksvideosrc",
-          GST_RANK_PRIMARY, GST_TYPE_KS_VIDEO_SRC))
-    return FALSE;
-
-  if (!gst_device_provider_register (plugin, "ksdeviceprovider",
-          GST_RANK_PRIMARY, GST_TYPE_KS_DEVICE_PROVIDER))
-    return FALSE;
-
-  return TRUE;
+  return gst_element_register (plugin, "ksvideosrc",
+      GST_RANK_NONE, GST_TYPE_KS_VIDEO_SRC);
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,

@@ -37,7 +37,6 @@ gst_mpeg_video_meta_init (GstMpegVideoMeta * mpeg_video_meta,
   mpeg_video_meta->pichdr = NULL;
   mpeg_video_meta->picext = NULL;
   mpeg_video_meta->quantext = NULL;
-  mpeg_video_meta->num_slices = mpeg_video_meta->slice_offset = 0;
 
   return TRUE;
 }
@@ -59,38 +58,6 @@ gst_mpeg_video_meta_free (GstMpegVideoMeta * mpeg_video_meta,
     g_slice_free (GstMpegVideoPictureExt, mpeg_video_meta->picext);
   if (mpeg_video_meta->quantext)
     g_slice_free (GstMpegVideoQuantMatrixExt, mpeg_video_meta->quantext);
-}
-
-static gboolean
-gst_mpeg_video_meta_transform (GstBuffer * dest, GstMeta * meta,
-    GstBuffer * buffer, GQuark type, gpointer data)
-{
-  GstMpegVideoMeta *smeta, *dmeta;
-
-  smeta = (GstMpegVideoMeta *) meta;
-
-  if (GST_META_TRANSFORM_IS_COPY (type)) {
-    GstMetaTransformCopy *copy = data;
-
-    if (!copy->region) {
-      /* only copy if the complete data is copied as well */
-      dmeta =
-          gst_buffer_add_mpeg_video_meta (dest, smeta->sequencehdr,
-          smeta->sequenceext, smeta->sequencedispext, smeta->pichdr,
-          smeta->picext, smeta->quantext);
-
-      if (!dmeta)
-        return FALSE;
-
-      dmeta->num_slices = smeta->num_slices;
-      dmeta->slice_offset = smeta->slice_offset;
-    }
-  } else {
-    /* return FALSE, if transform type is not supported */
-    return FALSE;
-  }
-
-  return TRUE;
 }
 
 GType
@@ -119,7 +86,7 @@ gst_mpeg_video_meta_get_info (void)
         "GstMpegVideoMeta", sizeof (GstMpegVideoMeta),
         (GstMetaInitFunction) gst_mpeg_video_meta_init,
         (GstMetaFreeFunction) gst_mpeg_video_meta_free,
-        (GstMetaTransformFunction) gst_mpeg_video_meta_transform);
+        (GstMetaTransformFunction) NULL);
     g_once_init_leave (&mpeg_video_meta_info, meta);
   }
 

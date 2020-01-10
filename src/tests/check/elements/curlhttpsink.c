@@ -54,14 +54,16 @@ GST_START_TEST (test_properties)
 
   g_object_set (G_OBJECT (sink),
       "location", "mylocation",
-      "file-name", "myfile",
+      "file-name","myfile",
       "user", "user",
       "passwd", "passwd",
       "proxy", "myproxy",
       "proxy-port", 7777,
       "proxy-user", "proxy_user",
       "proxy-passwd", "proxy_passwd",
-      "content-type", "image/jpeg", "use-content-length", TRUE, NULL);
+      "content-type", "image/jpeg",
+      "use-content-length", TRUE,
+      NULL);
 
   g_object_get (sink,
       "location", &res_location,
@@ -73,7 +75,8 @@ GST_START_TEST (test_properties)
       "proxy-user", &res_proxy_user,
       "proxy-passwd", &res_proxy_passwd,
       "content-type", &res_content_type,
-      "use-content-length", &res_use_content_length, NULL);
+      "use-content-length", &res_use_content_length,
+      NULL);
 
   fail_unless (strncmp (res_location, "mylocation", strlen ("mylocation"))
       == 0);
@@ -86,7 +89,7 @@ GST_START_TEST (test_properties)
   fail_unless (strncmp (res_proxy_user, "proxy_user", strlen ("proxy_user"))
       == 0);
   fail_unless (strncmp (res_proxy_passwd, "proxy_passwd",
-          strlen ("proxy_passwd")) == 0);
+        strlen ("proxy_passwd")) == 0);
   fail_unless (strncmp (res_content_type, "image/jpeg", strlen ("image/jpeg"))
       == 0);
   fail_unless (res_use_content_length == TRUE);
@@ -115,7 +118,6 @@ GST_START_TEST (test_properties)
 
   cleanup_curlhttpsink (sink);
 }
-
 GST_END_TEST;
 
 static Suite *

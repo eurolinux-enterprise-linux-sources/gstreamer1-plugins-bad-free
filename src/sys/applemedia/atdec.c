@@ -24,7 +24,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v filesrc location=file.mov ! qtdemux ! queue ! aacparse ! atdec ! autoaudiosink
+ * gst-launch -v filesrc location=file.mov ! qtdemux ! queue ! aacparse ! atdec ! autoaudiosink
  * ]|
  * Decode aac audio from a mov file
  * </refsect2>
@@ -93,10 +93,10 @@ gst_atdec_class_init (GstATDecClass * klass)
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstAudioDecoderClass *audio_decoder_class = GST_AUDIO_DECODER_CLASS (klass);
 
-  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
-      &gst_atdec_src_template);
-  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
-      &gst_atdec_sink_template);
+  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
+      gst_static_pad_template_get (&gst_atdec_src_template));
+  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
+      gst_static_pad_template_get (&gst_atdec_sink_template));
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "AudioToolbox based audio decoder",

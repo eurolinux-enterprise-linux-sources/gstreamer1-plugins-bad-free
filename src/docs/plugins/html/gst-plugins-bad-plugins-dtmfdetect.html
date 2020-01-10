@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>dtmfdetect: GStreamer Bad Plugins 1.0 Plugins Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<title>GStreamer Bad Plugins 1.0 Plugins Reference Manual: dtmfdetect</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 1.0 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-dodge.html" title="dodge">
 <link rel="next" href="gst-plugins-bad-plugins-dtsdec.html" title="dtsdec">
-<meta name="generator" content="GTK-Doc V1.25 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -28,13 +28,13 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="gst-plugins-bad-plugins-dtmfdetect.top_of_page"></a>dtmfdetect</span></h2>
-<p>dtmfdetect — Detects DTMF tones</p>
+<p>dtmfdetect — This element detects DTMF tones</p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
 <a name="GstDtmfDetect"></a><div class="refsect1">
 <a name="gst-plugins-bad-plugins-dtmfdetect.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -47,41 +47,20 @@
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-dtmfdetect.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
-    <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
-        <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstObject.html#GstObject-struct">GstObject</a>
-            <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstElement.html#GstElement-struct">GstElement</a>
-                <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-libs-1.0GstBaseTransform.html#GstBaseTransform-struct">GstBaseTransform</a>
+<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+    <span class="lineart">╰──</span> <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
+        <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
+            <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
+                <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseTransform.html">GstBaseTransform</a>
                     <span class="lineart">╰──</span> GstDtmfDetect
 </pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-dtmfdetect.description"></a><h2>Description</h2>
-<p>This element will detect DTMF tones and emit messages.</p>
-<p>The message is called <code class="classname">"dtmf-event"</code> and has
-the following fields:</p>
-<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
-<li class="listitem"><p>
-  gint <code class="classname">type</code> (0-1):
-  The application uses this field to specify which of the two methods
-  specified in RFC 2833 to use. The value should be 0 for tones and 1 for
-  named events. Tones are specified by their frequencies and events are
-  specfied by their number. This element can only take events as input.
-  Do not confuse with "method" which specified the output.
-  </p></li>
-<li class="listitem"><p>
-  gint <code class="classname">number</code> (0-16):
-  The event number.
-  </p></li>
-<li class="listitem"><p>
-  gint <code class="classname">method</code> (2):
-  This field will always been 2 (ie sound) from this element.
-  </p></li>
-</ul></div>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="id-1.2.28.6.5.1"></a><h3>Element Information</h3>
+<a name="id-1.2.22.6.2.1"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -107,7 +86,7 @@ the following fields:</p>
 </div>
 <hr>
 <div class="refsect2">
-<a name="id-1.2.28.6.5.2"></a><h3>Element Pads</h3>
+<a name="id-1.2.22.6.2.2"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -158,20 +137,24 @@ the following fields:</p>
 </table></div>
 </div>
 </div>
+<p>
+</p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-dtmfdetect.functions_details"></a><h2>Functions</h2>
-<p></p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-dtmfdetect.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
 <a name="GstDtmfDetect-struct"></a><h3>struct GstDtmfDetect</h3>
 <pre class="programlisting">struct GstDtmfDetect;</pre>
+<p>
+</p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25</div>
+<hr>
+          Generated by GTK-Doc V1.21</div>
 </body>
 </html>

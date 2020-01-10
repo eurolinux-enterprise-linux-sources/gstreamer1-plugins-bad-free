@@ -29,24 +29,41 @@
 
 #include <stdio.h>
 
+#if GST_GL_HAVE_GLES2
+/* *INDENT-OFF* */
+static const gchar *vertex_shader_str_gles2 =
+      "attribute vec4 a_position;   \n"
+      "attribute vec2 a_texCoord;   \n"
+      "varying vec2 v_texCoord;     \n"
+      "void main()                  \n"
+      "{                            \n"
+      "   gl_Position = a_position; \n"
+      "   v_texCoord = a_texCoord;  \n"
+      "}                            \n";
+
+static const gchar *fragment_shader_str_gles2 =
+      "precision mediump float;                            \n"
+      "varying vec2 v_texCoord;                            \n"
+      "uniform sampler2D s_texture;                        \n"
+      "void main()                                         \n"
+      "{                                                   \n"
+      "  gl_FragColor = texture2D( s_texture, v_texCoord );\n"
+      "}                                                   \n";
+/* *INDENT-ON* */
+#endif
+
 static GstGLDisplay *display;
 static GstGLContext *context;
 static GstGLWindow *window;
 static GstGLUpload *upload;
 static guint tex_id;
+#if GST_GL_HAVE_GLES2
+static GError *error;
 static GstGLShader *shader;
 static GLint shader_attr_position_loc;
 static GLint shader_attr_texture_loc;
-static guint vbo, vbo_indices, vao;
+#endif
 
-static const GLfloat vertices[] = {
-  1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
-  -1.0f, 1.0f, 0.0f, 0.0f, 0.0f,
-  -1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
-  1.0f, -1.0f, 0.0f, 1.0f, 1.0f
-};
-
-static GLushort indices[] = { 0, 1, 2, 0, 2, 3 };
 
 #define FORMAT GST_VIDEO_GL_TEXTURE_TYPE_RGBA
 #define WIDTH 10
@@ -86,114 +103,40 @@ setup (void)
 }
 
 static void
-_check_gl_error (GstGLContext * context, gpointer data)
+teardown (void)
 {
   GLuint error = context->gl_vtable->GetError ();
   fail_if (error != GL_NONE, "GL error 0x%x encountered during processing\n",
       error);
-}
 
-static void
-teardown (void)
-{
   gst_object_unref (upload);
   gst_object_unref (window);
-
-  gst_gl_context_thread_add (context, (GstGLContextThreadFunc) _check_gl_error,
-      NULL);
   gst_object_unref (context);
   gst_object_unref (display);
-  if (shader)
-    gst_object_unref (shader);
-}
-
-static void
-_bind_buffer (GstGLContext * context)
-{
-  const GstGLFuncs *gl = context->gl_vtable;
-
-  gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, vbo_indices);
-  gl->BindBuffer (GL_ARRAY_BUFFER, vbo);
-
-  /* Load the vertex position */
-  gl->VertexAttribPointer (shader_attr_position_loc, 3, GL_FLOAT, GL_FALSE,
-      5 * sizeof (GLfloat), (void *) 0);
-
-  /* Load the texture coordinate */
-  gl->VertexAttribPointer (shader_attr_texture_loc, 2, GL_FLOAT, GL_FALSE,
-      5 * sizeof (GLfloat), (void *) (3 * sizeof (GLfloat)));
-
-  gl->EnableVertexAttribArray (shader_attr_position_loc);
-  gl->EnableVertexAttribArray (shader_attr_texture_loc);
-}
-
-static void
-_unbind_buffer (GstGLContext * context)
-{
-  const GstGLFuncs *gl = context->gl_vtable;
-
-  gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
-  gl->BindBuffer (GL_ARRAY_BUFFER, 0);
-
-  gl->DisableVertexAttribArray (shader_attr_position_loc);
-  gl->DisableVertexAttribArray (shader_attr_texture_loc);
 }
 
 static void
 init (gpointer data)
 {
-  const GstGLFuncs *gl = context->gl_vtable;
-  GError *error = NULL;
+#if GST_GL_HAVE_GLES2
+  if (gst_gl_context_get_gl_api (context) & GST_GL_API_GLES2) {
+    shader = gst_gl_shader_new (context);
+    fail_if (shader == NULL, "failed to create shader object");
 
-  shader = gst_gl_shader_new_default (context, &error);
-  fail_if (shader == NULL, "failed to create shader object %s", error->message);
+    gst_gl_shader_set_vertex_source (shader, vertex_shader_str_gles2);
+    gst_gl_shader_set_fragment_source (shader, fragment_shader_str_gles2);
 
-  shader_attr_position_loc =
-      gst_gl_shader_get_attribute_location (shader, "a_position");
-  shader_attr_texture_loc =
-      gst_gl_shader_get_attribute_location (shader, "a_texcoord");
+    error = NULL;
+    gst_gl_shader_compile (shader, &error);
+    fail_if (error != NULL, "Error compiling shader %s\n",
+        error ? error->message : "Unknown Error");
 
-  if (!vbo) {
-    if (gl->GenVertexArrays) {
-      gl->GenVertexArrays (1, &vao);
-      gl->BindVertexArray (vao);
-    }
-
-    gl->GenBuffers (1, &vbo);
-    gl->BindBuffer (GL_ARRAY_BUFFER, vbo);
-    gl->BufferData (GL_ARRAY_BUFFER, 4 * 5 * sizeof (GLfloat), vertices,
-        GL_STATIC_DRAW);
-
-    gl->GenBuffers (1, &vbo_indices);
-    gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, vbo_indices);
-    gl->BufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof (indices), indices,
-        GL_STATIC_DRAW);
-
-    if (gl->GenVertexArrays) {
-      _bind_buffer (context);
-      gl->BindVertexArray (0);
-    }
-
-    gl->BindBuffer (GL_ARRAY_BUFFER, 0);
-    gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+    shader_attr_position_loc =
+        gst_gl_shader_get_attribute_location (shader, "a_position");
+    shader_attr_texture_loc =
+        gst_gl_shader_get_attribute_location (shader, "a_texCoord");
   }
-}
-
-static void
-deinit (gpointer data)
-{
-  GstGLContext *context = data;
-  const GstGLFuncs *gl = context->gl_vtable;
-
-  if (vbo)
-    gl->DeleteBuffers (1, &vbo);
-  vbo = 0;
-  if (vbo_indices)
-    gl->DeleteBuffers (1, &vbo_indices);
-  vbo_indices = 0;
-  if (vao)
-    gl->DeleteVertexArrays (1, &vao);
-  vao = 0;
+#endif
 }
 
 static void
@@ -203,60 +146,100 @@ draw_render (gpointer data)
   GstGLContextClass *context_class = GST_GL_CONTEXT_GET_CLASS (context);
   const GstGLFuncs *gl = context->gl_vtable;
 
-  gl->Clear (GL_COLOR_BUFFER_BIT);
+  /* redraw the texture into the system provided framebuffer */
 
-  gst_gl_shader_use (shader);
+#if GST_GL_HAVE_OPENGL
+  if (gst_gl_context_get_gl_api (context) & GST_GL_API_OPENGL) {
+    GLfloat verts[8] = { 1.0f, 1.0f,
+      -1.0f, 1.0f,
+      -1.0f, -1.0f,
+      1.0f, -1.0f
+    };
+    GLfloat texcoords[8] = { 1.0f, 0.0f,
+      0.0f, 0.0f,
+      0.0f, 1.0f,
+      1.0f, 1.0f
+    };
 
-  if (gl->GenVertexArrays)
-    gl->BindVertexArray (vao);
-  else
-    _bind_buffer (context);
+    gl->Viewport (0, 0, 10, 10);
 
-  gl->ActiveTexture (GL_TEXTURE0);
-  gl->BindTexture (GL_TEXTURE_2D, tex_id);
-  gst_gl_shader_set_uniform_1i (shader, "s_texture", 0);
+    gl->Clear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  gl->DrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
+    gl->MatrixMode (GL_PROJECTION);
+    gl->LoadIdentity ();
 
-  if (gl->GenVertexArrays)
-    gl->BindVertexArray (0);
-  else
-    _unbind_buffer (context);
+    gl->Enable (GL_TEXTURE_2D);
+    gl->BindTexture (GL_TEXTURE_2D, tex_id);
+
+    gl->EnableClientState (GL_VERTEX_ARRAY);
+    gl->EnableClientState (GL_TEXTURE_COORD_ARRAY);
+    gl->VertexPointer (2, GL_FLOAT, 0, &verts);
+    gl->TexCoordPointer (2, GL_FLOAT, 0, &texcoords);
+
+    gl->DrawArrays (GL_TRIANGLE_FAN, 0, 4);
+
+    gl->DisableClientState (GL_VERTEX_ARRAY);
+    gl->DisableClientState (GL_TEXTURE_COORD_ARRAY);
+
+    gl->Disable (GL_TEXTURE_2D);
+  }
+#endif
+#if GST_GL_HAVE_GLES2
+  if (gst_gl_context_get_gl_api (context) & GST_GL_API_GLES2) {
+    const GLfloat vVertices[] = { 1.0f, 1.0f, 0.0f,
+      1.0f, 0.0f,
+      -1.0f, 1.0f, 0.0f,
+      0.0f, 0.0f,
+      -1.0f, -1.0f, 0.0f,
+      0.0f, 1.0f,
+      1.0f, -1.0f, 0.0f,
+      1.0f, 1.0f
+    };
+
+    GLushort indices[] = { 0, 1, 2, 0, 2, 3 };
+
+    gl->Clear (GL_COLOR_BUFFER_BIT);
+
+    gst_gl_shader_use (shader);
+
+    /* Load the vertex position */
+    gl->VertexAttribPointer (shader_attr_position_loc, 3,
+        GL_FLOAT, GL_FALSE, 5 * sizeof (GLfloat), vVertices);
+
+    /* Load the texture coordinate */
+    gl->VertexAttribPointer (shader_attr_texture_loc, 2,
+        GL_FLOAT, GL_FALSE, 5 * sizeof (GLfloat), &vVertices[3]);
+
+    gl->EnableVertexAttribArray (shader_attr_position_loc);
+    gl->EnableVertexAttribArray (shader_attr_texture_loc);
+
+    gl->ActiveTexture (GL_TEXTURE0);
+    gl->BindTexture (GL_TEXTURE_2D, tex_id);
+    gst_gl_shader_set_uniform_1i (shader, "s_texture", 0);
+
+    gl->DrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
+  }
+#endif
 
   context_class->swap_buffers (context);
 }
 
 GST_START_TEST (test_upload_data)
 {
-  GstCaps *in_caps, *out_caps;
-  GstBuffer *inbuf, *outbuf;
-  GstMapInfo map_info;
+  gpointer data[GST_VIDEO_MAX_PLANES] = { rgba_data, NULL, NULL, NULL };
+  GstVideoInfo in_info;
   gboolean res;
   gint i = 0;
 
-  in_caps = gst_caps_from_string ("video/x-raw,format=RGBA,"
-      "width=10,height=10");
-  out_caps = gst_caps_from_string ("video/x-raw(memory:GLMemory),"
-      "format=RGBA,width=10,height=10");
+  gst_video_info_set_format (&in_info, GST_VIDEO_FORMAT_RGBA, WIDTH, HEIGHT);
 
-  gst_gl_upload_set_caps (upload, in_caps, out_caps);
+  gst_gl_upload_set_format (upload, &in_info);
 
-  inbuf = gst_buffer_new_wrapped_full (0, rgba_data, WIDTH * HEIGHT * 4,
-      0, WIDTH * HEIGHT * 4, NULL, NULL);
+  res = gst_gl_upload_perform_with_data (upload, &tex_id, data);
+  fail_if (res == FALSE, "Failed to upload buffer: %s\n",
+      gst_gl_context_get_error ());
 
-  res = gst_gl_upload_perform_with_buffer (upload, inbuf, &outbuf);
-  fail_if (res == FALSE, "Failed to upload buffer");
-  fail_unless (GST_IS_BUFFER (outbuf));
-
-  res = gst_buffer_map (outbuf, &map_info, GST_MAP_READ | GST_MAP_GL);
-  fail_if (res == FALSE, "Failed to map gl memory");
-
-  tex_id = *(guint *) map_info.data;
-
-  gst_buffer_unmap (outbuf, &map_info);
-
-  gst_gl_window_set_preferred_size (window, WIDTH, HEIGHT);
-  gst_gl_window_draw (window);
+  gst_gl_window_draw (window, WIDTH, HEIGHT);
 
   gst_gl_window_send_message (window, GST_GL_WINDOW_CB (init), context);
 
@@ -265,105 +248,33 @@ GST_START_TEST (test_upload_data)
         context);
     i++;
   }
-  gst_gl_window_send_message (window, GST_GL_WINDOW_CB (deinit), context);
-
-  gst_caps_unref (in_caps);
-  gst_caps_unref (out_caps);
-  gst_buffer_unref (inbuf);
-  gst_buffer_unref (outbuf);
 }
 
 GST_END_TEST;
 
-GST_START_TEST (test_upload_gl_memory)
+GST_START_TEST (test_upload_buffer)
 {
-  GstGLBaseMemoryAllocator *base_mem_alloc;
-  GstGLVideoAllocationParams *params;
-  GstBuffer *buffer, *outbuf;
+  GstBuffer *buffer;
   GstGLMemory *gl_mem;
-  GstCaps *in_caps, *out_caps;
-  GstStructure *out_s;
   GstVideoInfo in_info;
-  GstMapInfo map_info;
   gint i = 0;
   gboolean res;
 
-  base_mem_alloc =
-      GST_GL_BASE_MEMORY_ALLOCATOR (gst_allocator_find
-      (GST_GL_MEMORY_ALLOCATOR_NAME));
-
-  in_caps = gst_caps_from_string ("video/x-raw,format=RGBA,width=10,height=10");
-  gst_video_info_from_caps (&in_info, in_caps);
+  gst_video_info_set_format (&in_info, GST_VIDEO_FORMAT_RGBA, WIDTH, HEIGHT);
 
   /* create GL buffer */
   buffer = gst_buffer_new ();
-  params = gst_gl_video_allocation_params_new_wrapped_data (context, NULL,
-      &in_info, 0, NULL, GST_GL_TEXTURE_TARGET_2D,
-      GST_VIDEO_GL_TEXTURE_TYPE_RGBA, rgba_data, NULL, NULL);
-  gl_mem = (GstGLMemory *) gst_gl_base_memory_alloc (base_mem_alloc,
-      (GstGLAllocationParams *) params);
-  gst_gl_allocation_params_free ((GstGLAllocationParams *) params);
-
-  res =
-      gst_memory_map ((GstMemory *) gl_mem, &map_info,
-      GST_MAP_READ | GST_MAP_GL);
-  fail_if (res == FALSE, "Failed to map gl memory\n");
-  tex_id = *(guint *) map_info.data;
-  gst_memory_unmap ((GstMemory *) gl_mem, &map_info);
-
+  gl_mem = gst_gl_memory_wrapped (context, FORMAT, WIDTH, HEIGHT, WIDTH * 4,
+      rgba_data, NULL, NULL);
   gst_buffer_append_memory (buffer, (GstMemory *) gl_mem);
 
-  /* at this point glupload hasn't received any buffers so can output anything */
-  out_caps = gst_gl_upload_transform_caps (upload, context,
-      GST_PAD_SINK, in_caps, NULL);
-  out_s = gst_caps_get_structure (out_caps, 0);
-  fail_unless (gst_structure_has_field_typed (out_s, "texture-target",
-          GST_TYPE_LIST));
-  gst_caps_unref (out_caps);
+  gst_gl_upload_set_format (upload, &in_info);
 
-  /* set some output caps without setting texture-target: this should trigger RECONFIGURE */
-  out_caps = gst_caps_from_string ("video/x-raw(memory:GLMemory),"
-      "format=RGBA,width=10,height=10");
+  res = gst_gl_upload_perform_with_buffer (upload, buffer, &tex_id);
+  fail_if (res == FALSE, "Failed to upload buffer: %s\n",
+      gst_gl_context_get_error ());
 
-  /* set caps with texture-target not fixed. This should trigger RECONFIGURE. */
-  gst_gl_upload_set_caps (upload, in_caps, out_caps);
-  gst_caps_unref (out_caps);
-
-  /* push a texture-target=2D buffer */
-  res = gst_gl_upload_perform_with_buffer (upload, buffer, &outbuf);
-  fail_unless (res == GST_GL_UPLOAD_RECONFIGURE);
-  fail_if (outbuf);
-
-  /* now glupload has seen a 2D buffer and so wants to transform to that */
-  out_caps = gst_gl_upload_transform_caps (upload, context,
-      GST_PAD_SINK, in_caps, NULL);
-  out_s = gst_caps_get_structure (out_caps, 0);
-  fail_unless_equals_string (gst_structure_get_string (out_s, "texture-target"),
-      "2D");
-  gst_caps_unref (out_caps);
-
-  /* try setting the wrong type first tho */
-  out_caps = gst_caps_from_string ("video/x-raw(memory:GLMemory),"
-      "format=RGBA,width=10,height=10,texture-target=RECTANGLE");
-  gst_gl_upload_set_caps (upload, in_caps, out_caps);
-  gst_caps_unref (out_caps);
-
-  res = gst_gl_upload_perform_with_buffer (upload, buffer, &outbuf);
-  fail_unless (res == GST_GL_UPLOAD_RECONFIGURE);
-  fail_if (outbuf);
-
-  /* finally do set the correct texture-target */
-  out_caps = gst_caps_from_string ("video/x-raw(memory:GLMemory),"
-      "format=RGBA,width=10,height=10,texture-target=2D");
-  gst_gl_upload_set_caps (upload, in_caps, out_caps);
-  gst_caps_unref (out_caps);
-
-  res = gst_gl_upload_perform_with_buffer (upload, buffer, &outbuf);
-  fail_unless (res == GST_GL_UPLOAD_DONE, "Failed to upload buffer");
-  fail_unless (GST_IS_BUFFER (outbuf));
-
-  gst_gl_window_set_preferred_size (window, WIDTH, HEIGHT);
-  gst_gl_window_draw (window);
+  gst_gl_window_draw (window, WIDTH, HEIGHT);
   gst_gl_window_send_message (window, GST_GL_WINDOW_CB (init), context);
 
   while (i < 2) {
@@ -371,12 +282,63 @@ GST_START_TEST (test_upload_gl_memory)
         context);
     i++;
   }
-  gst_gl_window_send_message (window, GST_GL_WINDOW_CB (deinit), context);
 
-  gst_caps_unref (in_caps);
+  gst_gl_upload_release_buffer (upload);
   gst_buffer_unref (buffer);
-  gst_buffer_unref (outbuf);
-  gst_object_unref (base_mem_alloc);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_upload_meta_producer)
+{
+  GstBuffer *buffer;
+  GstGLMemory *gl_mem;
+  GstVideoInfo in_info;
+  GstVideoGLTextureUploadMeta *gl_upload_meta;
+  guint tex_ids[] = { 0, 0, 0, 0 };
+  GstGLUploadMeta *upload_meta;
+  gboolean res;
+  gint i = 0;
+
+  gst_video_info_set_format (&in_info, GST_VIDEO_FORMAT_RGBA, WIDTH, HEIGHT);
+
+  /* create GL buffer */
+  buffer = gst_buffer_new ();
+  gl_mem = gst_gl_memory_wrapped (context, FORMAT, WIDTH, HEIGHT, WIDTH * 4,
+      rgba_data, NULL, NULL);
+  gst_buffer_append_memory (buffer, (GstMemory *) gl_mem);
+
+  gst_gl_context_gen_texture (context, &tex_ids[0], GST_VIDEO_FORMAT_RGBA,
+      WIDTH, HEIGHT);
+
+  upload_meta = gst_gl_upload_meta_new (context);
+  gst_gl_upload_meta_set_format (upload_meta, &in_info);
+
+  gst_gl_upload_set_format (upload, &in_info);
+  gst_buffer_add_video_meta_full (buffer, 0, GST_VIDEO_FORMAT_RGBA, WIDTH,
+      HEIGHT, 1, in_info.offset, in_info.stride);
+  gst_gl_upload_meta_add_to_buffer (upload_meta, buffer);
+
+  gl_upload_meta = gst_buffer_get_video_gl_texture_upload_meta (buffer);
+  fail_if (gl_upload_meta == NULL, "Failed to add GstVideoGLTextureUploadMeta"
+      " to buffer\n");
+
+  res = gst_video_gl_texture_upload_meta_upload (gl_upload_meta, tex_ids);
+  fail_if (res == FALSE, "Failed to upload GstVideoGLTextureUploadMeta\n");
+
+  tex_id = tex_ids[0];
+  gst_gl_window_draw (window, WIDTH, HEIGHT);
+  gst_gl_window_send_message (window, GST_GL_WINDOW_CB (init), context);
+
+  while (i < 2) {
+    gst_gl_window_send_message (window, GST_GL_WINDOW_CB (draw_render),
+        context);
+    i++;
+  }
+
+  gst_object_unref (upload_meta);
+  gst_gl_context_del_texture (context, &tex_ids[0]);
+  gst_buffer_unref (buffer);
 }
 
 GST_END_TEST;
@@ -391,7 +353,8 @@ gst_gl_upload_suite (void)
   suite_add_tcase (s, tc_chain);
   tcase_add_checked_fixture (tc_chain, setup, teardown);
   tcase_add_test (tc_chain, test_upload_data);
-  tcase_add_test (tc_chain, test_upload_gl_memory);
+  tcase_add_test (tc_chain, test_upload_buffer);
+  tcase_add_test (tc_chain, test_upload_meta_producer);
 
   return s;
 }

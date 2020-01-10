@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>mirror: GStreamer Bad Plugins 1.0 Plugins Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<title>GStreamer Bad Plugins 1.0 Plugins Reference Manual: mirror</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 1.0 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-mimdec.html" title="mimdec">
 <link rel="next" href="gst-plugins-bad-plugins-modplug.html" title="modplug">
-<meta name="generator" content="GTK-Doc V1.25 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -29,20 +29,20 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="gst-plugins-bad-plugins-mirror.top_of_page"></a>mirror</span></h2>
-<p>mirror</p>
+<p>mirror — Split the image into two halves and reflect one over each other</p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mirror.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table class="informaltable" border="0">
+<div class="informaltable"><table border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
 <col width="200px" class="properties_flags">
 </colgroup>
 <tbody><tr>
-<td class="property_type"><a class="link" href="gst-plugins-bad-plugins-mirror.html#GstMirrorMode" title="enum GstMirrorMode"><span class="type">GstMirrorMode</span></a></td>
+<td class="property_type"><span class="type">GstMirrorMode</span></td>
 <td class="property_name"><a class="link" href="gst-plugins-bad-plugins-mirror.html#GstMirror--mode" title="The “mode” property">mode</a></td>
 <td class="property_flags">Read / Write</td>
 </tr></tbody>
@@ -50,57 +50,35 @@
 </div>
 <a name="GstMirror"></a><div class="refsect1">
 <a name="gst-plugins-bad-plugins-mirror.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
 </colgroup>
-<tbody>
-<tr>
+<tbody><tr>
 <td class="datatype_keyword">struct</td>
 <td class="function_name"><a class="link" href="gst-plugins-bad-plugins-mirror.html#GstMirror-struct" title="struct GstMirror">GstMirror</a></td>
-</tr>
-<tr>
-<td class="datatype_keyword">enum</td>
-<td class="function_name"><a class="link" href="gst-plugins-bad-plugins-mirror.html#GstMirrorMode" title="enum GstMirrorMode">GstMirrorMode</a></td>
-</tr>
-</tbody>
+</tr></tbody>
 </table></div>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mirror.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
-    <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
-        <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstObject.html#GstObject-struct">GstObject</a>
-            <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstElement.html#GstElement-struct">GstElement</a>
-                <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-libs-1.0GstBaseTransform.html#GstBaseTransform-struct">GstBaseTransform</a>
-                    <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gst-plugins-base-libs-1.0gst-plugins-base-libs-gstvideofilter.html#GstVideoFilter-struct">GstVideoFilter</a>
+<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+    <span class="lineart">╰──</span> <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
+        <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
+            <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
+                <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseTransform.html">GstBaseTransform</a>
+                    <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-libs/html/gst-plugins-base-libs-gstvideofilter.html#GstVideoFilter">GstVideoFilter</a>
                         <span class="lineart">╰──</span> GstGeometricTransform
                             <span class="lineart">╰──</span> GstMirror
 </pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mirror.description"></a><h2>Description</h2>
-<p>Mirror is a geometric transform element. It splits the image into two halves
-and reflects one over each other.</p>
-<div class="refsect2">
-<a name="id-1.2.94.7.3"></a><h3>Example launch line</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch<span class="gtkdoc opt">-</span><span class="number">1.0</span> <span class="gtkdoc opt">-</span>v videotestsrc <span class="gtkdoc opt">!</span> mirror <span class="gtkdoc opt">!</span> videoconvert <span class="gtkdoc opt">!</span> autovideosink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-</div>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="id-1.2.94.7.4.1"></a><h3>Element Information</h3>
+<a name="id-1.2.43.7.2.1"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -126,7 +104,7 @@ and reflects one over each other.</p>
 </div>
 <hr>
 <div class="refsect2">
-<a name="id-1.2.94.7.4.2"></a><h3>Element Pads</h3>
+<a name="id-1.2.43.7.2.2"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -177,79 +155,34 @@ and reflects one over each other.</p>
 </table></div>
 </div>
 </div>
+<p>
+</p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mirror.functions_details"></a><h2>Functions</h2>
-<p></p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mirror.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
 <a name="GstMirror-struct"></a><h3>struct GstMirror</h3>
 <pre class="programlisting">struct GstMirror;</pre>
-</div>
-<hr>
-<div class="refsect2">
-<a name="GstMirrorMode"></a><h3>enum GstMirrorMode</h3>
-<p>How to split the video frame and which side reflect</p>
-<div class="refsect3">
-<a name="GstMirrorMode.members"></a><h4>Members</h4>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
-<colgroup>
-<col width="300px" class="enum_members_name">
-<col class="enum_members_description">
-<col width="200px" class="enum_members_annotations">
-</colgroup>
-<tbody>
-<tr>
-<td class="enum_member_name"><p><a name="GST-MIRROR-MODE-LEFT:CAPS"></a>GST_MIRROR_MODE_LEFT</p></td>
-<td class="enum_member_description">
-<p>Split horizontally and reflect left into right</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-<tr>
-<td class="enum_member_name"><p><a name="GST-MIRROR-MODE-RIGHT:CAPS"></a>GST_MIRROR_MODE_RIGHT</p></td>
-<td class="enum_member_description">
-<p>Split horizontally and reflect right into left</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-<tr>
-<td class="enum_member_name"><p><a name="GST-MIRROR-MODE-TOP:CAPS"></a>GST_MIRROR_MODE_TOP</p></td>
-<td class="enum_member_description">
-<p>Split horizontally and reflect top into bottom</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-<tr>
-<td class="enum_member_name"><p><a name="GST-MIRROR-MODE-BOTTOM:CAPS"></a>GST_MIRROR_MODE_BOTTOM</p></td>
-<td class="enum_member_description">
-<p>Split horizontally and reflect bottom into top</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-</tbody>
-</table></div>
-</div>
+<p>
+</p>
 </div>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mirror.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="GstMirror--mode"></a><h3>The <code class="literal">“mode”</code> property</h3>
-<pre class="programlisting">  “mode”                     <a class="link" href="gst-plugins-bad-plugins-mirror.html#GstMirrorMode" title="enum GstMirrorMode"><span class="type">GstMirrorMode</span></a></pre>
+<pre class="programlisting">  “mode”                     <span class="type">GstMirrorMode</span></pre>
 <p>How to split the video frame and which side reflect.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: Split horizontally and reflect left into right</p>
 </div>
 </div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-mirror.see-also"></a><h2>See Also</h2>
-<p>geometrictransform</p>
-</div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25</div>
+<hr>
+          Generated by GTK-Doc V1.21</div>
 </body>
 </html>

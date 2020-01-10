@@ -41,8 +41,16 @@ typedef struct _GstTeletextDecClass GstTeletextDecClass;
 typedef struct _GstTeletextFrame GstTeletextFrame;
 typedef enum _GstTeletextOutputFormat GstTeletextOutputFormat;
 
-typedef GstFlowReturn (*GstTeletextExportFunc) (GstTeletextDec * teletext,
-    vbi_page * page, GstBuffer ** buf);
+enum _GstTeletextOutputFormat
+{
+  GST_TELETEXTDEC_OUTPUT_FORMAT_RGBA,
+  GST_TELETEXTDEC_OUTPUT_FORMAT_TEXT,
+  GST_TELETEXTDEC_OUTPUT_FORMAT_HTML,
+  GST_TELETEXTDEC_OUTPUT_FORMAT_PANGO
+};
+
+typedef void (*GstTeletextProcessBufferFunc) (GstTeletextDec *
+    teletext, GstBuffer * buf);
 
 struct _GstTeletextDec
 {
@@ -50,7 +58,6 @@ struct _GstTeletextDec
 
   GstPad *sinkpad;
   GstPad *srcpad;
-  GstEvent *segment;
 
   GstClockTime in_timestamp;
   GstClockTime in_duration;
@@ -64,22 +71,17 @@ struct _GstTeletextDec
   gchar *subtitles_template;
   gchar *font_description;
 
+  vbi_dvb_demux *demux;
   vbi_decoder *decoder;
-
+  vbi_export *exporter;
   GQueue *queue;
-  GMutex queue_lock;
+  GMutex *queue_lock;
 
   GstTeletextFrame *frame;
   float last_ts;
+  GstTeletextOutputFormat output_format;
 
-  GstTeletextExportFunc export_func;
-
-  /* negotiated size of the output image in RGBA mode. */
-  guint width;
-  guint height;
-
-  /* buffer pool received from the peer pad - used in RGBA output only. */
-  GstBufferPool *buf_pool;
+  GstTeletextProcessBufferFunc process_buf_func;
 };
 
 struct _GstTeletextFrame

@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>mimenc: GStreamer Bad Plugins 1.0 Plugins Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<title>GStreamer Bad Plugins 1.0 Plugins Reference Manual: mimenc</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 1.0 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-marble.html" title="marble">
 <link rel="next" href="gst-plugins-bad-plugins-mimdec.html" title="mimdec">
-<meta name="generator" content="GTK-Doc V1.25 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -29,20 +29,20 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="gst-plugins-bad-plugins-mimenc.top_of_page"></a>mimenc</span></h2>
-<p>mimenc</p>
+<p>mimenc — MSN Messenger compatible Mimic video encoder element</p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mimenc.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table class="informaltable" border="0">
+<div class="informaltable"><table border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
 <col width="200px" class="properties_flags">
 </colgroup>
 <tbody><tr>
-<td class="property_type"><a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="gst-plugins-bad-plugins-mimenc.html#GstMimEnc--paused-mode" title="The “paused-mode” property">paused-mode</a></td>
 <td class="property_flags">Read / Write</td>
 </tr></tbody>
@@ -50,7 +50,7 @@
 </div>
 <a name="GstMimEnc"></a><div class="refsect1">
 <a name="gst-plugins-bad-plugins-mimenc.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -63,28 +63,19 @@
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mimenc.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
-    <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
-        <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstObject.html#GstObject-struct">GstObject</a>
-            <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstElement.html#GstElement-struct">GstElement</a>
+<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+    <span class="lineart">╰──</span> <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
+        <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
+            <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
                 <span class="lineart">╰──</span> GstMimEnc
 </pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mimenc.description"></a><h2>Description</h2>
-<p>The MIMIC codec is used by MSN Messenger's webcam support. It creates the
-TCP header for the MIMIC codec.</p>
-<p>When using it to communicate directly with MSN Messenger, if the sender
-wants to stop sending, he has to send a special buffer every 4 seconds.
-When the "paused-mode" property is set to TRUE, if the element receives no
-buffer on its sink pad for 4 seconds, it will produced a special paused
-frame and will continue doing so every 4 seconds until a new buffer is
-u received on its sink pad.</p>
-<p>Its fourcc is ML20.</p>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="id-1.2.92.7.5.1"></a><h3>Element Information</h3>
+<a name="id-1.2.41.7.2.1"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -110,7 +101,7 @@ u received on its sink pad.</p>
 </div>
 <hr>
 <div class="refsect2">
-<a name="id-1.2.92.7.5.2"></a><h3>Element Pads</h3>
+<a name="id-1.2.41.7.2.2"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -165,34 +156,34 @@ u received on its sink pad.</p>
 </table></div>
 </div>
 </div>
+<p>
+</p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mimenc.functions_details"></a><h2>Functions</h2>
-<p></p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mimenc.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
 <a name="GstMimEnc-struct"></a><h3>struct GstMimEnc</h3>
 <pre class="programlisting">struct GstMimEnc;</pre>
+<p>
+</p>
 </div>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-mimenc.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="GstMimEnc--paused-mode"></a><h3>The <code class="literal">“paused-mode”</code> property</h3>
-<pre class="programlisting">  “paused-mode”              <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<pre class="programlisting">  “paused-mode”              <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>If enabled, empty frames will be generated every 4 seconds when no data is received.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: FALSE</p>
 </div>
 </div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-mimenc.see-also"></a><h2>See Also</h2>
-<p>mimdec</p>
-</div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25</div>
+<hr>
+          Generated by GTK-Doc V1.21</div>
 </body>
 </html>

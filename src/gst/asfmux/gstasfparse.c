@@ -75,17 +75,17 @@ static GstFlowReturn
 gst_asf_parse_parse_data_object (GstAsfParse * asfparse, guint8 * data,
     gsize size)
 {
-  GstByteReader reader;
+  GstByteReader *reader;
   GstFlowReturn ret = GST_FLOW_OK;
   guint64 packet_count = 0;
 
   GST_DEBUG_OBJECT (asfparse, "Parsing data object");
 
-  gst_byte_reader_init (&reader, data, size);
+  reader = gst_byte_reader_new (data, size);
   /* skip to packet count */
-  if (!gst_byte_reader_skip (&reader, 40))
+  if (!gst_byte_reader_skip (reader, 40))
     goto error;
-  if (!gst_byte_reader_get_uint64_le (&reader, &packet_count))
+  if (!gst_byte_reader_get_uint64_le (reader, &packet_count))
     goto error;
 
   if (asfparse->asfinfo->packets_count != packet_count) {
@@ -97,11 +97,13 @@ gst_asf_parse_parse_data_object (GstAsfParse * asfparse, guint8 * data,
         packet_count);
   }
 
+  gst_byte_reader_free (reader);
   return GST_FLOW_OK;
 
 error:
   ret = GST_FLOW_ERROR;
   GST_ERROR_OBJECT (asfparse, "Error while parsing data object headers");
+  gst_byte_reader_free (reader);
   return ret;
 }
 
@@ -400,8 +402,10 @@ gst_asf_parse_class_init (GstAsfParseClass * klass)
   gstbaseparse_class->stop = gst_asf_parse_stop;
   gstbaseparse_class->handle_frame = gst_asf_parse_handle_frame;
 
-  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
-  gst_element_class_add_static_pad_template (gstelement_class, &sink_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sink_factory));
 
   gst_element_class_set_static_metadata (gstelement_class, "ASF parser",
       "Parser", "Parses ASF", "Thiago Santos <thiagoss@embedded.ufcg.edu.br>");

@@ -24,7 +24,6 @@
 
 #include <gst/gst.h>
 #include <gst/video/video.h>
-#include <gst/codecparsers/gstjpeg2000sampling.h>
 
 #include "gstopenjpeg.h"
 
@@ -55,7 +54,6 @@ struct _GstOpenJPEGDec
   OPJ_CODEC_FORMAT codec_format;
   gboolean is_jp2c;
   OPJ_COLOR_SPACE color_space;
-  GstJPEG2000Sampling sampling;
   gint ncomps;
 
   void (*fill_frame) (GstVideoFrame *frame, opj_image_t * image);

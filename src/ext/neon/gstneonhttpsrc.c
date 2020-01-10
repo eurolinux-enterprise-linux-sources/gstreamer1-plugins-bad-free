@@ -203,7 +203,8 @@ gst_neonhttp_src_class_init (GstNeonhttpSrcClass * klass)
   GST_DEBUG_CATEGORY_INIT (neonhttpsrc_debug, "neonhttpsrc", 0,
       "NEON HTTP Client Source");
 
-  gst_element_class_add_static_pad_template (element_class, &srctemplate);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&srctemplate));
 
   gst_element_class_set_static_metadata (element_class, "HTTP client source",
       "Source/Network",
@@ -320,7 +321,8 @@ gst_neonhttp_src_set_property (GObject * object, guint prop_id,
       break;
     }
     case PROP_USER_AGENT:
-      g_free (src->user_agent);
+      if (src->user_agent)
+        g_free (src->user_agent);
       src->user_agent = g_strdup (g_value_get_string (value));
       break;
     case PROP_COOKIES:

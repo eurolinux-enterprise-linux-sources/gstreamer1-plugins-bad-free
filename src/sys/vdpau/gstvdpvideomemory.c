@@ -222,7 +222,8 @@ _vdp_video_mem_free (GstAllocator * allocator, GstMemory * mem)
 
   gst_object_unref (vmem->device);
 
-  g_free (vmem->cache);
+  if (vmem->cache)
+    g_free (vmem->cache);
 
   g_slice_free (GstVdpVideoMemory, vmem);
 }

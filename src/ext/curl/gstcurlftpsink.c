@@ -29,7 +29,7 @@
  * <title>Example launch line (upload a JPEG file to /home/test/images
  * directory)</title>
  * |[
- * gst-launch-1.0 filesrc location=image.jpg ! jpegparse ! curlftpsink  \
+ * gst-launch filesrc location=image.jpg ! jpegparse ! curlftpsink  \
  *     file-name=image.jpg  \
  *     location=ftp://192.168.0.1/images/
  * ]|
@@ -230,8 +230,7 @@ set_ftp_dynamic_options_unlocked (GstCurlBaseSink * basesink)
       return FALSE;
     }
 
-    res =
-        curl_easy_setopt (basesink->curl, CURLOPT_POSTQUOTE, sink->headerlist);
+    res = curl_easy_setopt (basesink->curl, CURLOPT_POSTQUOTE, sink->headerlist);
     if (res != CURLE_OK) {
       basesink->error = g_strdup_printf ("failed to set post quote: %s",
           curl_easy_strerror (res));

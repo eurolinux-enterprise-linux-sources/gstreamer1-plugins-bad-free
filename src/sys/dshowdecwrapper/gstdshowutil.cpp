@@ -19,19 +19,18 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include <atlbase.h>
 #include <dmodshow.h>
 #include <dmoreg.h>
 
 #include "gstdshowutil.h"
 #include "gstdshowfakesrc.h"
 
-_COM_SMARTPTR_TYPEDEF(IDMOWrapperFilter, __uuidof(IDMOWrapperFilter));
-
 IPin * 
 gst_dshow_get_pin_from_filter (IBaseFilter *filter, PIN_DIRECTION pindir)
 {
-  IEnumPinsPtr enumpins;
-  IPinPtr pin;
+  CComPtr<IEnumPins> enumpins;
+  CComPtr<IPin> pin;
   HRESULT hres; 
 
   hres = filter->EnumPins (&enumpins);
@@ -60,9 +59,9 @@ gst_dshow_find_filter(CLSID input_majortype, CLSID input_subtype,
   HRESULT hres;
   GUID inTypes[2];
   GUID outTypes[2];
-  IFilterMapper2Ptr mapper;
-  IEnumMonikerPtr enum_moniker;
-  IMonikerPtr moniker;
+  CComPtr<IFilterMapper2> mapper;
+  CComPtr<IEnumMoniker> enum_moniker;
+  CComPtr<IMoniker> moniker;
   ULONG fetched;
   IBaseFilter *filter;
 
@@ -74,7 +73,7 @@ gst_dshow_find_filter(CLSID input_majortype, CLSID input_subtype,
       /* If the filter is a DMO, we need to do this a bit differently */
       if (preferred_filters->dmo_category) 
       {
-        IDMOWrapperFilterPtr wrapper;
+        CComPtr<IDMOWrapperFilter> wrapper;
 
         hres = CoCreateInstance (CLSID_DMOWrapperFilter, NULL, 
           CLSCTX_INPROC,

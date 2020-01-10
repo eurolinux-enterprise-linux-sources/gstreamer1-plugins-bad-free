@@ -20,7 +20,7 @@
  * SECTION:element-sdpdemux
  *
  * sdpdemux currently understands SDP as the input format of the session description.
- * For each stream listed in the SDP a new stream_\%u pad will be created
+ * For each stream listed in the SDP a new stream_%u pad will be created
  * with caps derived from the SDP media description. This is a caps of mime type
  * "application/x-rtp" that can be connected to any available RTP depayloader
  * element. 
@@ -35,7 +35,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 souphttpsrc location=http://some.server/session.sdp ! sdpdemux ! fakesink
+ * gst-launch gnomevfssrc location=http://some.server/session.sdp ! sdpdemux ! fakesink
  * ]| Establish a connection to an HTTP server that contains an SDP session description
  * that gets parsed by sdpdemux and send the raw RTP packets to a fakesink.
  * </refsect2>
@@ -44,6 +44,10 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
+/* FIXME 0.11: suppress warnings for deprecated API such as GStaticRecMutex
+ * with newer GLib versions (>= 2.31.0) */
+#define GLIB_DISABLE_DEPRECATION_WARNINGS
 
 #include "gstsdpdemux.h"
 
@@ -84,7 +88,8 @@ enum
   PROP_DEBUG,
   PROP_TIMEOUT,
   PROP_LATENCY,
-  PROP_REDIRECT
+  PROP_REDIRECT,
+  PROP_LAST
 };
 
 static void gst_sdp_demux_finalize (GObject * object);
@@ -93,6 +98,9 @@ static void gst_sdp_demux_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_sdp_demux_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
+
+static GstCaps *gst_sdp_demux_media_to_caps (gint pt,
+    const GstSDPMedia * media);
 
 static GstStateChangeReturn gst_sdp_demux_change_state (GstElement * element,
     GstStateChange transition);
@@ -150,8 +158,10 @@ gst_sdp_demux_class_init (GstSDPDemuxClass * klass)
           DEFAULT_REDIRECT,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
-  gst_element_class_add_static_pad_template (gstelement_class, &rtptemplate);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sinktemplate));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&rtptemplate));
 
   gst_element_class_set_static_metadata (gstelement_class, "SDP session setup",
       "Codec/Demuxer/Network/RTP",
@@ -391,14 +401,9 @@ gst_sdp_demux_create_stream (GstSDPDemux * demux, GstSDPMessage * sdp, gint idx)
   /* we must have a payload. No payload means we cannot create caps */
   /* FIXME, handle multiple formats. */
   if ((payload = gst_sdp_media_get_format (media, 0))) {
-    GstStructure *s;
-
     stream->pt = atoi (payload);
     /* convert caps */
-    stream->caps = gst_sdp_media_get_caps_from_media (media, stream->pt);
-
-    s = gst_caps_get_structure (stream->caps, 0);
-    gst_structure_set_name (s, "application/x-rtp");
+    stream->caps = gst_sdp_demux_media_to_caps (stream->pt, media);
 
     if (stream->pt >= 96) {
       /* If we have a dynamic payload type, see if we have a stream with the
@@ -482,12 +487,238 @@ gst_sdp_demux_cleanup (GstSDPDemux * demux)
   demux->numstreams = 0;
 }
 
+#define PARSE_INT(p, del, res)          \
+G_STMT_START {                          \
+  gchar *t = p;                         \
+  p = strstr (p, del);                  \
+  if (p == NULL)                        \
+    res = -1;                           \
+  else {                                \
+    *p = '\0';                          \
+    p++;                                \
+    res = atoi (t);                     \
+  }                                     \
+} G_STMT_END
+
+#define PARSE_STRING(p, del, res)       \
+G_STMT_START {                          \
+  gchar *t = p;                         \
+  p = strstr (p, del);                  \
+  if (p == NULL) {                      \
+    res = NULL;                         \
+    p = t;                              \
+  }                                     \
+  else {                                \
+    *p = '\0';                          \
+    p++;                                \
+    res = t;                            \
+  }                                     \
+} G_STMT_END
+
+#define SKIP_SPACES(p)                  \
+  while (*p && g_ascii_isspace (*p))    \
+    p++;
+
+/* rtpmap contains:
+ *
+ *  <payload> <encoding_name>/<clock_rate>[/<encoding_params>]
+ */
+static gboolean
+gst_sdp_demux_parse_rtpmap (const gchar * rtpmap, gint * payload, gchar ** name,
+    gint * rate, gchar ** params)
+{
+  gchar *p, *t;
+
+  t = p = (gchar *) rtpmap;
+
+  PARSE_INT (p, " ", *payload);
+  if (*payload == -1)
+    return FALSE;
+
+  SKIP_SPACES (p);
+  if (*p == '\0')
+    return FALSE;
+
+  PARSE_STRING (p, "/", *name);
+  if (*name == NULL) {
+    GST_DEBUG ("no rate, name %s", p);
+    /* no rate, assume -1 then */
+    *name = p;
+    *rate = -1;
+    return TRUE;
+  }
+
+  t = p;
+  p = strstr (p, "/");
+  if (p == NULL) {
+    *rate = atoi (t);
+    return TRUE;
+  }
+  *p = '\0';
+  p++;
+  *rate = atoi (t);
+
+  t = p;
+  if (*p == '\0')
+    return TRUE;
+  *params = t;
+
+  return TRUE;
+}
+
+/*
+ *  Mapping of caps to and from SDP fields:
+ *
+ *   m=<media> <UDP port> RTP/AVP <payload> 
+ *   a=rtpmap:<payload> <encoding_name>/<clock_rate>[/<encoding_params>]
+ *   a=fmtp:<payload> <param>[=<value>];...
+ */
+static GstCaps *
+gst_sdp_demux_media_to_caps (gint pt, const GstSDPMedia * media)
+{
+  GstCaps *caps;
+  const gchar *rtpmap;
+  const gchar *fmtp;
+  gchar *name = NULL;
+  gint rate = -1;
+  gchar *params = NULL;
+  gchar *tmp;
+  GstStructure *s;
+  gint payload = 0;
+  gboolean ret;
+
+  /* get and parse rtpmap */
+  if ((rtpmap = gst_sdp_media_get_attribute_val (media, "rtpmap"))) {
+    ret = gst_sdp_demux_parse_rtpmap (rtpmap, &payload, &name, &rate, &params);
+    if (ret) {
+      if (payload != pt) {
+        /* we ignore the rtpmap if the payload type is different. */
+        g_warning ("rtpmap of wrong payload type, ignoring");
+        name = NULL;
+        rate = -1;
+        params = NULL;
+      }
+    } else {
+      /* if we failed to parse the rtpmap for a dynamic payload type, we have an
+       * error */
+      if (pt >= 96)
+        goto no_rtpmap;
+      /* else we can ignore */
+      g_warning ("error parsing rtpmap, ignoring");
+    }
+  } else {
+    /* dynamic payloads need rtpmap or we fail */
+    if (pt >= 96)
+      goto no_rtpmap;
+  }
+  /* check if we have a rate, if not, we need to look up the rate from the
+   * default rates based on the payload types. */
+  if (rate == -1) {
+    const GstRTPPayloadInfo *info;
+
+    if (GST_RTP_PAYLOAD_IS_DYNAMIC (pt)) {
+      /* dynamic types, use media and encoding_name */
+      tmp = g_ascii_strdown (media->media, -1);
+      info = gst_rtp_payload_info_for_name (tmp, name);
+      g_free (tmp);
+    } else {
+      /* static types, use payload type */
+      info = gst_rtp_payload_info_for_pt (pt);
+    }
+
+    if (info) {
+      if ((rate = info->clock_rate) == 0)
+        rate = -1;
+    }
+    /* we fail if we cannot find one */
+    if (rate == -1)
+      goto no_rate;
+  }
+
+  tmp = g_ascii_strdown (media->media, -1);
+  caps = gst_caps_new_simple ("application/x-rtp",
+      "media", G_TYPE_STRING, tmp, "payload", G_TYPE_INT, pt, NULL);
+  g_free (tmp);
+  s = gst_caps_get_structure (caps, 0);
+
+  gst_structure_set (s, "clock-rate", G_TYPE_INT, rate, NULL);
+
+  /* encoding name must be upper case */
+  if (name != NULL) {
+    tmp = g_ascii_strup (name, -1);
+    gst_structure_set (s, "encoding-name", G_TYPE_STRING, tmp, NULL);
+    g_free (tmp);
+  }
+
+  /* params must be lower case */
+  if (params != NULL) {
+    tmp = g_ascii_strdown (params, -1);
+    gst_structure_set (s, "encoding-params", G_TYPE_STRING, tmp, NULL);
+    g_free (tmp);
+  }
+
+  /* parse optional fmtp: field */
+  if ((fmtp = gst_sdp_media_get_attribute_val (media, "fmtp"))) {
+    gchar *p;
+    gint payload = 0;
+
+    p = (gchar *) fmtp;
+
+    /* p is now of the format <payload> <param>[=<value>];... */
+    PARSE_INT (p, " ", payload);
+    if (payload != -1 && payload == pt) {
+      gchar **pairs;
+      gint i;
+
+      /* <param>[=<value>] are separated with ';' */
+      pairs = g_strsplit (p, ";", 0);
+      for (i = 0; pairs[i]; i++) {
+        gchar *valpos, *key;
+        const gchar *val;
+
+        /* the key may not have a '=', the value can have other '='s */
+        valpos = strstr (pairs[i], "=");
+        if (valpos) {
+          /* we have a '=' and thus a value, remove the '=' with \0 */
+          *valpos = '\0';
+          /* value is everything between '=' and ';'. FIXME, strip? */
+          val = g_strstrip (valpos + 1);
+        } else {
+          /* simple <param>;.. is translated into <param>=1;... */
+          val = "1";
+        }
+        /* strip the key of spaces, convert key to lowercase but not the value. */
+        key = g_strstrip (pairs[i]);
+        if (strlen (key) > 1) {
+          tmp = g_ascii_strdown (key, -1);
+          gst_structure_set (s, tmp, G_TYPE_STRING, val, NULL);
+          g_free (tmp);
+        }
+      }
+      g_strfreev (pairs);
+    }
+  }
+  return caps;
+
+  /* ERRORS */
+no_rtpmap:
+  {
+    g_warning ("rtpmap type not given for dynamic payload %d", pt);
+    return NULL;
+  }
+no_rate:
+  {
+    g_warning ("rate unknown for payload type %d", pt);
+    return NULL;
+  }
+}
+
 /* this callback is called when the session manager generated a new src pad with
  * payloaded RTP packets. We simply ghost the pad here. */
 static void
 new_session_pad (GstElement * session, GstPad * pad, GstSDPDemux * demux)
 {
-  gchar *name, *pad_name;
+  gchar *name;
   GstPadTemplate *template;
   gint id, ssrc, pt;
   GList *lstream;
@@ -512,13 +743,11 @@ new_session_pad (GstElement * session, GstPad * pad, GstSDPDemux * demux)
   /* no need for a timeout anymore now */
   g_object_set (G_OBJECT (stream->udpsrc[0]), "timeout", (guint64) 0, NULL);
 
-  pad_name = g_strdup_printf ("stream_%u", stream->id);
   /* create a new pad we will use to stream to */
   template = gst_static_pad_template_get (&rtptemplate);
-  stream->srcpad = gst_ghost_pad_new_from_template (pad_name, pad, template);
+  stream->srcpad = gst_ghost_pad_new_from_template (name, pad, template);
   gst_object_unref (template);
   g_free (name);
-  g_free (pad_name);
 
   stream->added = TRUE;
   gst_pad_set_active (stream->srcpad, TRUE);
@@ -1034,7 +1263,7 @@ gst_sdp_demux_handle_message (GstBin * bin, GstMessage * message)
 static gboolean
 gst_sdp_demux_start (GstSDPDemux * demux)
 {
-  guint8 *data = NULL;
+  guint8 *data;
   guint size;
   gint i, n_streams;
   GstSDPMessage sdp = { 0 };
@@ -1049,9 +1278,6 @@ gst_sdp_demux_start (GstSDPDemux * demux)
   GST_DEBUG_OBJECT (demux, "parse SDP...");
 
   size = gst_adapter_available (demux->adapter);
-  if (size == 0)
-    goto no_data;
-
   data = gst_adapter_take (demux->adapter, size);
 
   gst_sdp_message_init (&sdp);
@@ -1193,12 +1419,6 @@ no_manager:
   {
     GST_ELEMENT_ERROR (demux, STREAM, TYPE_NOT_FOUND, (NULL),
         ("Could not create RTP session manager."));
-    goto done;
-  }
-no_data:
-  {
-    GST_ELEMENT_ERROR (demux, STREAM, TYPE_NOT_FOUND, (NULL),
-        ("Empty SDP message."));
     goto done;
   }
 could_not_parse:

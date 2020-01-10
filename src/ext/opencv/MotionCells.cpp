@@ -49,9 +49,11 @@
 //#endif
 #endif
 
+#include <cstdlib>
 #include <errno.h>
+#include <math.h>
+#include <gst/gst.h>
 #include "MotionCells.h"
-#include <opencv2/imgproc/imgproc_c.h>
 
 MotionCells::MotionCells ()
 {
@@ -73,21 +75,7 @@ MotionCells::MotionCells ()
   m_beta = 0.5;
   m_useAlpha = false;
   m_isVisible = false;
-  m_pCells = NULL;
-  m_gridx = 0;
-  m_gridy = 0;
-  m_cellwidth = 0;
-  m_cellheight = 0;
-  m_sensitivity = 0;
 
-  memset (&m_header, 0, sizeof (MotionCellHeader));
-  m_header.headersize = GINT32_TO_BE (MC_HEADER);
-  m_header.type = GINT32_TO_BE (MC_TYPE);
-  m_header.version = GINT32_TO_BE (MC_VERSION);
-  m_header.itemsize = 0;
-  m_header.gridx = 0;
-  m_header.gridy = 0;
-  m_header.starttime = 0;
 }
 
 MotionCells::~MotionCells ()
@@ -125,8 +113,6 @@ MotionCells::performDetectionMotionCells (IplImage * p_frame,
 
   int sumframecnt = 0;
   int ret = 0;
-  CvSize frameSize;
-
   p_framerate >= 1 ? p_framerate <= 5 ? sumframecnt = 1
       : p_framerate <= 10 ? sumframecnt = 2
       : p_framerate <= 15 ? sumframecnt = 3
@@ -146,21 +132,21 @@ MotionCells::performDetectionMotionCells (IplImage * p_frame,
         return ret;
     }
 
-    frameSize = cvGetSize (p_frame);
-    frameSize.width /= 2;
-    frameSize.height /= 2;
-    setMotionCells (frameSize.width, frameSize.height);
+    m_frameSize = cvGetSize (p_frame);
+    m_frameSize.width /= 2;
+    m_frameSize.height /= 2;
+    setMotionCells (m_frameSize.width, m_frameSize.height);
     m_sensitivity = 1 - p_sensitivity;
     m_isVisible = p_isVisible;
     m_pcurFrame = cvCloneImage (p_frame);
-    IplImage *m_pcurgreyImage = cvCreateImage (frameSize, IPL_DEPTH_8U, 1);
-    IplImage *m_pprevgreyImage = cvCreateImage (frameSize, IPL_DEPTH_8U, 1);
-    IplImage *m_pgreyImage = cvCreateImage (frameSize, IPL_DEPTH_8U, 1);
+    IplImage *m_pcurgreyImage = cvCreateImage (m_frameSize, IPL_DEPTH_8U, 1);
+    IplImage *m_pprevgreyImage = cvCreateImage (m_frameSize, IPL_DEPTH_8U, 1);
+    IplImage *m_pgreyImage = cvCreateImage (m_frameSize, IPL_DEPTH_8U, 1);
     IplImage *m_pcurDown =
-        cvCreateImage (frameSize, m_pcurFrame->depth, m_pcurFrame->nChannels);
-    IplImage *m_pprevDown = cvCreateImage (frameSize, m_pprevFrame->depth,
+        cvCreateImage (m_frameSize, m_pcurFrame->depth, m_pcurFrame->nChannels);
+    IplImage *m_pprevDown = cvCreateImage (m_frameSize, m_pprevFrame->depth,
         m_pprevFrame->nChannels);
-    m_pbwImage = cvCreateImage (frameSize, IPL_DEPTH_8U, 1);
+    m_pbwImage = cvCreateImage (m_frameSize, IPL_DEPTH_8U, 1);
     cvPyrDown (m_pprevFrame, m_pprevDown);
     cvCvtColor (m_pprevDown, m_pprevgreyImage, CV_RGB2GRAY);
     cvPyrDown (m_pcurFrame, m_pcurDown);
@@ -344,7 +330,10 @@ MotionCells::initDataFile (char *p_datafile, gint64 starttime)  //p_date is incr
     }
   } else
     mc_savefile = NULL;
-
+  memset (&m_header, 0, sizeof (MotionCellHeader));
+  m_header.headersize = GINT32_TO_BE (MC_HEADER);
+  m_header.type = GINT32_TO_BE (MC_TYPE);
+  m_header.version = GINT32_TO_BE (MC_VERSION);
   //it needs these bytes
   m_header.itemsize =
       GINT32_TO_BE ((int) ceil (ceil (m_gridx * m_gridy / 8.0) / 4.0) * 4 +

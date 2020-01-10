@@ -64,18 +64,19 @@ struct _GstTSDemux
   gboolean emit_statistics;
 
   /*< private >*/
-  gint program_generation; /* Incremented each time we switch program 0..15 */
   MpegTSBaseProgram *program;	/* Current program */
-  MpegTSBaseProgram *previous_program; /* Previous program, to deactivate once
-					* the new program becomes active */
 
   /* segments to be sent */
   GstSegment segment;
   GstEvent *segment_event;
-  gboolean reset_segment;
 
   /* global taglist */
   GstTagList *global_tags;
+
+  /* Set when program change */
+  gboolean calculate_update_segment;
+  /* update segment is */
+  GstEvent *update_segment;
 
   /* Full stream duration */
   GstClockTime duration;

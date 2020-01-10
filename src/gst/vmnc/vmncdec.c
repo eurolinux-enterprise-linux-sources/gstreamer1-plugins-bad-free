@@ -41,8 +41,6 @@ static GstFlowReturn gst_vmnc_dec_handle_frame (GstVideoDecoder * decoder,
     GstVideoCodecFrame * frame);
 static GstFlowReturn gst_vmnc_dec_parse (GstVideoDecoder * decoder,
     GstVideoCodecFrame * frame, GstAdapter * adapter, gboolean at_eos);
-static gboolean gst_vmnc_dec_sink_event (GstVideoDecoder * bdec,
-    GstEvent * event);
 
 #define GST_CAT_DEFAULT vmnc_debug
 GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
@@ -53,7 +51,7 @@ GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
 
 enum
 {
-  PROP_0,
+  ARG_0,
 };
 
 enum
@@ -91,14 +89,14 @@ gst_vmnc_dec_class_init (GstVMncDecClass * klass)
   decoder_class->parse = gst_vmnc_dec_parse;
   decoder_class->handle_frame = gst_vmnc_dec_handle_frame;
   decoder_class->set_format = gst_vmnc_dec_set_format;
-  decoder_class->sink_event = gst_vmnc_dec_sink_event;
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &vmnc_dec_src_factory);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &vmnc_dec_sink_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&vmnc_dec_src_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&vmnc_dec_sink_factory));
   gst_element_class_set_static_metadata (gstelement_class, "VMnc video decoder",
-      "Codec/Decoder/Video", "Decode VmWare video to raw (RGB) video",
+      "Codec/Decoder/Video",
+      "Decode VmWare video to raw (RGB) video",
       "Michael Smith <msmith@xiph.org>");
 
   GST_DEBUG_CATEGORY_INIT (vmnc_debug, "vmncdec", 0, "VMnc decoder");
@@ -107,9 +105,6 @@ gst_vmnc_dec_class_init (GstVMncDecClass * klass)
 static void
 gst_vmnc_dec_init (GstVMncDec * dec)
 {
-  gst_video_decoder_set_use_default_pad_acceptcaps (GST_VIDEO_DECODER_CAST
-      (dec), TRUE);
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_VIDEO_DECODER_SINK_PAD (dec));
 }
 
 static gboolean
@@ -260,7 +255,7 @@ vmnc_handle_wmvi_rectangle (GstVMncDec * dec, struct RfbRectangle *rect,
   gst_video_codec_state_unref (state);
 
   g_free (dec->imagedata);
-  dec->imagedata = g_malloc0 (dec->format.width * dec->format.height *
+  dec->imagedata = g_malloc (dec->format.width * dec->format.height *
       dec->format.bytes_per_pixel);
   GST_DEBUG_OBJECT (dec, "Allocated image data at %p", dec->imagedata);
 
@@ -785,16 +780,11 @@ vmnc_handle_packet (GstVMncDec * dec, const guint8 * data, int len,
                 r.type);
             return ERROR_INVALID;
           }
-          if (r.x > dec->format.width || r.y > dec->format.height ||
-              r.x + r.width > dec->format.width ||
+          if (r.x + r.width > dec->format.width ||
               r.y + r.height > dec->format.height) {
             GST_WARNING_OBJECT (dec, "Rectangle out of range, type %d", r.type);
             return ERROR_INVALID;
           }
-        } else if (r.width > 16384 || r.height > 16384) {
-          GST_WARNING_OBJECT (dec, "Width or height too high: %ux%u", r.width,
-              r.height);
-          return ERROR_INVALID;
         }
 
         switch (r.type) {
@@ -858,31 +848,15 @@ gst_vmnc_dec_set_format (GstVideoDecoder * decoder, GstVideoCodecState * state)
   /* We require a format descriptor in-stream, so we ignore the info from the
    * container here. We just use the framerate */
 
+  /* Declare it packetized if a valid framerate was parsed, not ideal */
+  gst_video_decoder_set_packetized (decoder,
+      state->info.fps_n && state->info.fps_d);
+
   if (dec->input_state)
     gst_video_codec_state_unref (dec->input_state);
   dec->input_state = gst_video_codec_state_ref (state);
 
   return TRUE;
-}
-
-static gboolean
-gst_vmnc_dec_sink_event (GstVideoDecoder * bdec, GstEvent * event)
-{
-  const GstSegment *segment;
-
-  if (GST_EVENT_TYPE (event) != GST_EVENT_SEGMENT)
-    goto done;
-
-  gst_event_parse_segment (event, &segment);
-
-  if (segment->format == GST_FORMAT_TIME)
-    gst_video_decoder_set_packetized (bdec, TRUE);
-  else
-    gst_video_decoder_set_packetized (bdec, FALSE);
-
-done:
-  return GST_VIDEO_DECODER_CLASS (gst_vmnc_dec_parent_class)->sink_event (bdec,
-      event);
 }
 
 static GstFlowReturn

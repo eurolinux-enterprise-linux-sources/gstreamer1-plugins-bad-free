@@ -44,19 +44,6 @@ GST_DEBUG_CATEGORY_EXTERN (gst_debug_glimage_sink);
 #define GST_IS_GLIMAGE_SINK_CLASS(klass) \
     (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_GLIMAGE_SINK))
 
-typedef enum
-{
-  GST_GL_ROTATE_METHOD_IDENTITY,
-  GST_GL_ROTATE_METHOD_90R,
-  GST_GL_ROTATE_METHOD_180,
-  GST_GL_ROTATE_METHOD_90L,
-  GST_GL_ROTATE_METHOD_FLIP_HORIZ,
-  GST_GL_ROTATE_METHOD_FLIP_VERT,
-  GST_GL_ROTATE_METHOD_FLIP_UL_LR,
-  GST_GL_ROTATE_METHOD_FLIP_UR_LL,
-  GST_GL_ROTATE_METHOD_AUTO,
-}GstGLRotateMethod;
-
 typedef struct _GstGLImageSink GstGLImageSink;
 typedef struct _GstGLImageSinkClass GstGLImageSinkClass;
 
@@ -64,82 +51,43 @@ struct _GstGLImageSink
 {
     GstVideoSink video_sink;
 
+    //properties
+    gchar *display_name;
+
     guintptr window_id;
     guintptr new_window_id;
-    gulong mouse_sig_id;
-    gulong key_sig_id;
 
-    /* GstVideoOverlay::set_render_rectangle() cache */
-    gint x;
-    gint y;
-    gint width;
-    gint height;
-
-    /* Input info before 3d stereo output conversion, if any */
-    GstVideoInfo in_info;
-    GstCaps *in_caps;
-
-    /* format/caps we actually hand off to the app */
-    GstVideoInfo out_info;
-    GstCaps *out_caps;
-    GstGLTextureTarget texture_target;
+    //caps
+    GstVideoInfo info;
 
     GstGLDisplay *display;
     GstGLContext *context;
     GstGLContext *other_context;
-    gboolean handle_events;
-    gboolean ignore_alpha;
 
-    GstGLViewConvert *convert_views;
-
-    /* Original input RGBA buffer, ready for display,
-     * or possible reconversion through the views filter */
-    GstBuffer *input_buffer;
-    /* Secondary view buffer - when operating in frame-by-frame mode */
-    GstBuffer *input_buffer2;
-
+    GstGLUpload *upload;
     guint      next_tex;
-    GstBuffer *next_buffer;
-    GstBuffer *next_buffer2; /* frame-by-frame 2nd view */
-    GstBuffer *next_sync;
-    GstGLSyncMeta *next_sync_meta;
 
     volatile gint to_quit;
     gboolean keep_aspect_ratio;
     gint par_n, par_d;
 
+    GstBufferPool *pool;
+
     /* avoid replacing the stored_buffer while drawing */
     GMutex drawing_lock;
-    GstBuffer *stored_buffer[2];
-    GstBuffer *stored_sync;
-    GstGLSyncMeta *stored_sync_meta;
+    GstBuffer *stored_buffer;
     GLuint redisplay_texture;
 
-    /* protected with drawing_lock */
-    gboolean window_resized;
+    gboolean caps_change;
     guint window_width;
     guint window_height;
 
-    GstVideoRectangle display_rect;
+#if GST_GL_HAVE_GLES2
+  GstGLShader *redisplay_shader;
+  GLint redisplay_attr_position_loc;
+  GLint redisplay_attr_texture_loc;
+#endif
 
-    GstGLShader *redisplay_shader;
-    GLuint vao;
-    GLuint vbo_indices;
-    GLuint vertex_buffer;
-    GLint  attr_position;
-    GLint  attr_texture;
-
-    GstVideoMultiviewMode mview_output_mode;
-    GstVideoMultiviewFlags mview_output_flags;
-    gboolean output_mode_changed;
-    GstGLStereoDownmix mview_downmix_mode;
-
-    GstGLOverlayCompositor *overlay_compositor;
-
-    /* current video flip method */
-    GstGLRotateMethod current_rotate_method;
-    GstGLRotateMethod rotate_method;
-    const gfloat *transform_matrix;
 };
 
 struct _GstGLImageSinkClass
@@ -148,7 +96,6 @@ struct _GstGLImageSinkClass
 };
 
 GType gst_glimage_sink_get_type(void);
-GType gst_gl_image_sink_bin_get_type(void);
 
 G_END_DECLS
 

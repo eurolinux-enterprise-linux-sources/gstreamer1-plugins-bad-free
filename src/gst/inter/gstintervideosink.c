@@ -26,10 +26,10 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! intervideosink
+ * gst-launch -v videotestsrc ! intervideosink
  * ]|
  * 
- * The intervideosink element cannot be used effectively with gst-launch-1.0,
+ * The intervideosink element cannot be used effectively with gst-launch,
  * as it requires a second pipeline in the application to send video to.
  * See the gstintertest.c example in the gst-plugins-bad source code for
  * more details.
@@ -40,14 +40,17 @@
 #include "config.h"
 #endif
 
+#include <gst/gst.h>
+#include <gst/base/gstbasesink.h>
+#include <gst/video/video.h>
 #include "gstintervideosink.h"
-
-#include <string.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_inter_video_sink_debug_category);
 #define GST_CAT_DEFAULT gst_inter_video_sink_debug_category
 
 /* prototypes */
+
+
 static void gst_inter_video_sink_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_inter_video_sink_get_property (GObject * object,
@@ -58,9 +61,7 @@ static void gst_inter_video_sink_get_times (GstBaseSink * sink,
     GstBuffer * buffer, GstClockTime * start, GstClockTime * end);
 static gboolean gst_inter_video_sink_start (GstBaseSink * sink);
 static gboolean gst_inter_video_sink_stop (GstBaseSink * sink);
-static gboolean gst_inter_video_sink_set_caps (GstBaseSink * sink,
-    GstCaps * caps);
-static GstFlowReturn gst_inter_video_sink_show_frame (GstVideoSink * sink,
+static GstFlowReturn gst_inter_video_sink_render (GstBaseSink * sink,
     GstBuffer * buffer);
 
 enum
@@ -69,19 +70,19 @@ enum
   PROP_CHANNEL
 };
 
-#define DEFAULT_CHANNEL ("default")
-
 /* pad templates */
+
 static GstStaticPadTemplate gst_inter_video_sink_sink_template =
 GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE (GST_VIDEO_FORMATS_ALL))
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("I420"))
     );
 
 
 /* class initialization */
-G_DEFINE_TYPE (GstInterVideoSink, gst_inter_video_sink, GST_TYPE_VIDEO_SINK);
+
+G_DEFINE_TYPE (GstInterVideoSink, gst_inter_video_sink, GST_TYPE_BASE_SINK);
 
 static void
 gst_inter_video_sink_class_init (GstInterVideoSinkClass * klass)
@@ -89,13 +90,12 @@ gst_inter_video_sink_class_init (GstInterVideoSinkClass * klass)
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   GstBaseSinkClass *base_sink_class = GST_BASE_SINK_CLASS (klass);
-  GstVideoSinkClass *video_sink_class = GST_VIDEO_SINK_CLASS (klass);
 
   GST_DEBUG_CATEGORY_INIT (gst_inter_video_sink_debug_category,
       "intervideosink", 0, "debug category for intervideosink element");
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_inter_video_sink_sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_inter_video_sink_sink_template));
 
   gst_element_class_set_static_metadata (element_class,
       "Internal video sink",
@@ -110,20 +110,18 @@ gst_inter_video_sink_class_init (GstInterVideoSinkClass * klass)
       GST_DEBUG_FUNCPTR (gst_inter_video_sink_get_times);
   base_sink_class->start = GST_DEBUG_FUNCPTR (gst_inter_video_sink_start);
   base_sink_class->stop = GST_DEBUG_FUNCPTR (gst_inter_video_sink_stop);
-  base_sink_class->set_caps = GST_DEBUG_FUNCPTR (gst_inter_video_sink_set_caps);
-  video_sink_class->show_frame =
-      GST_DEBUG_FUNCPTR (gst_inter_video_sink_show_frame);
+  base_sink_class->render = GST_DEBUG_FUNCPTR (gst_inter_video_sink_render);
 
   g_object_class_install_property (gobject_class, PROP_CHANNEL,
       g_param_spec_string ("channel", "Channel",
           "Channel name to match inter src and sink elements",
-          DEFAULT_CHANNEL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+          "default", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 static void
 gst_inter_video_sink_init (GstInterVideoSink * intervideosink)
 {
-  intervideosink->channel = g_strdup (DEFAULT_CHANNEL);
+  intervideosink->channel = g_strdup ("default");
 }
 
 void
@@ -182,13 +180,15 @@ gst_inter_video_sink_get_times (GstBaseSink * sink, GstBuffer * buffer,
     if (GST_BUFFER_DURATION_IS_VALID (buffer)) {
       *end = *start + GST_BUFFER_DURATION (buffer);
     } else {
-      if (intervideosink->info.fps_n > 0) {
+      if (intervideosink->fps_n > 0) {
         *end = *start +
-            gst_util_uint64_scale_int (GST_SECOND, intervideosink->info.fps_d,
-            intervideosink->info.fps_n);
+            gst_util_uint64_scale_int (GST_SECOND, intervideosink->fps_d,
+            intervideosink->fps_n);
       }
     }
   }
+
+
 }
 
 static gboolean
@@ -197,9 +197,6 @@ gst_inter_video_sink_start (GstBaseSink * sink)
   GstInterVideoSink *intervideosink = GST_INTER_VIDEO_SINK (sink);
 
   intervideosink->surface = gst_inter_surface_get (intervideosink->channel);
-  g_mutex_lock (&intervideosink->surface->mutex);
-  memset (&intervideosink->surface->video_info, 0, sizeof (GstVideoInfo));
-  g_mutex_unlock (&intervideosink->surface->mutex);
 
   return TRUE;
 }
@@ -214,7 +211,6 @@ gst_inter_video_sink_stop (GstBaseSink * sink)
     gst_buffer_unref (intervideosink->surface->video_buffer);
   }
   intervideosink->surface->video_buffer = NULL;
-  memset (&intervideosink->surface->video_info, 0, sizeof (GstVideoInfo));
   g_mutex_unlock (&intervideosink->surface->mutex);
 
   gst_inter_surface_unref (intervideosink->surface);
@@ -223,32 +219,10 @@ gst_inter_video_sink_stop (GstBaseSink * sink)
   return TRUE;
 }
 
-static gboolean
-gst_inter_video_sink_set_caps (GstBaseSink * sink, GstCaps * caps)
-{
-  GstInterVideoSink *intervideosink = GST_INTER_VIDEO_SINK (sink);
-  GstVideoInfo info;
-
-  if (!gst_video_info_from_caps (&info, caps)) {
-    GST_ERROR_OBJECT (sink, "Failed to parse caps %" GST_PTR_FORMAT, caps);
-    return FALSE;
-  }
-
-  g_mutex_lock (&intervideosink->surface->mutex);
-  intervideosink->surface->video_info = info;
-  intervideosink->info = info;
-  g_mutex_unlock (&intervideosink->surface->mutex);
-
-  return TRUE;
-}
-
 static GstFlowReturn
-gst_inter_video_sink_show_frame (GstVideoSink * sink, GstBuffer * buffer)
+gst_inter_video_sink_render (GstBaseSink * sink, GstBuffer * buffer)
 {
   GstInterVideoSink *intervideosink = GST_INTER_VIDEO_SINK (sink);
-
-  GST_DEBUG_OBJECT (intervideosink, "render ts %" GST_TIME_FORMAT,
-      GST_TIME_ARGS (GST_BUFFER_PTS (buffer)));
 
   g_mutex_lock (&intervideosink->surface->mutex);
   if (intervideosink->surface->video_buffer) {

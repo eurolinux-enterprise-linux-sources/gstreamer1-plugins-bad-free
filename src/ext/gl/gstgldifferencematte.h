@@ -37,7 +37,6 @@ struct _GstGLDifferenceMatte
 {
   GstGLFilter filter;
 
-  GstGLShader *identity_shader;
   GstGLShader *shader[4];
 
   gchar *location;
@@ -45,10 +44,10 @@ struct _GstGLDifferenceMatte
 
   guchar *pixbuf;
   gint pbuf_width, pbuf_height;
-  GstGLMemory *savedbgtexture;
-  GstGLMemory *newbgtexture;
-  GstGLMemory *midtexture[4];
-  GstGLMemory *intexture;
+  GLuint savedbgtexture;
+  GLuint newbgtexture;
+  GLuint midtexture[4];
+  GLuint intexture;
   float kernel[7];
 };
 

@@ -41,36 +41,12 @@ G_BEGIN_DECLS
 
 #define GST_H264_MAX_SPS_COUNT   32
 #define GST_H264_MAX_PPS_COUNT   256
-#define GST_H264_MAX_VIEW_COUNT  1024
-#define GST_H264_MAX_VIEW_ID     (GST_H264_MAX_VIEW_COUNT - 1)
 
 #define GST_H264_IS_P_SLICE(slice)  (((slice)->type % 5) == GST_H264_P_SLICE)
 #define GST_H264_IS_B_SLICE(slice)  (((slice)->type % 5) == GST_H264_B_SLICE)
 #define GST_H264_IS_I_SLICE(slice)  (((slice)->type % 5) == GST_H264_I_SLICE)
 #define GST_H264_IS_SP_SLICE(slice) (((slice)->type % 5) == GST_H264_SP_SLICE)
 #define GST_H264_IS_SI_SLICE(slice) (((slice)->type % 5) == GST_H264_SI_SLICE)
-
-/**
- * GST_H264_IS_SVC_NALU:
- * @nalu: a #GstH264NalUnit
- *
- * Check if @nalu is a scalable extension NAL unit.
- *
- * Since: 1.6
- */
-#define GST_H264_IS_SVC_NALU(nalu) \
-  ((nalu)->extension_type == GST_H264_NAL_EXTENSION_SVC)
-
-/**
- * GST_H264_IS_MVC_NALU:
- * @nalu: a #GstH264NalUnit
- *
- * Check if @nalu is a multiview extension NAL unit.
- *
- * Since: 1.6
- */
-#define GST_H264_IS_MVC_NALU(nalu) \
-  ((nalu)->extension_type == GST_H264_NAL_EXTENSION_MVC)
 
 /**
  * GstH264Profile:
@@ -127,11 +103,9 @@ typedef enum {
  * @GST_H264_NAL_FILLER_DATA: Filler data nal lunit
  * @GST_H264_NAL_SPS_EXT: Sequence parameter set (SPS) extension NAL unit
  * @GST_H264_NAL_PREFIX_UNIT: Prefix NAL unit
- * @GST_H264_NAL_SUBSET_SPS: Subset sequence parameter set (SSPS) NAL unit
- * @GST_H264_NAL_DEPTH_SPS: Depth parameter set (DPS) NAL unit
+ * @GST_H264_NAL_SUBSET_SPS: Subset sequence parameter set (SPS) NAL unit
  * @GST_H264_NAL_SLICE_AUX: Auxiliary coded picture without partitioning NAL unit
  * @GST_H264_NAL_SLICE_EXT: Coded slice extension NAL unit
- * @GST_H264_NAL_SLICE_DEPTH: Coded slice extension for depth or 3D-AVC texture view
  *
  * Indicates the type of H264 Nal Units
  */
@@ -153,35 +127,16 @@ typedef enum
   GST_H264_NAL_SPS_EXT      = 13,
   GST_H264_NAL_PREFIX_UNIT  = 14,
   GST_H264_NAL_SUBSET_SPS   = 15,
-  GST_H264_NAL_DEPTH_SPS    = 16,
   GST_H264_NAL_SLICE_AUX    = 19,
-  GST_H264_NAL_SLICE_EXT    = 20,
-  GST_H264_NAL_SLICE_DEPTH  = 21
+  GST_H264_NAL_SLICE_EXT    = 20
 } GstH264NalUnitType;
-
-/**
- * GstH264NalUnitExtensionType:
- * @GST_H264_NAL_EXTENSION_NONE: No NAL unit header extension is available
- * @GST_H264_NAL_EXTENSION_SVC: NAL unit header extension for SVC (Annex G)
- * @GST_H264_NAL_EXTENSION_MVC: NAL unit header extension for MVC (Annex H)
- *
- * Indicates the type of H.264 NAL unit extension.
- *
- * Since: 1.6
- */
-typedef enum
-{
-  GST_H264_NAL_EXTENSION_NONE = 0,
-  GST_H264_NAL_EXTENSION_SVC,
-  GST_H264_NAL_EXTENSION_MVC,
-} GstH264NalUnitExtensionType;
 
 /**
  * GstH264ParserResult:
  * @GST_H264_PARSER_OK: The parsing succeded
  * @GST_H264_PARSER_BROKEN_DATA: The data to parse is broken
  * @GST_H264_PARSER_BROKEN_LINK: The link to structure needed for the parsing couldn't be found
- * @GST_H264_PARSER_ERROR: An error occured when parsing
+ * @GST_H264_PARSER_ERROR: An error accured when parsing
  * @GST_H264_PARSER_NO_NAL: No nal found during the parsing
  * @GST_H264_PARSER_NO_NAL_END: Start of the nal found, but not the end.
  *
@@ -198,39 +153,10 @@ typedef enum
 } GstH264ParserResult;
 
 /**
- * GstH264FramePackingType:
- * @GST_H264_FRAME_PACKING_NONE: A complete 2D frame without any frame packing
- * @GST_H264_FRAME_PACKING_CHECKERBOARD_INTERLEAVING: Checkerboard
- *   based interleaving
- * @GST_H264_FRAME_PACKING_COLUMN_INTERLEAVING: Column based interleaving
- * @GST_H264_FRAME_PACKING_ROW_INTERLEAVING: Row based interleaving
- * @GST_H264_FRAME_PACKING_SIDE_BY_SIDE: Side-by-side packing
- * @GST_H264_FRMAE_PACKING_TOP_BOTTOM: Top-Bottom packing
- * @GST_H264_FRAME_PACKING_TEMPORAL_INTERLEAVING: Temporal interleaving
- *
- * Frame packing arrangement types.
- *
- * Since: 1.6
- */
-typedef enum
-{
-  GST_H264_FRAME_PACKING_NONE                           = 6,
-  GST_H264_FRAME_PACKING_CHECKERBOARD_INTERLEAVING      = 0,
-  GST_H264_FRAME_PACKING_COLUMN_INTERLEAVING            = 1,
-  GST_H264_FRAME_PACKING_ROW_INTERLEAVING               = 2,
-  GST_H264_FRAME_PACKING_SIDE_BY_SIDE                   = 3,
-  GST_H264_FRMAE_PACKING_TOP_BOTTOM                     = 4,
-  GST_H264_FRAME_PACKING_TEMPORAL_INTERLEAVING          = 5
-} GstH264FramePackingType;
-
-/**
  * GstH264SEIPayloadType:
  * @GST_H264_SEI_BUF_PERIOD: Buffering Period SEI Message
  * @GST_H264_SEI_PIC_TIMING: Picture Timing SEI Message
  * @GST_H264_SEI_RECOVERY_POINT: Recovery Point SEI Message (D.2.7)
- * @GST_H264_SEI_STEREO_VIDEO_INFO: stereo video info SEI message (Since: 1.6)
- * @GST_H264_SEI_FRAME_PACKING: Frame Packing Arrangement (FPA) message that
- *     contains the 3D arrangement for stereoscopic 3D video (Since: 1.6)
  * ...
  *
  * The type of SEI message.
@@ -240,8 +166,6 @@ typedef enum
   GST_H264_SEI_BUF_PERIOD = 0,
   GST_H264_SEI_PIC_TIMING = 1,
   GST_H264_SEI_RECOVERY_POINT = 6,
-  GST_H264_SEI_STEREO_VIDEO_INFO = 21,
-  GST_H264_SEI_FRAME_PACKING = 45
       /* and more...  */
 } GstH264SEIPayloadType;
 
@@ -297,12 +221,6 @@ typedef enum
 typedef struct _GstH264NalParser              GstH264NalParser;
 
 typedef struct _GstH264NalUnit                GstH264NalUnit;
-typedef struct _GstH264NalUnitExtensionMVC    GstH264NalUnitExtensionMVC;
-
-typedef struct _GstH264SPSExtMVCView          GstH264SPSExtMVCView;
-typedef struct _GstH264SPSExtMVCLevelValue    GstH264SPSExtMVCLevelValue;
-typedef struct _GstH264SPSExtMVCLevelValueOp  GstH264SPSExtMVCLevelValueOp;
-typedef struct _GstH264SPSExtMVC              GstH264SPSExtMVC;
 
 typedef struct _GstH264SPS                    GstH264SPS;
 typedef struct _GstH264PPS                    GstH264PPS;
@@ -319,34 +237,7 @@ typedef struct _GstH264ClockTimestamp         GstH264ClockTimestamp;
 typedef struct _GstH264PicTiming              GstH264PicTiming;
 typedef struct _GstH264BufferingPeriod        GstH264BufferingPeriod;
 typedef struct _GstH264RecoveryPoint          GstH264RecoveryPoint;
-typedef struct _GstH264StereoVideoInfo        GstH264StereoVideoInfo;
-typedef struct _GstH264FramePacking           GstH264FramePacking;
 typedef struct _GstH264SEIMessage             GstH264SEIMessage;
-
-/**
- * GstH264NalUnitExtensionMVC:
- * @non_idr_flag: If equal to 0, it specifies that the current access
- *   unit is an IDR access unit
- * @priority_id: The priority identifier for the NAL unit
- * @view_id: The view identifier for the NAL unit
- * @temporal_id: The temporal identifier for the NAL unit
- * @anchor_pic_flag: If equal to 1, it specifies that the current
- *   access unit is an anchor access unit
- * @inter_view_flag: If equal to 0, it specifies that the current view
- *   component is not used for inter-view prediction by any other view
- *   component in the current access unit
- *
- * Since: 1.6
- */
-struct _GstH264NalUnitExtensionMVC
-{
-  guint8 non_idr_flag;
-  guint8 priority_id;
-  guint16 view_id;
-  guint8 temporal_id;
-  guint8 anchor_pic_flag;
-  guint8 inter_view_flag;
-};
 
 /**
  * GstH264NalUnit:
@@ -366,8 +257,6 @@ struct _GstH264NalUnitExtensionMVC
  * @valid: If the nal unit is valid, which means it has
  * already been parsed
  * @data: The data from which the Nalu has been parsed
- * @header_bytes: The size of the NALU header in bytes (Since 1.6)
- * @extension_type: the extension type (Since 1.6)
  *
  * Structure defining the Nal unit headers
  */
@@ -384,12 +273,6 @@ struct _GstH264NalUnit
   gboolean valid;
 
   guint8 *data;
-
-  guint8 header_bytes;
-  guint8 extension_type;
-  union {
-    GstH264NalUnitExtensionMVC mvc;
-  } extension;
 };
 
 /**
@@ -437,7 +320,7 @@ struct _GstH264HRDParams
  * @aspect_ratio_idc specifies the value of the sample aspect ratio of the luma samples
  * @sar_width indicates the horizontal size of the sample aspect ratio
  * @sar_height indicates the vertical size of the sample aspect ratio
- * @overscan_info_present_flag: %TRUE overscan_appropriate_flag is present %FALSE otherwise
+ * @overscan_info_present_flag: %TRUE overscan_appropriate_flag is present %FALSE otherwize
  * @overscan_appropriate_flag: %TRUE indicates that the cropped decoded pictures
  *  output are suitable for display using overscan. %FALSE the cropped decoded pictures
  *  output contain visually important information
@@ -451,7 +334,7 @@ struct _GstH264HRDParams
  * @transfer_characteristics: indicates the opto-electronic transfer characteristic
  * @matrix_coefficients: describes the matrix coefficients used in deriving luma and chroma signals
  * @chroma_loc_info_present_flag: %TRUE specifies that chroma_sample_loc_type_top_field and
- *  chroma_sample_loc_type_bottom_field are present, %FALSE otherwise
+ *  chroma_sample_loc_type_bottom_field are present, %FALSE otherwize
  * @chroma_sample_loc_type_top_field: specify the location of chroma for top field
  * @chroma_sample_loc_type_bottom_field specify the location of chroma for bottom field
  * @timing_info_present_flag: %TRUE specifies that num_units_in_tick,
@@ -460,7 +343,7 @@ struct _GstH264HRDParams
  * time_scale: is the number of time units that pass in one second
  * @fixed_frame_rate_flag: %TRUE indicates that the temporal distance between the HRD output times
  *  of any two consecutive pictures in output order is constrained as specified in the spec, %FALSE
- *  otherwise.
+ *  otherwize.
  * @nal_hrd_parameters_present_flag: %TRUE if nal hrd parameters present in the bitstream
  * @vcl_hrd_parameters_present_flag: %TRUE if nal vlc hrd parameters present in the bitstream
  * @low_delay_hrd_flag: specifies the HRD operational mode
@@ -541,105 +424,6 @@ struct _GstH264VUIParams
 };
 
 /**
- * GstH264SPSExtMVCView:
- * @num_anchor_refs_l0: specifies the number of view components for
- *   inter-view prediction in the initialized RefPicList0 in decoding
- *   anchor view components.
- * @anchor_ref_l0: specifies the view_id for inter-view prediction in
- *   the initialized RefPicList0 in decoding anchor view components.
- * @num_anchor_refs_l1: specifies the number of view components for
- *   inter-view prediction in the initialized RefPicList1 in decoding
- *   anchor view components.
- * @anchor_ref_l1: specifies the view_id for inter-view prediction in
- *   the initialized RefPicList1 in decoding anchor view components.
- * @num_non_anchor_refs_l0: specifies the number of view components
- *   for inter-view prediction in the initialized RefPicList0 in
- *   decoding non-anchor view components.
- * @non_anchor_ref_l0: specifies the view_id for inter-view prediction
- *   in the initialized RefPicList0 in decoding non-anchor view
- *   components.
- * @num_non_anchor_refs_l1: specifies the number of view components
- *   for inter-view prediction in the initialized RefPicList1 in
- *   decoding non-anchor view components.
- * @non_anchor_ref_l1: specifies the view_id for inter-view prediction
- *   in the initialized RefPicList1 in decoding non-anchor view
- *   components.
- *
- * Represents inter-view dependency relationships for the coded video
- * sequence.
- *
- * Since: 1.6
- */
-struct _GstH264SPSExtMVCView
-{
-  guint16 view_id;
-  guint8 num_anchor_refs_l0;
-  guint16 anchor_ref_l0[15];
-  guint8 num_anchor_refs_l1;
-  guint16 anchor_ref_l1[15];
-  guint8 num_non_anchor_refs_l0;
-  guint16 non_anchor_ref_l0[15];
-  guint8 num_non_anchor_refs_l1;
-  guint16 non_anchor_ref_l1[15];
-};
-
-/**
- * GstH264SPSExtMVCLevelValueOp:
- *
- * Represents an operation point for the coded video sequence.
- *
- * Since: 1.6
- */
-struct _GstH264SPSExtMVCLevelValueOp
-{
-  guint8 temporal_id;
-  guint16 num_target_views_minus1;
-  guint16 *target_view_id;
-  guint16 num_views_minus1;
-};
-
-/**
- * GstH264SPSExtMVCLevelValue:
- * @level_idc: specifies the level value signalled for the coded video
- *   sequence
- * @num_applicable_ops_minus1: plus 1 specifies the number of
- *   operation points to which the level indicated by level_idc applies
- * @applicable_op: specifies the applicable operation point
- *
- * Represents level values for a subset of the operation points for
- * the coded video sequence.
- *
- * Since: 1.6
- */
-struct _GstH264SPSExtMVCLevelValue
-{
-  guint8 level_idc;
-  guint16 num_applicable_ops_minus1;
-  GstH264SPSExtMVCLevelValueOp *applicable_op;
-};
-
-/**
- * GstH264SPSExtMVC:
- * @num_views_minus1: plus 1 specifies the maximum number of coded
- *   views in the coded video sequence
- * @view: array of #GstH264SPSExtMVCView
- * @num_level_values_signalled_minus1: plus 1 specifies the number of
- *   level values signalled for the coded video sequence.
- * @level_value: array of #GstH264SPSExtMVCLevelValue
- *
- * Represents the parsed seq_parameter_set_mvc_extension().
- *
- * Since: 1.6
-	 */
-struct _GstH264SPSExtMVC
-{
-  guint16 num_views_minus1;
-  GstH264SPSExtMVCView *view;
-  guint8 num_level_values_signalled_minus1;
-  GstH264SPSExtMVCLevelValue *level_value;
-};
-
-/**
  * GstH264SPS:
  * @id: The ID of the sequence parameter set
  * @profile_idc: indicate the profile to which the coded video sequence conforms
@@ -655,8 +439,6 @@ struct _GstH264SPS
   guint8 constraint_set1_flag;
   guint8 constraint_set2_flag;
   guint8 constraint_set3_flag;
-  guint8 constraint_set4_flag;
-  guint8 constraint_set5_flag;
   guint8 level_idc;
 
   guint8 chroma_format_idc;
@@ -710,14 +492,8 @@ struct _GstH264SPS
   gint width, height;
   gint crop_rect_width, crop_rect_height;
   gint crop_rect_x, crop_rect_y;
-  gint fps_num_removed, fps_den_removed; /* FIXME: remove */
+  gint fps_num, fps_den;
   gboolean valid;
-
-  /* Subset SPS extensions */
-  guint8 extension_type;
-  union {
-    GstH264SPSExtMVC mvc;
-  } extension;
 };
 
 /**
@@ -780,8 +556,6 @@ struct _GstH264RefPicListModification
     guint32 abs_diff_pic_num_minus1;
     /* if modification_of_pic_nums_idc == 2 */
     guint32 long_term_pic_num;
-    /* if modification_of_pic_nums_idc == 4 || 5 */
-    guint32 abs_diff_view_idx_minus1;
   } value;
 };
 
@@ -913,46 +687,6 @@ struct _GstH264ClockTimestamp
   guint32 time_offset;
 };
 
-/**
- * GstH264FramePacking:
- *
- * Since: 1.6
- */
-struct _GstH264FramePacking
-{
-  guint32 frame_packing_id;
-  guint8 frame_packing_cancel_flag;
-  guint8 frame_packing_type; /* GstH264FramePackingType */
-  guint8 quincunx_sampling_flag;
-  guint8 content_interpretation_type;
-  guint8 spatial_flipping_flag;
-  guint8 frame0_flipped_flag;
-  guint8 field_views_flag;
-  guint8 current_frame_is_frame0_flag;
-  guint8 frame0_self_contained_flag;
-  guint8 frame1_self_contained_flag;
-  guint8 frame0_grid_position_x;
-  guint8 frame0_grid_position_y;
-  guint8 frame1_grid_position_x;
-  guint8 frame1_grid_position_y;
-  guint16 frame_packing_repetition_period;
-};
-
-/**
- * GstH264StereoVideoInfo:
- *
- * Since: 1.6
- */
-struct _GstH264StereoVideoInfo
-{
-  guint8 field_views_flag;
-  guint8 top_field_is_left_view_flag;
-  guint8 current_frame_is_left_view_flag;
-  guint8 next_frame_is_second_view_flag;
-  guint8 left_view_self_contained_flag;
-  guint8 right_view_self_contained_flag;
-};
-
 struct _GstH264PicTiming
 {
   guint32 cpb_removal_delay;
@@ -971,12 +705,12 @@ struct _GstH264BufferingPeriod
   GstH264SPS *sps;
 
   /* seq->vui_parameters->nal_hrd_parameters_present_flag */
-  guint32 nal_initial_cpb_removal_delay[32];
-  guint32 nal_initial_cpb_removal_delay_offset[32];
+  guint8 nal_initial_cpb_removal_delay[32];
+  guint8 nal_initial_cpb_removal_delay_offset[32];
 
   /* seq->vui_parameters->vcl_hrd_parameters_present_flag */
-  guint32 vcl_initial_cpb_removal_delay[32];
-  guint32 vcl_initial_cpb_removal_delay_offset[32];
+  guint8 vcl_initial_cpb_removal_delay[32];
+  guint8 vcl_initial_cpb_removal_delay_offset[32];
 };
 
 struct _GstH264RecoveryPoint
@@ -995,8 +729,6 @@ struct _GstH264SEIMessage
     GstH264BufferingPeriod buffering_period;
     GstH264PicTiming pic_timing;
     GstH264RecoveryPoint recovery_point;
-    GstH264StereoVideoInfo stereo_video_info;
-    GstH264FramePacking frame_packing;
     /* ... could implement more */
   } payload;
 };
@@ -1036,9 +768,6 @@ GstH264ParserResult gst_h264_parser_parse_slice_hdr   (GstH264NalParser *nalpars
                                                        GstH264SliceHdr *slice, gboolean parse_pred_weight_table,
                                                        gboolean parse_dec_ref_pic_marking);
 
-GstH264ParserResult gst_h264_parser_parse_subset_sps  (GstH264NalParser *nalparser, GstH264NalUnit *nalu,
-                                                       GstH264SPS *sps, gboolean parse_vui_params);
-
 GstH264ParserResult gst_h264_parser_parse_sps         (GstH264NalParser *nalparser, GstH264NalUnit *nalu,
                                                        GstH264SPS *sps, gboolean parse_vui_params);
 
@@ -1050,16 +779,12 @@ GstH264ParserResult gst_h264_parser_parse_sei         (GstH264NalParser *nalpars
 
 void gst_h264_nal_parser_free                         (GstH264NalParser *nalparser);
 
-GstH264ParserResult gst_h264_parse_subset_sps         (GstH264NalUnit *nalu,
-                                                       GstH264SPS *sps, gboolean parse_vui_params);
-
 GstH264ParserResult gst_h264_parse_sps                (GstH264NalUnit *nalu,
                                                        GstH264SPS *sps, gboolean parse_vui_params);
 
 GstH264ParserResult gst_h264_parse_pps                (GstH264NalParser *nalparser,
                                                        GstH264NalUnit *nalu, GstH264PPS *pps);
 
-void                gst_h264_sps_clear                (GstH264SPS *sps);
 void                gst_h264_pps_clear                (GstH264PPS *pps);
 
 void    gst_h264_quant_matrix_8x8_get_zigzag_from_raster (guint8 out_quant[64],

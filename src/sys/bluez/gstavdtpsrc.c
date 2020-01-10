@@ -39,7 +39,7 @@ GST_DEBUG_CATEGORY_STATIC (avdtpsrc_debug);
 enum
 {
   PROP_0,
-  PROP_TRANSPORT,
+  PROP_TRANSPORT
 };
 
 #define parent_class gst_avdtp_src_parent_class
@@ -68,7 +68,6 @@ static void gst_avdtp_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 
 static GstCaps *gst_avdtp_src_getcaps (GstBaseSrc * bsrc, GstCaps * filter);
-static gboolean gst_avdtp_src_query (GstBaseSrc * bsrc, GstQuery * query);
 static gboolean gst_avdtp_src_start (GstBaseSrc * bsrc);
 static gboolean gst_avdtp_src_stop (GstBaseSrc * bsrc);
 static GstFlowReturn gst_avdtp_src_create (GstBaseSrc * bsrc, guint64 offset,
@@ -95,7 +94,6 @@ gst_avdtp_src_class_init (GstAvdtpSrcClass * klass)
   basesrc_class->unlock = GST_DEBUG_FUNCPTR (gst_avdtp_src_unlock);
   basesrc_class->unlock_stop = GST_DEBUG_FUNCPTR (gst_avdtp_src_unlock_stop);
   basesrc_class->get_caps = GST_DEBUG_FUNCPTR (gst_avdtp_src_getcaps);
-  basesrc_class->query = GST_DEBUG_FUNCPTR (gst_avdtp_src_query);
 
   g_object_class_install_property (gobject_class, PROP_TRANSPORT,
       g_param_spec_string ("transport",
@@ -110,16 +108,14 @@ gst_avdtp_src_class_init (GstAvdtpSrcClass * klass)
   GST_DEBUG_CATEGORY_INIT (avdtpsrc_debug, "avdtpsrc", 0,
       "Bluetooth AVDTP Source");
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_avdtp_src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_avdtp_src_template));
 }
 
 static void
 gst_avdtp_src_init (GstAvdtpSrc * avdtpsrc)
 {
   avdtpsrc->poll = gst_poll_new (TRUE);
-
-  avdtpsrc->duration = GST_CLOCK_TIME_NONE;
 
   gst_base_src_set_format (GST_BASE_SRC (avdtpsrc), GST_FORMAT_TIME);
   gst_base_src_set_live (GST_BASE_SRC (avdtpsrc), TRUE);
@@ -173,35 +169,6 @@ gst_avdtp_src_set_property (GObject * object, guint prop_id,
   }
 }
 
-static gboolean
-gst_avdtp_src_query (GstBaseSrc * bsrc, GstQuery * query)
-{
-  GstAvdtpSrc *avdtpsrc = GST_AVDTP_SRC (bsrc);
-  gboolean ret = FALSE;
-
-  switch (GST_QUERY_TYPE (query)) {
-    case GST_QUERY_DURATION:{
-      GstFormat format;
-
-      if (avdtpsrc->duration != GST_CLOCK_TIME_NONE) {
-        gst_query_parse_duration (query, &format, NULL);
-
-        if (format == GST_FORMAT_TIME) {
-          gst_query_set_duration (query, format, (gint64) avdtpsrc->duration);
-          ret = TRUE;
-        }
-      }
-
-      break;
-    }
-
-    default:
-      ret = GST_BASE_SRC_CLASS (parent_class)->query (bsrc, query);
-  }
-
-  return ret;
-}
-
 static GstCaps *
 gst_avdtp_src_getcaps (GstBaseSrc * bsrc, GstCaps * filter)
 {
@@ -232,7 +199,7 @@ gst_avdtp_src_getcaps (GstBaseSrc * bsrc, GstCaps * filter)
       value = gst_structure_get_value (structure, "mpegversion");
       if (!value || !G_VALUE_HOLDS_INT (value)) {
         GST_ERROR_OBJECT (avdtpsrc, "Failed to get mpegversion");
-        return NULL;
+        goto fail;
       }
       gst_caps_set_simple (caps, "mpegversion", G_TYPE_INT,
           g_value_get_int (value), NULL);
@@ -240,7 +207,7 @@ gst_avdtp_src_getcaps (GstBaseSrc * bsrc, GstCaps * filter)
       value = gst_structure_get_value (structure, "channels");
       if (!value || !G_VALUE_HOLDS_INT (value)) {
         GST_ERROR_OBJECT (avdtpsrc, "Failed to get channels");
-        return NULL;
+        goto fail;
       }
       gst_caps_set_simple (caps, "channels", G_TYPE_INT,
           g_value_get_int (value), NULL);
@@ -248,7 +215,7 @@ gst_avdtp_src_getcaps (GstBaseSrc * bsrc, GstCaps * filter)
       value = gst_structure_get_value (structure, "base-profile");
       if (!value || !G_VALUE_HOLDS_STRING (value)) {
         GST_ERROR_OBJECT (avdtpsrc, "Failed to get base-profile");
-        return NULL;
+        goto fail;
       }
       gst_caps_set_simple (caps, "base-profile", G_TYPE_STRING,
           g_value_get_string (value), NULL);
@@ -261,7 +228,7 @@ gst_avdtp_src_getcaps (GstBaseSrc * bsrc, GstCaps * filter)
     value = gst_structure_get_value (structure, "rate");
     if (!value || !G_VALUE_HOLDS_INT (value)) {
       GST_ERROR_OBJECT (avdtpsrc, "Failed to get sample rate");
-      return NULL;
+      goto fail;
     }
     rate = g_value_get_int (value);
 
@@ -278,54 +245,12 @@ gst_avdtp_src_getcaps (GstBaseSrc * bsrc, GstCaps * filter)
   }
 
   return ret;
-}
 
-static void
-avrcp_metadata_cb (GstAvrcpConnection * avrcp, GstTagList * taglist,
-    gpointer user_data)
-{
-  GstAvdtpSrc *src = GST_AVDTP_SRC (user_data);
-  guint64 duration;
+fail:
+  if (ret)
+    gst_caps_unref (ret);
 
-  if (gst_tag_list_get_uint64 (taglist, GST_TAG_DURATION, &duration)) {
-    src->duration = duration;
-    gst_element_post_message (GST_ELEMENT (src),
-        gst_message_new_duration_changed (GST_OBJECT (src)));
-  }
-
-  gst_pad_push_event (GST_BASE_SRC_PAD (src),
-      gst_event_new_tag (gst_tag_list_copy (taglist)));
-  gst_element_post_message (GST_ELEMENT (src),
-      gst_message_new_tag (GST_OBJECT (src), taglist));
-}
-
-static void
-gst_avdtp_src_start_avrcp (GstAvdtpSrc * src)
-{
-  gchar *path, **strv;
-  int i;
-
-  /* Strip out the /fdX in /org/bluez/dev_.../fdX */
-  strv = g_strsplit (src->conn.transport, "/", -1);
-
-  for (i = 0; strv[i]; i++);
-  g_return_if_fail (i > 0);
-
-  g_free (strv[i - 1]);
-  strv[i - 1] = NULL;
-
-  path = g_strjoinv ("/", strv);
-  g_strfreev (strv);
-
-  src->avrcp = gst_avrcp_connection_new (path, avrcp_metadata_cb, src, NULL);
-
-  g_free (path);
-}
-
-static void
-gst_avdtp_src_stop_avrcp (GstAvdtpSrc * src)
-{
-  gst_avrcp_connection_free (src->avrcp);
+  return NULL;
 }
 
 static gboolean
@@ -337,7 +262,7 @@ gst_avdtp_src_start (GstBaseSrc * bsrc)
    * connection to figure out what format the device is going to send us.
    */
 
-  if (!gst_avdtp_connection_acquire (&avdtpsrc->conn, FALSE)) {
+  if (!gst_avdtp_connection_acquire (&avdtpsrc->conn)) {
     GST_ERROR_OBJECT (avdtpsrc, "Failed to acquire connection");
     return FALSE;
   }
@@ -372,8 +297,6 @@ gst_avdtp_src_start (GstBaseSrc * bsrc)
 
   g_atomic_int_set (&avdtpsrc->unlocked, FALSE);
 
-  gst_avdtp_src_start_avrcp (avdtpsrc);
-
   return TRUE;
 
 fail:
@@ -389,7 +312,6 @@ gst_avdtp_src_stop (GstBaseSrc * bsrc)
   gst_poll_remove_fd (avdtpsrc->poll, &avdtpsrc->pfd);
   gst_poll_set_flushing (avdtpsrc->poll, TRUE);
 
-  gst_avdtp_src_stop_avrcp (avdtpsrc);
   gst_avdtp_connection_release (&avdtpsrc->conn);
 
   if (avdtpsrc->dev_caps) {

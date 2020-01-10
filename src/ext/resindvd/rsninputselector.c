@@ -1236,10 +1236,10 @@ gst_input_selector_class_init (RsnInputSelectorClass * klass)
       "Julien Moutte <julien@moutte.net>, "
       "Jan Schmidt <thaytan@mad.scientist.com>, "
       "Wim Taymans <wim.taymans@gmail.com>");
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_input_selector_sink_factory);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_input_selector_src_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_input_selector_sink_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_input_selector_src_factory));
 
   gstelement_class->request_new_pad = gst_input_selector_request_new_pad;
   gstelement_class->release_pad = gst_input_selector_release_pad;
@@ -1535,7 +1535,6 @@ gst_input_selector_query (GstPad * pad, GstObject * parent, GstQuery * query)
 
       /* perform the query on all sinkpads and combine the results. We take the
        * max of min and the min of max for the result latency. */
-      res = TRUE;
       GST_INPUT_SELECTOR_LOCK (sel);
       for (walk = GST_ELEMENT_CAST (sel)->sinkpads; walk;
           walk = g_list_next (walk)) {
@@ -1544,6 +1543,9 @@ gst_input_selector_query (GstPad * pad, GstObject * parent, GstQuery * query)
         if (gst_pad_peer_query (sinkpad, query)) {
           GstClockTime min, max;
           gboolean live;
+
+          /* one query succeeded, we succeed too */
+          res = TRUE;
 
           gst_query_parse_latency (query, &live, &min, &max);
 
@@ -1558,11 +1560,9 @@ gst_input_selector_query (GstPad * pad, GstObject * parent, GstQuery * query)
               resmax = max;
             else if (max < resmax)
               resmax = max;
-            reslive = TRUE;
+            if (reslive == FALSE)
+              reslive = live;
           }
-        } else {
-          GST_LOG_OBJECT (sinkpad, "latency query failed");
-          res = FALSE;
         }
       }
       GST_INPUT_SELECTOR_UNLOCK (sel);

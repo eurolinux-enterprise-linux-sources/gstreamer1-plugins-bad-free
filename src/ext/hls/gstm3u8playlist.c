@@ -21,10 +21,20 @@
 
 #include <glib.h>
 
-#include "gsthls.h"
+#include "gstfragmented.h"
 #include "gstm3u8playlist.h"
 
-#define GST_CAT_DEFAULT hls_debug
+#define GST_CAT_DEFAULT fragmented_debug
+
+#define M3U8_HEADER_TAG "#EXTM3U\n"
+#define M3U8_VERSION_TAG "#EXT-X-VERSION:%d\n"
+#define M3U8_ALLOW_CACHE_TAG "#EXT-X-ALLOW-CACHE:%s\n"
+#define M3U8_TARGETDURATION_TAG "#EXT-X-TARGETDURATION:%d\n"
+#define M3U8_MEDIA_SEQUENCE_TAG "#EXT-X-MEDIA-SEQUENCE:%d\n"
+#define M3U8_DISCONTINUITY_TAG "#EXT-X-DISCONTINUITY\n"
+#define M3U8_INT_INF_TAG "#EXTINF:%d,%s\n%s\n"
+#define M3U8_FLOAT_INF_TAG "#EXTINF:%s,%s\n%s\n"
+#define M3U8_ENDLIST_TAG "#EXT-X-ENDLIST"
 
 enum
 {
@@ -32,28 +42,20 @@ enum
   GST_M3U8_PLAYLIST_TYPE_VOD,
 };
 
-typedef struct _GstM3U8Entry GstM3U8Entry;
-
-struct _GstM3U8Entry
-{
-  gfloat duration;
-  gchar *title;
-  gchar *url;
-  gboolean discontinuous;
-};
-
 static GstM3U8Entry *
-gst_m3u8_entry_new (const gchar * url, const gchar * title,
+gst_m3u8_entry_new (const gchar * url, GFile * file, const gchar * title,
     gfloat duration, gboolean discontinuous)
 {
   GstM3U8Entry *entry;
 
   g_return_val_if_fail (url != NULL, NULL);
+  g_return_val_if_fail (title != NULL, NULL);
 
   entry = g_new0 (GstM3U8Entry, 1);
   entry->url = g_strdup (url);
   entry->title = g_strdup (title);
   entry->duration = duration;
+  entry->file = file;
   entry->discontinuous = discontinuous;
   return entry;
 }
@@ -65,7 +67,28 @@ gst_m3u8_entry_free (GstM3U8Entry * entry)
 
   g_free (entry->url);
   g_free (entry->title);
+  if (entry->file != NULL)
+    g_object_unref (entry->file);
   g_free (entry);
+}
+
+static gchar *
+gst_m3u8_entry_render (GstM3U8Entry * entry, guint version)
+{
+  gchar buf[G_ASCII_DTOSTR_BUF_SIZE];
+
+  g_return_val_if_fail (entry != NULL, NULL);
+
+  if (version < 3)
+    return g_strdup_printf ("%s" M3U8_INT_INF_TAG,
+        entry->discontinuous ? M3U8_DISCONTINUITY_TAG : "",
+        (gint) ((entry->duration + 500 * GST_MSECOND) / GST_SECOND),
+        entry->title, entry->url);
+
+  return g_strdup_printf ("%s" M3U8_FLOAT_INF_TAG,
+      entry->discontinuous ? M3U8_DISCONTINUITY_TAG : "",
+      g_ascii_dtostr (buf, sizeof (buf), (entry->duration / GST_SECOND)),
+      entry->title, entry->url);
 }
 
 GstM3U8Playlist *
@@ -97,20 +120,21 @@ gst_m3u8_playlist_free (GstM3U8Playlist * playlist)
 
 gboolean
 gst_m3u8_playlist_add_entry (GstM3U8Playlist * playlist,
-    const gchar * url, const gchar * title,
+    const gchar * url, GFile * file, const gchar * title,
     gfloat duration, guint index, gboolean discontinuous)
 {
   GstM3U8Entry *entry;
 
   g_return_val_if_fail (playlist != NULL, FALSE);
   g_return_val_if_fail (url != NULL, FALSE);
+  g_return_val_if_fail (title != NULL, FALSE);
 
   if (playlist->type == GST_M3U8_PLAYLIST_TYPE_VOD)
     return FALSE;
 
-  entry = gst_m3u8_entry_new (url, title, duration, discontinuous);
+  entry = gst_m3u8_entry_new (url, file, title, duration, discontinuous);
 
-  if (playlist->window_size > 0) {
+  if (playlist->window_size != -1) {
     /* Delete old entries from the playlist */
     while (playlist->entries->length >= playlist->window_size) {
       GstM3U8Entry *old_entry;
@@ -129,12 +153,12 @@ gst_m3u8_playlist_add_entry (GstM3U8Playlist * playlist,
 static guint
 gst_m3u8_playlist_target_duration (GstM3U8Playlist * playlist)
 {
+  gint i;
+  GstM3U8Entry *entry;
   guint64 target_duration = 0;
-  GList *l;
 
-  for (l = playlist->entries->head; l != NULL; l = l->next) {
-    GstM3U8Entry *entry = l->data;
-
+  for (i = 0; i < playlist->entries->length; i++) {
+    entry = (GstM3U8Entry *) g_queue_peek_nth (playlist->entries, i);
     if (entry->duration > target_duration)
       target_duration = entry->duration;
   }
@@ -142,52 +166,65 @@ gst_m3u8_playlist_target_duration (GstM3U8Playlist * playlist)
   return (guint) ((target_duration + 500 * GST_MSECOND) / GST_SECOND);
 }
 
+static void
+render_entry (GstM3U8Entry * entry, GstM3U8Playlist * playlist)
+{
+  gchar *entry_str;
+
+  entry_str = gst_m3u8_entry_render (entry, playlist->version);
+  g_string_append_printf (playlist->playlist_str, "%s", entry_str);
+  g_free (entry_str);
+}
+
 gchar *
 gst_m3u8_playlist_render (GstM3U8Playlist * playlist)
 {
-  GString *playlist_str;
-  GList *l;
+  gchar *pl;
 
   g_return_val_if_fail (playlist != NULL, NULL);
 
-  playlist_str = g_string_new ("#EXTM3U\n");
+  playlist->playlist_str = g_string_new ("");
 
-  g_string_append_printf (playlist_str, "#EXT-X-VERSION:%d\n",
+  /* #EXTM3U */
+  g_string_append_printf (playlist->playlist_str, M3U8_HEADER_TAG);
+  /* #EXT-X-VERSION */
+  g_string_append_printf (playlist->playlist_str, M3U8_VERSION_TAG,
       playlist->version);
-
-  g_string_append_printf (playlist_str, "#EXT-X-ALLOW-CACHE:%s\n",
+  /* #EXT-X-ALLOW_CACHE */
+  g_string_append_printf (playlist->playlist_str, M3U8_ALLOW_CACHE_TAG,
       playlist->allow_cache ? "YES" : "NO");
-
-  g_string_append_printf (playlist_str, "#EXT-X-MEDIA-SEQUENCE:%d\n",
+  /* #EXT-X-MEDIA-SEQUENCE */
+  g_string_append_printf (playlist->playlist_str, M3U8_MEDIA_SEQUENCE_TAG,
       playlist->sequence_number - playlist->entries->length);
-
-  g_string_append_printf (playlist_str, "#EXT-X-TARGETDURATION:%u\n",
+  /* #EXT-X-TARGETDURATION */
+  g_string_append_printf (playlist->playlist_str, M3U8_TARGETDURATION_TAG,
       gst_m3u8_playlist_target_duration (playlist));
-  g_string_append (playlist_str, "\n");
+  g_string_append_printf (playlist->playlist_str, "\n");
 
   /* Entries */
-  for (l = playlist->entries->head; l != NULL; l = l->next) {
-    gchar buf[G_ASCII_DTOSTR_BUF_SIZE];
-    GstM3U8Entry *entry = l->data;
-
-    if (entry->discontinuous)
-      g_string_append (playlist_str, "#EXT-X-DISCONTINUITY\n");
-
-    if (playlist->version < 3) {
-      g_string_append_printf (playlist_str, "#EXTINF:%d,%s\n",
-          (gint) ((entry->duration + 500 * GST_MSECOND) / GST_SECOND),
-          entry->title ? entry->title : "");
-    } else {
-      g_string_append_printf (playlist_str, "#EXTINF:%s,%s\n",
-          g_ascii_dtostr (buf, sizeof (buf), entry->duration / GST_SECOND),
-          entry->title ? entry->title : "");
-    }
-
-    g_string_append_printf (playlist_str, "%s\n", entry->url);
-  }
+  g_queue_foreach (playlist->entries, (GFunc) render_entry, playlist);
 
   if (playlist->end_list)
-    g_string_append (playlist_str, "#EXT-X-ENDLIST");
+    g_string_append_printf (playlist->playlist_str, M3U8_ENDLIST_TAG);
 
-  return g_string_free (playlist_str, FALSE);
+  pl = playlist->playlist_str->str;
+  g_string_free (playlist->playlist_str, FALSE);
+  return pl;
+}
+
+void
+gst_m3u8_playlist_clear (GstM3U8Playlist * playlist)
+{
+  g_return_if_fail (playlist != NULL);
+
+  g_queue_foreach (playlist->entries, (GFunc) gst_m3u8_entry_free, NULL);
+  g_queue_clear (playlist->entries);
+}
+
+guint
+gst_m3u8_playlist_n_entries (GstM3U8Playlist * playlist)
+{
+  g_return_val_if_fail (playlist != NULL, 0);
+
+  return playlist->entries->length;
 }

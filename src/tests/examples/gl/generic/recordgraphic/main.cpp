@@ -19,6 +19,7 @@
  */
 
 #include <GL/gl.h>
+#include <GL/glu.h>
 #if __WIN32__ || _WIN32
 # include <GL/glext.h>
 #endif
@@ -65,7 +66,7 @@ static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 }
 
 //client draw callback
-static gboolean drawCallback (void *filter, void *context, GLuint texture, GLuint width, GLuint height, gpointer data)
+static gboolean drawCallback (void *filter, GLuint width, GLuint height, GLuint texture, gpointer data)
 {
     static GLfloat	xrot = 0;
     static GLfloat	yrot = 0;

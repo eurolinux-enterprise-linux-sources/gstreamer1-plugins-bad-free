@@ -29,7 +29,7 @@
  * <refsect2>
  * <title>Example pipelines</title>
  * |[
- * gst-launch-1.0 -v filesrc location=sine.ogg ! oggdemux ! vorbisdec ! audioconvert ! stereo ! audioconvert ! audioresample ! alsasink
+ * gst-launch -v filesrc location=sine.ogg ! oggdemux ! vorbisdec ! audioconvert ! stereo ! audioconvert ! audioresample ! alsasink
  * ]| Play an Ogg/Vorbis file.
  * </refsect2>
  */
@@ -59,9 +59,9 @@ enum
 
 enum
 {
-  PROP_0,
-  PROP_ACTIVE,
-  PROP_STEREO
+  ARG_0,
+  ARG_ACTIVE,
+  ARG_STEREO
 };
 
 static void gst_stereo_set_property (GObject * object, guint prop_id,
@@ -95,14 +95,14 @@ gst_stereo_class_init (GstStereoClass * klass)
   gobject_class->set_property = gst_stereo_set_property;
   gobject_class->get_property = gst_stereo_get_property;
 
-  g_object_class_install_property (gobject_class, PROP_ACTIVE,
+  g_object_class_install_property (gobject_class, ARG_ACTIVE,
       g_param_spec_boolean ("active", "active", "active",
           TRUE,
           G_PARAM_READWRITE | GST_PARAM_CONTROLLABLE | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_STEREO,
+  g_object_class_install_property (gobject_class, ARG_STEREO,
       g_param_spec_float ("stereo", "stereo", "stereo",
-          0.0, 1.0, 0.1f,
+          0.0, 1.0, 0.1,
           G_PARAM_READWRITE | GST_PARAM_CONTROLLABLE | G_PARAM_STATIC_STRINGS));
 
   trans_class->transform_ip = GST_DEBUG_FUNCPTR (gst_stereo_transform_ip);
@@ -112,7 +112,7 @@ static void
 gst_stereo_init (GstStereo * stereo)
 {
   stereo->active = TRUE;
-  stereo->stereo = 0.1f;
+  stereo->stereo = 0.1;
 }
 
 static GstFlowReturn
@@ -169,10 +169,10 @@ gst_stereo_set_property (GObject * object, guint prop_id, const GValue * value,
   GstStereo *stereo = GST_STEREO (object);
 
   switch (prop_id) {
-    case PROP_ACTIVE:
+    case ARG_ACTIVE:
       stereo->active = g_value_get_boolean (value);
       break;
-    case PROP_STEREO:
+    case ARG_STEREO:
       stereo->stereo = g_value_get_float (value) * 10.0;
       break;
     default:
@@ -188,10 +188,10 @@ gst_stereo_get_property (GObject * object, guint prop_id, GValue * value,
   GstStereo *stereo = GST_STEREO (object);
 
   switch (prop_id) {
-    case PROP_ACTIVE:
+    case ARG_ACTIVE:
       g_value_set_boolean (value, stereo->active);
       break;
-    case PROP_STEREO:
+    case ARG_STEREO:
       g_value_set_float (value, stereo->stereo / 10.0);
       break;
     default:

@@ -22,13 +22,12 @@
 /**
  * SECTION:element-teletextdec
  *
- * Decode a stream of raw VBI packets containing teletext information to a RGBA
- * stream.
+ * Decode PES stream containing teletext information to RGBA stream
  *
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v -m filesrc location=recording.mpeg ! tsdemux ! teletextdec ! videoconvert ! ximagesink
+ * gst-launch -v -m filesrc location=recording.mpeg ! mpegtsdemux ! private/teletext ! teletextdec ! videoconvert ! ximagesink
  * ]|
  * </refsect2>
  */
@@ -40,14 +39,11 @@
 #include <gst/gst.h>
 #include <gst/video/video.h>
 #include <string.h>
-#include <stdlib.h>
 
 #include "gstteletextdec.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_teletextdec_debug);
 #define GST_CAT_DEFAULT gst_teletextdec_debug
-
-#define parent_class gst_teletextdec_parent_class
 
 #define SUBTITLES_PAGE 888
 #define MAX_SLICES 32
@@ -124,25 +120,26 @@ static const gchar *default_color_map[40] = {
   "#FF00FF", "#00FFFF", "#EEEEEE"
 };
 
-/* in RGBA mode, one character occupies 12 x 10 pixels. */
-#define COLUMNS_TO_WIDTH(cols) ((cols) * 12)
-#define ROWS_TO_HEIGHT(rows) ((rows) * 10)
-
 static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("application/x-teletext;")
+    GST_STATIC_CAPS
+    ("video/mpeg,mpegversion=2,systemstream=TRUE ; private/teletext")
     );
 
 static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS
-    (GST_VIDEO_CAPS_MAKE ("RGBA") ";"
-        "text/x-raw, format={utf-8,pango-markup} ;")
+    (GST_VIDEO_CAPS_RGBA "; text/plain ; text/html ; text/x-pango-markup")
     );
 
-G_DEFINE_TYPE (GstTeletextDec, gst_teletextdec, GST_TYPE_ELEMENT);
+/* debug category for filtering log messages */
+#define DEBUG_INIT(bla) \
+  GST_DEBUG_CATEGORY_INIT (gst_teletextdec_debug, "teletext", 0, "Teletext decoder");
+
+GST_BOILERPLATE_FULL (GstTeletextDec, gst_teletextdec, GstElement,
+    GST_TYPE_ELEMENT, DEBUG_INIT);
 
 static void gst_teletextdec_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -150,35 +147,60 @@ static void gst_teletextdec_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 static void gst_teletextdec_finalize (GObject * object);
 
-static GstStateChangeReturn gst_teletextdec_change_state (GstElement *
-    element, GstStateChange transition);
+static GstStateChangeReturn gst_teletextdec_change_state (GstElement * element,
+    GstStateChange transition);
 
-static GstFlowReturn gst_teletextdec_chain (GstPad * pad, GstObject * parent,
-    GstBuffer * buffer);
-static gboolean gst_teletextdec_sink_event (GstPad * pad, GstObject * parent,
-    GstEvent * event);
-static gboolean gst_teletextdec_src_event (GstPad * pad, GstObject * parent,
-    GstEvent * event);
+static GstFlowReturn gst_teletextdec_chain (GstPad * pad, GstBuffer * buf);
+static gboolean gst_teletextdec_sink_setcaps (GstPad * pad, GstCaps * caps);
+static gboolean gst_teletextdec_sink_event (GstPad * pad, GstEvent * event);
+static GstPadLinkReturn gst_teletextdec_src_set_caps (GstPad * pad,
+    GstCaps * caps);
 
+static vbi_bool gst_teletextdec_convert (vbi_dvb_demux * dx, gpointer user_data,
+    const vbi_sliced * sliced, guint n_lines, gint64 pts);
 static void gst_teletextdec_event_handler (vbi_event * ev, void *user_data);
 
 static GstFlowReturn gst_teletextdec_push_page (GstTeletextDec * teletext);
 static GstFlowReturn gst_teletextdec_export_text_page (GstTeletextDec *
+    teletext, vbi_page * page, GstBuffer ** buf);
+static GstFlowReturn gst_teletextdec_export_html_page (GstTeletextDec *
     teletext, vbi_page * page, GstBuffer ** buf);
 static GstFlowReturn gst_teletextdec_export_rgba_page (GstTeletextDec *
     teletext, vbi_page * page, GstBuffer ** buf);
 static GstFlowReturn gst_teletextdec_export_pango_page (GstTeletextDec *
     teletext, vbi_page * page, GstBuffer ** buf);
 
+
+static gboolean gst_teletextdec_push_preroll_buffer (GstTeletextDec * teletext);
 static void gst_teletextdec_process_telx_buffer (GstTeletextDec * teletext,
     GstBuffer * buf);
-static gboolean gst_teletextdec_extract_data_units (GstTeletextDec *
-    teletext, GstTeletextFrame * f, const guint8 * packet, guint * offset,
-    gsize size);
+static void gst_teletextdec_process_pes_buffer (GstTeletextDec * teletext,
+    GstBuffer * buf);
+static gboolean gst_teletextdec_extract_data_units (GstTeletextDec * teletext,
+    GstTeletextFrame * f, guint8 * packet, guint * offset, gint size);
 
 static void gst_teletextdec_zvbi_init (GstTeletextDec * teletext);
 static void gst_teletextdec_zvbi_clear (GstTeletextDec * teletext);
-static void gst_teletextdec_reset_frame (GstTeletextDec * teletext);
+
+/* GObject vmethod implementations */
+
+static void
+gst_teletextdec_base_init (gpointer klass)
+{
+  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+
+  gst_element_class_set_static_metadata (element_class,
+      "Teletext decoder",
+      "Decoder",
+      "Decode PES or raw VBI stream containing teletext information to RGBA, HTML and text",
+      "Sebastian Pölsterl <sebp@k-d-w.org>, "
+      "Andoni Morales Alastruey <ylatuya@gmail.com>");
+
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
+}
 
 /* initialize the gstteletext's class */
 static void
@@ -223,26 +245,18 @@ gst_teletextdec_class_init (GstTeletextDecClass * klass)
           "Font description used for the pango output.",
           DEFAULT_FONT_DESCRIPTION,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  gst_element_class_set_static_metadata (gstelement_class,
-      "Teletext decoder",
-      "Decoder",
-      "Decode a raw VBI stream containing teletext information to RGBA and text",
-      "Sebastian Pölsterl <sebp@k-d-w.org>, "
-      "Andoni Morales Alastruey <ylatuya@gmail.com>");
-
-  gst_element_class_add_static_pad_template (gstelement_class, &src_template);
-  gst_element_class_add_static_pad_template (gstelement_class, &sink_template);
 }
 
 /* initialize the new element
  * initialize instance structure
  */
 static void
-gst_teletextdec_init (GstTeletextDec * teletext)
+gst_teletextdec_init (GstTeletextDec * teletext, GstTeletextDecClass * klass)
 {
   /* Create sink pad */
   teletext->sinkpad = gst_pad_new_from_static_template (&sink_template, "sink");
+  gst_pad_set_setcaps_function (teletext->sinkpad,
+      GST_DEBUG_FUNCPTR (gst_teletextdec_sink_setcaps));
   gst_pad_set_chain_function (teletext->sinkpad,
       GST_DEBUG_FUNCPTR (gst_teletextdec_chain));
   gst_pad_set_event_function (teletext->sinkpad,
@@ -251,11 +265,11 @@ gst_teletextdec_init (GstTeletextDec * teletext)
 
   /* Create src pad */
   teletext->srcpad = gst_pad_new_from_static_template (&src_template, "src");
-  gst_pad_set_event_function (teletext->srcpad,
-      GST_DEBUG_FUNCPTR (gst_teletextdec_src_event));
+  gst_pad_set_setcaps_function (teletext->srcpad,
+      GST_DEBUG_FUNCPTR (gst_teletextdec_src_set_caps));
   gst_element_add_pad (GST_ELEMENT (teletext), teletext->srcpad);
 
-  teletext->segment = NULL;
+  teletext->demux = NULL;
   teletext->decoder = NULL;
   teletext->pageno = 0x100;
   teletext->subno = -1;
@@ -270,14 +284,16 @@ gst_teletextdec_init (GstTeletextDec * teletext)
   teletext->rate_denominator = 1;
 
   teletext->queue = NULL;
-  g_mutex_init (&teletext->queue_lock);
+  teletext->queue_lock = g_mutex_new ();
 
-  gst_teletextdec_reset_frame (teletext);
+  teletext->frame = g_new0 (GstTeletextFrame, 1);
+  teletext->frame->sliced_begin = g_new (vbi_sliced, MAX_SLICES);
+  teletext->frame->current_slice = teletext->frame->sliced_begin;
+  teletext->frame->sliced_end = teletext->frame->sliced_begin + MAX_SLICES;
 
   teletext->last_ts = 0;
 
-  teletext->export_func = NULL;
-  teletext->buf_pool = NULL;
+  teletext->process_buf_func = NULL;
 }
 
 static void
@@ -285,7 +301,7 @@ gst_teletextdec_finalize (GObject * object)
 {
   GstTeletextDec *teletext = GST_TELETEXTDEC (object);
 
-  g_mutex_clear (&teletext->queue_lock);
+  g_mutex_free (teletext->queue_lock);
 
   g_free (teletext->frame);
 
@@ -305,9 +321,9 @@ gst_teletextdec_zvbi_init (GstTeletextDec * teletext)
       VBI_EVENT_TTX_PAGE | VBI_EVENT_CAPTION,
       gst_teletextdec_event_handler, teletext);
 
-  g_mutex_lock (&teletext->queue_lock);
+  g_mutex_lock (teletext->queue_lock);
   teletext->queue = g_queue_new ();
-  g_mutex_unlock (&teletext->queue_lock);
+  g_mutex_unlock (teletext->queue_lock);
 }
 
 static void
@@ -317,23 +333,25 @@ gst_teletextdec_zvbi_clear (GstTeletextDec * teletext)
 
   GST_LOG_OBJECT (teletext, "Clearing structures");
 
+  if (teletext->demux != NULL) {
+    vbi_dvb_demux_delete (teletext->demux);
+    teletext->demux = NULL;
+  }
   if (teletext->decoder != NULL) {
     vbi_decoder_delete (teletext->decoder);
     teletext->decoder = NULL;
   }
   if (teletext->frame != NULL) {
-    if (teletext->frame->sliced_begin)
-      g_free (teletext->frame->sliced_begin);
     g_free (teletext->frame);
     teletext->frame = NULL;
   }
 
-  g_mutex_lock (&teletext->queue_lock);
+  g_mutex_lock (teletext->queue_lock);
   if (teletext->queue != NULL) {
     g_queue_free (teletext->queue);
     teletext->queue = NULL;
   }
-  g_mutex_unlock (&teletext->queue_lock);
+  g_mutex_unlock (teletext->queue_lock);
 
   teletext->in_timestamp = GST_CLOCK_TIME_NONE;
   teletext->in_duration = GST_CLOCK_TIME_NONE;
@@ -399,31 +417,21 @@ gst_teletextdec_get_property (GObject * object, guint prop_id,
 }
 
 static gboolean
-gst_teletextdec_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
+gst_teletextdec_sink_event (GstPad * pad, GstEvent * event)
 {
   gboolean ret;
-  GstTeletextDec *teletext = GST_TELETEXTDEC (parent);
+  GstTeletextDec *teletext = GST_TELETEXTDEC (gst_pad_get_parent (pad));
 
   GST_DEBUG_OBJECT (teletext, "got event %s",
       gst_event_type_get_name (GST_EVENT_TYPE (event)));
 
   switch (GST_EVENT_TYPE (event)) {
-    case GST_EVENT_SEGMENT:
+    case GST_EVENT_NEWSEGMENT:
       /* maybe save and/or update the current segment (e.g. for output
        * clipping) or convert the event into one in a different format
        * (e.g. BYTES to TIME) or drop it and set a flag to send a newsegment
        * event in a different format later */
-      if (NULL == teletext->export_func) {
-        /* save the segment event and send it after sending caps. replace the
-         * old event if present. */
-        if (teletext->segment) {
-          gst_event_unref (teletext->segment);
-        }
-        teletext->segment = event;
-        ret = TRUE;
-      } else {
-        ret = gst_pad_push_event (teletext->srcpad, event);
-      }
+      ret = gst_pad_push_event (teletext->srcpad, event);
       break;
     case GST_EVENT_EOS:
       /* end-of-stream, we should close down all stream leftovers here */
@@ -436,31 +444,12 @@ gst_teletextdec_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       ret = gst_pad_push_event (teletext->srcpad, event);
       break;
     default:
-      ret = gst_pad_event_default (pad, parent, event);
+      ret = gst_pad_event_default (pad, event);
       break;
   }
 
-  return ret;
-}
+  gst_object_unref (teletext);
 
-static gboolean
-gst_teletextdec_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
-{
-  gboolean ret;
-  GstTeletextDec *teletext = GST_TELETEXTDEC (parent);
-
-  switch (GST_EVENT_TYPE (event)) {
-    case GST_EVENT_RECONFIGURE:
-      /* setting export_func to NULL will cause the element to renegotiate caps
-       * before pushing a buffer. */
-      teletext->export_func = NULL;
-      ret = TRUE;
-      break;
-
-    default:
-      ret = gst_pad_event_default (pad, parent, event);
-      break;
-  }
   return ret;
 }
 
@@ -495,13 +484,109 @@ gst_teletextdec_change_state (GstElement * element, GstStateChange transition)
   return ret;
 }
 
+static gboolean
+gst_teletextdec_sink_setcaps (GstPad * pad, GstCaps * caps)
+{
+  GstTeletextDec *teletext = GST_TELETEXTDEC (gst_pad_get_parent (pad));
+  GstStructure *structure = gst_caps_get_structure (caps, 0);
+  const gchar *mimetype = gst_structure_get_name (structure);
+
+  GST_DEBUG_OBJECT (teletext, "%s:%s, caps=%" GST_PTR_FORMAT,
+      GST_DEBUG_PAD_NAME (pad), caps);
+
+  if (g_strcmp0 (mimetype, "private/teletext") == 0) {
+    teletext->process_buf_func = gst_teletextdec_process_telx_buffer;
+    goto accept_caps;
+  } else if (g_strcmp0 (mimetype, "video/mpeg") == 0) {
+    gint version;
+    gboolean is_systemstream;
+
+    if (!gst_structure_get_int (structure, "mpegversion", &version) ||
+        !gst_structure_get_boolean (structure, "systemstream",
+            &is_systemstream))
+      goto refuse_caps;
+
+    if (version != 2 || !is_systemstream)
+      goto refuse_caps;
+
+    teletext->process_buf_func = gst_teletextdec_process_pes_buffer;
+    teletext->demux = vbi_dvb_pes_demux_new (gst_teletextdec_convert, teletext);
+    goto accept_caps;
+  } else
+    goto refuse_caps;
+
+accept_caps:
+  {
+    gst_object_unref (teletext);
+    return gst_teletextdec_push_preroll_buffer (teletext);
+  }
+
+refuse_caps:
+  {
+    GST_ERROR_OBJECT (teletext,
+        "pad %s refused renegotiation to %" GST_PTR_FORMAT,
+        GST_PAD_NAME (pad), caps);
+    gst_object_unref (teletext);
+    return FALSE;
+  }
+}
+
+static gboolean
+gst_teletextdec_src_set_caps (GstPad * pad, GstCaps * caps)
+{
+  GstTeletextDec *teletext;
+  GstStructure *structure = NULL;
+  const gchar *mimetype;
+  GstPad *peer;
+
+  teletext = GST_TELETEXTDEC (gst_pad_get_parent (pad));
+  GST_DEBUG_OBJECT (teletext, "Linking teletext source pad");
+
+  if (gst_caps_is_empty (caps)) {
+    GST_ERROR_OBJECT (teletext,
+        "pad %s refused renegotiation to %" GST_PTR_FORMAT,
+        GST_PAD_NAME (pad), caps);
+    goto refuse_caps;
+  }
+
+  peer = gst_pad_get_peer (pad);
+  if (peer) {
+    gst_pad_set_caps (peer, caps);
+    gst_object_unref (peer);
+  }
+
+  structure = gst_caps_get_structure (caps, 0);
+  mimetype = gst_structure_get_name (structure);
+
+  if (g_strcmp0 (mimetype, "video/x-raw-rgb") == 0) {
+    teletext->output_format = GST_TELETEXTDEC_OUTPUT_FORMAT_RGBA;
+    GST_DEBUG_OBJECT (teletext, "Selected RGBA output format");
+  } else if (g_strcmp0 (mimetype, "text/html") == 0) {
+    teletext->output_format = GST_TELETEXTDEC_OUTPUT_FORMAT_HTML;
+    GST_DEBUG_OBJECT (teletext, "Selected HTML output format");
+  } else if (g_strcmp0 (mimetype, "text/plain") == 0) {
+    teletext->output_format = GST_TELETEXTDEC_OUTPUT_FORMAT_TEXT;
+    GST_DEBUG_OBJECT (teletext, "Selected text output format");
+  } else if (g_strcmp0 (mimetype, "text/x-pango-markup") == 0) {
+    teletext->output_format = GST_TELETEXTDEC_OUTPUT_FORMAT_PANGO;
+    GST_DEBUG_OBJECT (teletext, "Selected pango markup output format");
+  } else
+    goto refuse_caps;
+
+  gst_object_unref (teletext);
+  return TRUE;
+
+
+refuse_caps:
+  {
+    gst_object_unref (teletext);
+    return FALSE;
+  }
+}
+
 static void
 gst_teletextdec_reset_frame (GstTeletextDec * teletext)
 {
-  if (teletext->frame == NULL)
-    teletext->frame = g_new0 (GstTeletextFrame, 1);
-  if (teletext->frame->sliced_begin == NULL)
-    teletext->frame->sliced_begin = g_new (vbi_sliced, MAX_SLICES);
   teletext->frame->current_slice = teletext->frame->sliced_begin;
   teletext->frame->sliced_end = teletext->frame->sliced_begin + MAX_SLICES;
   teletext->frame->last_field = 0;
@@ -510,23 +595,32 @@ gst_teletextdec_reset_frame (GstTeletextDec * teletext)
 }
 
 static void
+gst_teletextdec_process_pes_buffer (GstTeletextDec * teletext, GstBuffer * buf)
+{
+  vbi_dvb_demux_feed (teletext->demux, GST_BUFFER_DATA (buf),
+      GST_BUFFER_SIZE (buf));
+  return;
+}
+
+static void
 gst_teletextdec_process_telx_buffer (GstTeletextDec * teletext, GstBuffer * buf)
 {
-  GstMapInfo buf_map;
+  guint8 *data = GST_BUFFER_DATA (buf);
+  const gint size = GST_BUFFER_SIZE (buf);
   guint offset = 0;
   gint res;
-  gst_buffer_map (buf, &buf_map, GST_MAP_READ);
 
   teletext->in_timestamp = GST_BUFFER_TIMESTAMP (buf);
   teletext->in_duration = GST_BUFFER_DURATION (buf);
 
-  if (teletext->frame == NULL)
+  if (teletext->frame == NULL) {
     gst_teletextdec_reset_frame (teletext);
+  }
 
-  while (offset < buf_map.size) {
+  while (offset < size) {
     res =
-        gst_teletextdec_extract_data_units (teletext, teletext->frame,
-        buf_map.data, &offset, buf_map.size);
+        gst_teletextdec_extract_data_units (teletext, teletext->frame, data,
+        &offset, size);
 
     if (res == VBI_NEW_FRAME) {
       /* We have a new frame, it's time to feed the decoder */
@@ -552,12 +646,30 @@ gst_teletextdec_process_telx_buffer (GstTeletextDec * teletext, GstBuffer * buf)
       gst_teletextdec_reset_frame (teletext);
     } else if (res == VBI_ERROR) {
       gst_teletextdec_reset_frame (teletext);
-      goto beach;
+      return;
     }
   }
-beach:
-  gst_buffer_unmap (buf, &buf_map);
   return;
+}
+
+static vbi_bool
+gst_teletextdec_convert (vbi_dvb_demux * dx,
+    gpointer user_data, const vbi_sliced * sliced, guint n_lines, gint64 pts)
+{
+  gdouble sample_time;
+  vbi_sliced *s;
+
+  GstTeletextDec *teletext = GST_TELETEXTDEC (user_data);
+
+  GST_DEBUG_OBJECT (teletext, "Converting %u lines to decode", n_lines);
+
+  sample_time = pts * (1 / 90000.0);
+
+  s = g_memdup (sliced, n_lines * sizeof (vbi_sliced));
+  vbi_decode (teletext->decoder, s, n_lines, sample_time);
+  g_free (s);
+
+  return GST_FLOW_OK;
 }
 
 static void
@@ -585,9 +697,9 @@ gst_teletextdec_event_handler (vbi_event * ev, void *user_data)
       pi->pgno = pgno;
       pi->subno = subno;
 
-      g_mutex_lock (&teletext->queue_lock);
+      g_mutex_lock (teletext->queue_lock);
       g_queue_push_tail (teletext->queue, pi);
-      g_mutex_unlock (&teletext->queue_lock);
+      g_mutex_unlock (teletext->queue_lock);
       break;
     case VBI_EVENT_CAPTION:
       /* TODO: Handle subtitles in caption teletext pages */
@@ -599,142 +711,29 @@ gst_teletextdec_event_handler (vbi_event * ev, void *user_data)
   return;
 }
 
-static void
-gst_teletextdec_try_get_buffer_pool (GstTeletextDec * teletext, GstCaps * caps,
-    gssize size)
-{
-  guint pool_bufsize, min_bufs, max_bufs;
-  GstStructure *poolcfg;
-  GstBufferPool *new_pool;
-  GstQuery *alloc = gst_query_new_allocation (caps, TRUE);
-
-  if (teletext->buf_pool) {
-    /* this function is called only on a caps/size change, so it's practically
-     * impossible that we'll be able to reuse the old pool. */
-    gst_buffer_pool_set_active (teletext->buf_pool, FALSE);
-    gst_object_unref (teletext->buf_pool);
-  }
-
-  if (!gst_pad_peer_query (teletext->srcpad, alloc)) {
-    GST_DEBUG_OBJECT (teletext, "Failed to query peer pad for allocation "
-        "parameters");
-    teletext->buf_pool = NULL;
-    goto beach;
-  }
-
-  if (gst_query_get_n_allocation_pools (alloc) > 0) {
-    gst_query_parse_nth_allocation_pool (alloc, 0, &new_pool, &pool_bufsize,
-        &min_bufs, &max_bufs);
-  } else {
-    new_pool = gst_buffer_pool_new ();
-    max_bufs = 0;
-    min_bufs = 1;
-  }
-
-  poolcfg = gst_buffer_pool_get_config (new_pool);
-  gst_buffer_pool_config_set_params (poolcfg, gst_caps_copy (caps), size,
-      min_bufs, max_bufs);
-  if (!gst_buffer_pool_set_config (new_pool, poolcfg)) {
-    GST_DEBUG_OBJECT (teletext, "Failed to configure the buffer pool");
-    gst_object_unref (new_pool);
-    teletext->buf_pool = NULL;
-    goto beach;
-  }
-  if (!gst_buffer_pool_set_active (new_pool, TRUE)) {
-    GST_DEBUG_OBJECT (teletext, "Failed to make the buffer pool active");
-    gst_object_unref (new_pool);
-    teletext->buf_pool = NULL;
-    goto beach;
-  }
-
-  teletext->buf_pool = new_pool;
-
-beach:
-  gst_query_unref (alloc);
-}
-
-static gboolean
-gst_teletextdec_negotiate_caps (GstTeletextDec * teletext, guint width,
-    guint height)
-{
-  gboolean rv = FALSE;
-  /* get the peer's caps filtered by our own ones. */
-  GstCaps *ourcaps = gst_pad_query_caps (teletext->srcpad, NULL);
-  GstCaps *peercaps = gst_pad_peer_query_caps (teletext->srcpad, ourcaps);
-  GstStructure *caps_struct;
-  const gchar *caps_name, *caps_fmt;
-
-  gst_caps_unref (ourcaps);
-
-  if (gst_caps_is_empty (peercaps)) {
-    goto beach;
-  }
-
-  /* make them writable in case we need to fixate them (video/x-raw). */
-  peercaps = gst_caps_make_writable (peercaps);
-  caps_struct = gst_caps_get_structure (peercaps, 0);
-  caps_name = gst_structure_get_name (caps_struct);
-  caps_fmt = gst_structure_get_string (caps_struct, "format");
-
-  if (!g_strcmp0 (caps_name, "video/x-raw")) {
-    teletext->width = width;
-    teletext->height = height;
-    teletext->export_func = gst_teletextdec_export_rgba_page;
-    gst_structure_set (caps_struct,
-        "width", G_TYPE_INT, width,
-        "height", G_TYPE_INT, height,
-        "framerate", GST_TYPE_FRACTION, 0, 1, NULL);
-  } else if (!g_strcmp0 (caps_name, "text/x-raw") &&
-      !g_strcmp0 (caps_fmt, "utf-8")) {
-    teletext->export_func = gst_teletextdec_export_text_page;
-  } else if (!g_strcmp0 (caps_name, "text/x-raw") &&
-      !g_strcmp0 (caps_fmt, "pango-markup")) {
-    teletext->export_func = gst_teletextdec_export_pango_page;
-  } else {
-    goto beach;
-  }
-
-  if (!gst_pad_push_event (teletext->srcpad, gst_event_new_caps (peercaps))) {
-    goto beach;
-  }
-
-  /* try to get a bufferpool from the peer pad in case of RGBA output. */
-  if (gst_teletextdec_export_rgba_page == teletext->export_func) {
-    gst_teletextdec_try_get_buffer_pool (teletext, peercaps,
-        width * height * sizeof (vbi_rgba));
-  }
-
-  /* we can happily return a success now. */
-  rv = TRUE;
-
-beach:
-  gst_caps_unref (peercaps);
-  return rv;
-}
-
 /* this function does the actual processing
  */
 static GstFlowReturn
-gst_teletextdec_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
+gst_teletextdec_chain (GstPad * pad, GstBuffer * buf)
 {
-  GstTeletextDec *teletext = GST_TELETEXTDEC (parent);
+  GstTeletextDec *teletext = GST_TELETEXTDEC (GST_PAD_PARENT (pad));
   GstFlowReturn ret = GST_FLOW_OK;
 
   teletext->in_timestamp = GST_BUFFER_TIMESTAMP (buf);
   teletext->in_duration = GST_BUFFER_DURATION (buf);
 
-  gst_teletextdec_process_telx_buffer (teletext, buf);
+  teletext->process_buf_func (teletext, buf);
   gst_buffer_unref (buf);
 
-  g_mutex_lock (&teletext->queue_lock);
+  g_mutex_lock (teletext->queue_lock);
   if (!g_queue_is_empty (teletext->queue)) {
     ret = gst_teletextdec_push_page (teletext);
     if (ret != GST_FLOW_OK) {
-      g_mutex_unlock (&teletext->queue_lock);
+      g_mutex_unlock (teletext->queue_lock);
       goto error;
     }
   }
-  g_mutex_unlock (&teletext->queue_lock);
+  g_mutex_unlock (teletext->queue_lock);
 
   return ret;
 
@@ -743,7 +742,9 @@ error:
   {
     if (ret != GST_FLOW_OK && ret != GST_FLOW_NOT_LINKED
         && ret != GST_FLOW_FLUSHING) {
-      GST_ELEMENT_FLOW_ERROR (teletext, ret);
+      GST_ELEMENT_ERROR (teletext, STREAM, FAILED,
+          ("Internal data stream error."), ("stream stopped, reason %s",
+              gst_flow_get_name (ret)));
       return GST_FLOW_ERROR;
     }
     return ret;
@@ -759,9 +760,9 @@ gst_teletextdec_push_page (GstTeletextDec * teletext)
   page_info *pi;
   gint pgno, subno;
   gboolean success;
-  guint width, height;
 
-  pi = g_queue_pop_head (teletext->queue);
+  pi = (page_info *) g_queue_pop_head (teletext->queue);
+
   pgno = vbi_bcd2dec (pi->pgno);
   subno = vbi_bcd2dec (pi->subno);
 
@@ -769,37 +770,37 @@ gst_teletextdec_push_page (GstTeletextDec * teletext)
 
   success = vbi_fetch_vt_page (teletext->decoder, &page, pi->pgno, pi->subno,
       VBI_WST_LEVEL_3p5, 25, FALSE);
-  g_free (pi);
   if (G_UNLIKELY (!success))
     goto fetch_page_failed;
 
-  width = COLUMNS_TO_WIDTH (page.columns);
-  height = ROWS_TO_HEIGHT (page.rows);
-
-  /* if output_func is NULL, we need to (re-)negotiate. also, it is possible
-   * (though unlikely) that we received a page of a different size. */
-  if (G_UNLIKELY (NULL == teletext->export_func ||
-          teletext->width != width || teletext->height != height)) {
-    /* if negotiate_caps returns FALSE, that means we weren't able to
-     * negotiate. */
-    if (G_UNLIKELY (!gst_teletextdec_negotiate_caps (teletext, width, height))) {
-      ret = GST_FLOW_NOT_NEGOTIATED;
-      goto push_failed;
-    }
-    if (G_UNLIKELY (teletext->segment)) {
-      gst_pad_push_event (teletext->srcpad, teletext->segment);
-      teletext->segment = NULL;
-    }
+  switch (teletext->output_format) {
+    case GST_TELETEXTDEC_OUTPUT_FORMAT_TEXT:
+      ret = gst_teletextdec_export_text_page (teletext, &page, &buf);
+      break;
+    case GST_TELETEXTDEC_OUTPUT_FORMAT_HTML:
+      ret = gst_teletextdec_export_html_page (teletext, &page, &buf);
+      break;
+    case GST_TELETEXTDEC_OUTPUT_FORMAT_RGBA:
+      ret = gst_teletextdec_export_rgba_page (teletext, &page, &buf);
+      break;
+    case GST_TELETEXTDEC_OUTPUT_FORMAT_PANGO:
+      ret = gst_teletextdec_export_pango_page (teletext, &page, &buf);
+      break;
+    default:
+      g_assert_not_reached ();
+      break;
   }
-
-  teletext->export_func (teletext, &page, &buf);
   vbi_unref_page (&page);
+  g_free (pi);
+
+  if (ret != GST_FLOW_OK)
+    goto alloc_failed;
 
   GST_BUFFER_TIMESTAMP (buf) = teletext->in_timestamp;
   GST_BUFFER_DURATION (buf) = teletext->in_duration;
 
-  GST_INFO_OBJECT (teletext, "Pushing buffer of size %" G_GSIZE_FORMAT,
-      gst_buffer_get_size (buf));
+  GST_INFO_OBJECT (teletext, "Pushing buffer of size %d",
+      GST_BUFFER_SIZE (buf));
 
   ret = gst_pad_push (teletext->srcpad, buf);
   if (ret != GST_FLOW_OK)
@@ -813,6 +814,13 @@ fetch_page_failed:
     return GST_FLOW_ERROR;
   }
 
+alloc_failed:
+  {
+    GST_ERROR_OBJECT (teletext, "Error allocating output buffer, reason %s",
+        gst_flow_get_name (ret));
+    return ret;
+  }
+
 push_failed:
   {
     GST_ERROR_OBJECT (teletext, "Pushing buffer failed, reason %s",
@@ -822,17 +830,17 @@ push_failed:
 }
 
 static gchar **
-gst_teletextdec_vbi_page_to_text_lines (guint start, guint stop, vbi_page *
-    page)
+gst_teletextdec_vbi_page_to_text_lines (GstTeletextDec * teletext,
+    guint start, guint stop, vbi_page * page)
 {
   const guint lines_count = stop - start + 1;
   const guint line_length = page->columns;
   gchar **lines;
-  guint i;
+  gint i;
 
   /* allocate a new NULL-terminated array of strings */
   lines = (gchar **) g_malloc (sizeof (gchar *) * (lines_count + 1));
-  lines[lines_count] = NULL;
+  lines[lines_count] = g_strdup ('\0');
 
   /* export each line in the range of the teletext page in text format */
   for (i = start; i <= stop; i++) {
@@ -850,6 +858,8 @@ static GstFlowReturn
 gst_teletextdec_export_text_page (GstTeletextDec * teletext, vbi_page * page,
     GstBuffer ** buf)
 {
+  GstCaps *caps;
+  GstFlowReturn ret;
   gchar *text;
   guint size;
 
@@ -858,7 +868,7 @@ gst_teletextdec_export_text_page (GstTeletextDec * teletext, vbi_page * page,
     GString *subs;
     guint i;
 
-    lines = gst_teletextdec_vbi_page_to_text_lines (1, 23, page);
+    lines = gst_teletextdec_vbi_page_to_text_lines (teletext, 1, 23, page);
     subs = g_string_new ("");
     /* Strip white spaces and squash blank lines */
     for (i = 0; i < 23; i++) {
@@ -882,9 +892,52 @@ gst_teletextdec_export_text_page (GstTeletextDec * teletext, vbi_page * page,
   }
 
   /* Allocate new buffer */
-  *buf = gst_buffer_new_wrapped (text, size);
+  caps = gst_caps_new_simple ("text/plain", NULL);
+  ret = gst_pad_alloc_buffer (teletext->srcpad, GST_BUFFER_OFFSET_NONE,
+      size, caps, &(*buf));
+  if (G_LIKELY (ret == GST_FLOW_OK))
+    GST_BUFFER_DATA (*buf) = GST_BUFFER_MALLOCDATA (*buf) = (guint8 *) text;
+  else
+    gst_buffer_unref (*buf);
 
-  return GST_FLOW_OK;
+  gst_caps_unref (caps);
+  return ret;
+}
+
+static GstFlowReturn
+gst_teletextdec_export_html_page (GstTeletextDec * teletext, vbi_page * page,
+    GstBuffer ** buf)
+{
+  GstCaps *caps;
+  GstFlowReturn ret;
+  gchar *html;
+  gssize size;
+  vbi_export *ex;
+  gchar *err;
+
+  if (!(ex = vbi_export_new ("html", &err))) {
+    GST_ELEMENT_ERROR (teletext, LIBRARY, SETTINGS,
+        ("Can't open the HTML export module: %s", err), (NULL));
+    g_free (err);
+    return GST_FLOW_ERROR;
+  }
+
+  /* export to NULL to get size of the memory needed to allocate the page */
+  size = vbi_export_mem (ex, NULL, 0, page);
+  if (size < 0)
+    return GST_FLOW_ERROR;
+  html = g_malloc (size);
+  vbi_export_mem (ex, html, size, page);
+
+  /* Allocate new buffer */
+  caps = gst_caps_new_simple ("text/html", NULL);
+  ret = gst_pad_alloc_buffer (teletext->srcpad, GST_BUFFER_OFFSET_NONE,
+      size, caps, &(*buf));
+  if (G_LIKELY (ret == GST_FLOW_OK))
+    GST_BUFFER_DATA (*buf) = GST_BUFFER_MALLOCDATA (*buf) = (guint8 *) html;
+
+  gst_caps_unref (caps);
+  return ret;
 }
 
 static GstFlowReturn
@@ -892,34 +945,40 @@ gst_teletextdec_export_rgba_page (GstTeletextDec * teletext, vbi_page * page,
     GstBuffer ** buf)
 {
   guint size;
-  GstBuffer *lbuf;
-  GstMapInfo buf_map;
+  GstCaps *caps, *out_caps;
+  GstFlowReturn ret;
+  gint width, height;
+  GstPadTemplate *templ;
 
-  size = teletext->width * teletext->height * sizeof (vbi_rgba);
+  /* one character occupies 12 x 10 pixels */
+  width = page->columns * 12;
+  height = page->rows * 10;
 
-  /* Allocate new buffer, using the negotiated pool if available. */
-  if (teletext->buf_pool) {
-    GstFlowReturn acquire_rv =
-        gst_buffer_pool_acquire_buffer (teletext->buf_pool, &lbuf, NULL);
-    if (acquire_rv != GST_FLOW_OK) {
-      return acquire_rv;
-    }
-  } else {
-    lbuf = gst_buffer_new_allocate (NULL, size, NULL);
-    if (NULL == lbuf)
-      return GST_FLOW_ERROR;
+  caps = gst_caps_new_simple ("video/x-raw-rgb",
+      "width", G_TYPE_INT, width,
+      "height", G_TYPE_INT, height,
+      "framerate", GST_TYPE_FRACTION, teletext->rate_numerator,
+      teletext->rate_denominator, NULL);
+
+  templ = gst_static_pad_template_get (&src_template);
+  out_caps = gst_caps_intersect (caps, gst_pad_template_get_caps (templ));
+  gst_caps_unref (caps);
+  gst_object_unref (templ);
+
+  size = (guint) width *(guint) height *sizeof (vbi_rgba);
+
+  ret = gst_pad_alloc_buffer_and_set_caps (teletext->srcpad,
+      GST_BUFFER_OFFSET_NONE, size, out_caps, &(*buf));
+
+  if (ret == GST_FLOW_OK) {
+    GST_DEBUG_OBJECT (teletext, "Creating image with %d rows and %d cols",
+        page->rows, page->columns);
+    vbi_draw_vt_page (page, VBI_PIXFMT_RGBA32_LE,
+        (vbi_rgba *) GST_BUFFER_DATA (*buf), FALSE, TRUE);
   }
 
-  if (!gst_buffer_map (lbuf, &buf_map, GST_MAP_WRITE)) {
-    gst_buffer_unref (lbuf);
-    return GST_FLOW_ERROR;
-  }
-
-  vbi_draw_vt_page (page, VBI_PIXFMT_RGBA32_LE, buf_map.data, FALSE, TRUE);
-  gst_buffer_unmap (lbuf, &buf_map);
-  *buf = lbuf;
-
-  return GST_FLOW_OK;
+  gst_caps_unref (out_caps);
+  return ret;
 }
 
 static GstFlowReturn
@@ -931,11 +990,13 @@ gst_teletextdec_export_pango_page (GstTeletextDec * teletext, vbi_page * page,
   gchar **colors;
   gchar **lines;
   GString *subs;
-  guint start, stop, k;
-  gint i, j;
+  GstCaps *caps;
+  GstFlowReturn ret;
+  guint start, stop;
+  guint i, j;
 
   colors = (gchar **) g_malloc (sizeof (gchar *) * (rows + 1));
-  colors[rows] = NULL;
+  colors[rows] = g_strdup ('\0');
 
   /* parse all the lines and approximate it's foreground color using the first
    * non null character */
@@ -952,23 +1013,76 @@ gst_teletextdec_export_pango_page (GstTeletextDec * teletext, vbi_page * page,
   /* get an array of strings with each line of the telext page */
   start = teletext->subtitles_mode ? 1 : 0;
   stop = teletext->subtitles_mode ? rows - 2 : rows - 1;
-  lines = gst_teletextdec_vbi_page_to_text_lines (start, stop, page);
+  lines = gst_teletextdec_vbi_page_to_text_lines (teletext, start, stop, page);
 
   /* format each line in pango markup */
   subs = g_string_new ("");
-  for (k = start; k <= stop; k++) {
+  for (i = start; i <= stop; i++) {
     g_string_append_printf (subs, PANGO_TEMPLATE,
-        teletext->font_description, colors[k], lines[k - start]);
+        teletext->font_description, colors[i], lines[i - start]);
   }
 
   /* Allocate new buffer */
-  *buf = gst_buffer_new_wrapped (subs->str, subs->len + 1);
+  caps = gst_caps_new_simple ("text/x-pango-markup", NULL);
+  ret = gst_pad_alloc_buffer (teletext->srcpad, GST_BUFFER_OFFSET_NONE,
+      subs->len + 1, caps, &(*buf));
+  if (G_LIKELY (ret == GST_FLOW_OK))
+    GST_BUFFER_DATA (*buf) = GST_BUFFER_MALLOCDATA (*buf) =
+        (guint8 *) subs->str;
+  else
+    gst_buffer_unref (*buf);
 
   g_strfreev (lines);
   g_strfreev (colors);
   g_string_free (subs, FALSE);
-  return GST_FLOW_OK;
+  gst_caps_unref (caps);
+  return ret;
 }
+
+static gboolean
+gst_teletextdec_push_preroll_buffer (GstTeletextDec * teletext)
+{
+  GstFlowReturn ret;
+  GstBuffer *buf;
+  gboolean res = TRUE;
+  GstStructure *structure;
+  const gchar *mimetype;
+  GstCaps *out_caps, *peer_caps, *pad_caps;
+
+  /* the stream is sparse, we send a dummy buffer for preroll */
+  peer_caps = gst_pad_peer_get_caps (teletext->srcpad);
+  pad_caps = gst_pad_get_caps (teletext->srcpad);
+  out_caps = gst_caps_intersect (pad_caps, peer_caps);
+
+  if (gst_caps_is_empty (out_caps)) {
+    res = FALSE;
+    goto beach;
+  }
+
+  gst_caps_truncate (out_caps);
+  structure = gst_caps_get_structure (out_caps, 0);
+  mimetype = gst_structure_get_name (structure);
+  if (g_strcmp0 (mimetype, "video/x-raw-rgb") == 0) {
+    /* omit preroll buffer for this format */
+    goto beach;
+  }
+
+  buf = gst_buffer_new_and_alloc (1);
+  GST_BUFFER_DATA (buf)[0] = 0;
+  gst_buffer_set_caps (buf, out_caps);
+  ret = gst_pad_push (teletext->srcpad, buf);
+  if (ret != GST_FLOW_OK)
+    res = FALSE;
+
+beach:
+  {
+    gst_caps_unref (out_caps);
+    gst_caps_unref (pad_caps);
+    gst_caps_unref (peer_caps);
+    return res;
+  }
+}
+
 
 /* Converts the line_offset / field_parity byte of a VBI data unit. */
 static void
@@ -1046,9 +1160,9 @@ gst_teletextdec_line_address (GstTeletextDec * teletext,
 
 static gboolean
 gst_teletextdec_extract_data_units (GstTeletextDec * teletext,
-    GstTeletextFrame * f, const guint8 * packet, guint * offset, gsize size)
+    GstTeletextFrame * f, guint8 * packet, guint * offset, gint size)
 {
-  const guint8 *data_unit;
+  guint8 *data_unit;
   guint i;
 
   while (*offset < size) {
@@ -1129,18 +1243,3 @@ gst_teletextdec_extract_data_units (GstTeletextDec * teletext,
   }
   return VBI_SUCCESS;
 }
-
-static gboolean
-teletext_init (GstPlugin * teletext)
-{
-  GST_DEBUG_CATEGORY_INIT (gst_teletextdec_debug, "teletext", 0,
-      "Teletext decoder");
-  return gst_element_register (teletext, "teletextdec", GST_RANK_NONE,
-      GST_TYPE_TELETEXTDEC);
-}
-
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    teletext,
-    "Teletext plugin",
-    teletext_init, VERSION, "LGPL", "GStreamer", "http://gstreamer.net/")

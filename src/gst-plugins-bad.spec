@@ -6,7 +6,7 @@
 
 Summary: GStreamer streaming media framework "bad" plug-ins
 Name: %{gstreamer}-plugins-bad
-Version: 1.10.4
+Version: 1.4.5
 Release: 1.gst
 # The freeze and nfs plugins are LGPLv2 (only)
 License: LGPLv2+ and LGPLv2
@@ -31,7 +31,6 @@ BuildRequires: libass-devel
 %ifnarch s390 s390x
 BuildRequires: libdc1394-devel
 %endif
-BuildRequires: libde265-devel
 BuildRequires: libdvdnav-devel
 BuildRequires: libexif-devel
 BuildRequires: libiptcdata-devel
@@ -103,7 +102,7 @@ gstreamer-plugins-bad contains plug-ins that aren't
 tested well enough, or the code is not of good enough quality.
 
 This package (gstreamer-plugins-bad-extras) contains extra "bad" plugins for
-sources, sinks (jack) and effects (pitch) which are not used
+sources (mythtv), sinks (jack) and effects (pitch) which are not used
 very much and require additional libraries to be installed.
 
 
@@ -223,6 +222,7 @@ make ERROR_CFLAGS='' ERROR_CXXFLAGS=''
 %{_libdir}/gstreamer-%{majorminor}/libgstfreeverb.so
 %{_libdir}/gstreamer-%{majorminor}/libgstivtc.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmidi.so
+%{_libdir}/gstreamer-%{majorminor}/libgstmpg123.so
 %{_libdir}/gstreamer-%{majorminor}/libgstrfbsrc.so
 %{_libdir}/gstreamer-%{majorminor}/libgstsmoothstreaming.so
 %{_libdir}/gstreamer-%{majorminor}/libgstvideofiltersbad.so
@@ -230,7 +230,7 @@ make ERROR_CFLAGS='' ERROR_CXXFLAGS=''
 %{_libdir}/gstreamer-%{majorminor}/libgstsiren.so
 
 %{_libdir}/gstreamer-%{majorminor}/libgstdvbsuboverlay.so
-%{_libdir}/gstreamer-%{majorminor}/libgsthls.so
+%{_libdir}/gstreamer-%{majorminor}/libgstfragmented.so
 %{_libdir}/gstreamer-%{majorminor}/libgstvideoparsersbad.so
 %{_libdir}/gstreamer-%{majorminor}/libgsty4mdec.so
 %{_libdir}/gstreamer-%{majorminor}/libgstaudiovisualizers.so
@@ -266,7 +266,6 @@ make ERROR_CFLAGS='' ERROR_CXXFLAGS=''
 # %{_libdir}/gstreamer-%{majorminor}/libgstgsm.so
 %{_libdir}/gstreamer-%{majorminor}/libgstkate.so
 %{_libdir}/gstreamer-%{majorminor}/libgstladspa.so
-%{_libdir}/gstreamer-%{majorminor}/libgstlibde265.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmodplug.so
 %{_libdir}/gstreamer-%{majorminor}/libgstofa.so
 %{_libdir}/gstreamer-%{majorminor}/libgstresindvd.so
@@ -302,6 +301,7 @@ make ERROR_CFLAGS='' ERROR_CXXFLAGS=''
 %defattr(-,root,root,-)
 # Plugins with external dependencies
 # %{_libdir}/gstreamer-%{majorminor}/libgstjack.so
+# %{_libdir}/gstreamer-%{majorminor}/libgstmythtvsrc.so
 # %{_libdir}/gstreamer-%{majorminor}/libgstsdl.so
 # %{_libdir}/gstreamer-%{majorminor}/libgstsoundtouch.so
 # %{_libdir}/gstreamer-%{majorminor}/libgsttimidity.so

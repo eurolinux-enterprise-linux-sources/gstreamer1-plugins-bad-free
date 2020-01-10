@@ -80,7 +80,9 @@ GST_START_TEST (test_properties)
       "nbr-attachments", &res_nbr_attach,
       "use-ssl", &res_use_ssl,
       "pop-location", &res_pop_location,
-      "pop_user", &res_pop_usr, "pop-passwd", &res_pop_passwd, NULL);
+      "pop_user", &res_pop_usr,
+      "pop-passwd", &res_pop_passwd,
+      NULL);
 
   fail_unless (strncmp (res_location, "mylocation", strlen ("mylocation"))
       == 0);
@@ -145,7 +147,9 @@ GST_START_TEST (test_properties)
       "subject", &res_subj,
       "use-ssl", &res_use_ssl,
       "message-body", &res_msg,
-      "mail-from", &res_mail_from, "mail-rcpt", &res_mail_rcpt, NULL);
+      "mail-from", &res_mail_from,
+      "mail-rcpt", &res_mail_rcpt,
+      NULL);
 
   fail_unless (strncmp (res_location, "newlocation", strlen ("newlocation"))
       == 0);
@@ -156,7 +160,7 @@ GST_START_TEST (test_properties)
   fail_unless (strncmp (res_passwd, "newpasswd", strlen ("newpasswd"))
       == 0);
   fail_unless (strncmp (res_mail_rcpt, "rcpt1,rcpt2,rcpt3",
-          strlen ("rcpt1,rcpt2,rcpt3")) == 0);
+      strlen ("rcpt1,rcpt2,rcpt3")) == 0);
   fail_unless (strncmp (res_mail_from, "newsender", strlen ("newsender"))
       == 0);
   fail_unless (strncmp (res_subj, "newsubject", strlen ("newsubject"))
@@ -186,7 +190,6 @@ GST_START_TEST (test_properties)
 
   cleanup_curlsmtpsink (sink);
 }
-
 GST_END_TEST;
 
 static Suite *

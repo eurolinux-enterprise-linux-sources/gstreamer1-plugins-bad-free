@@ -2,7 +2,7 @@
  * GStreamer
  * Copyright (C) 2011 Robert Jobbagy <jobbagy.robert@gmail.com>
  * Copyright (C) 2011 Nicola Murino <nicola.murino@gmail.com>
- *
+ * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -45,9 +45,8 @@
 #ifndef __GST_MOTIONCELLS_H__
 #define __GST_MOTIONCELLS_H__
 
-#include <gstopencvvideofilter.h>
-#include <opencv2/core/core_c.h>
-#include "motioncells_wrapper.h"
+#include <gst/gst.h>
+#include <cv.h>
 
 G_BEGIN_DECLS
 /* #defines don't like whitespacey bits */
@@ -64,9 +63,28 @@ G_BEGIN_DECLS
 typedef struct _GstMotioncells GstMotioncells;
 typedef struct _GstMotioncellsClass GstMotioncellsClass;
 
+typedef struct {
+	int upper_left_x;
+	int upper_left_y;
+	int lower_right_x;
+	int lower_right_y;
+} motionmaskcoordrect;
+
+typedef struct {
+	int R_channel_value;
+	int G_channel_value;
+	int B_channel_value;
+} cellscolor;
+
+typedef struct {
+	int lineidx;
+	int columnidx;
+} motioncellidx;
+
 struct _GstMotioncells
 {
-  GstOpencvVideoFilter element;
+  GstElement element;
+  GstPad *sinkpad, *srcpad;
   GstState state;
   gboolean display, calculate_motion, firstgridx, firstgridy, changed_gridx,
       changed_gridy, changed_startime;
@@ -76,25 +94,25 @@ struct _GstMotioncells
   gchar *prev_datafile, *cur_datafile, *basename_datafile, *datafile_extension;
   gint prevgridx, gridx, prevgridy, gridy, id;
   gdouble sensitivity, threshold;
+  IplImage *cvImage;
   motionmaskcoordrect *motionmaskcoords;
   cellscolor *motioncellscolor;
   motioncellidx *motioncellsidx, *motionmaskcellsidx;
   int motionmaskcoord_count, motioncells_count, motionmaskcells_count;
-  int thickness;
-  guint gap, datafileidx, postnomotion, minimum_motion_frames;
+  int gap, thickness, datafileidx, postnomotion, minimum_motion_frames;
   guint64 motion_begin_timestamp, last_motion_timestamp, motion_timestamp,
       last_nomotion_notified, prev_buff_timestamp, cur_buff_timestamp;
   gint64 diff_timestamp, starttime;
   guint64 consecutive_motion;
   gint width, height;
   //time stuff
-  GTimeVal tv;
+  struct timeval tv;
   double framerate;
 };
 
 struct _GstMotioncellsClass
 {
-  GstOpencvVideoFilterClass parent_class;
+  GstElementClass parent_class;
 };
 
 GType gst_motion_cells_get_type (void);

@@ -26,61 +26,198 @@
 static gboolean kernel_ready = FALSE;
 static float gauss_kernel[7];
 
-void
-gst_gl_effects_glow (GstGLEffects * effects)
+static void
+gst_gl_effects_glow_step_one (gint width, gint height, guint texture,
+    gpointer data)
 {
-  const GstGLFuncs *gl = GST_GL_BASE_FILTER (effects)->context->gl_vtable;
-  GstGLFilter *filter = GST_GL_FILTER (effects);
   GstGLShader *shader;
+  GstGLEffects *effects = GST_GL_EFFECTS (data);
+  GstGLFilter *filter = GST_GL_FILTER (effects);
+  GstGLContext *context = filter->context;
+  GstGLFuncs *gl = context->gl_vtable;
+
+  shader = g_hash_table_lookup (effects->shaderstable, "glow0");
+
+  if (!shader) {
+    shader = gst_gl_shader_new (context);
+    g_hash_table_insert (effects->shaderstable, (gchar *) "glow0", shader);
+  }
+
+  if (!gst_gl_shader_compile_and_check (shader,
+          luma_threshold_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
+    gst_gl_context_set_error (context,
+        "Failed to initialize luma threshold shader");
+    GST_ELEMENT_ERROR (effects, RESOURCE, NOT_FOUND,
+        ("%s", gst_gl_context_get_error ()), (NULL));
+    return;
+  }
+
+  gl->MatrixMode (GL_PROJECTION);
+  gl->LoadIdentity ();
+
+  gst_gl_shader_use (shader);
+
+  gl->ActiveTexture (GL_TEXTURE0);
+  gl->Enable (GL_TEXTURE_2D);
+  gl->BindTexture (GL_TEXTURE_2D, texture);
+
+  gst_gl_shader_set_uniform_1i (shader, "tex", 0);
+
+  gst_gl_filter_draw_texture (filter, texture, width, height);
+}
+
+static void
+gst_gl_effects_glow_step_two (gint width, gint height, guint texture,
+    gpointer data)
+{
+  GstGLShader *shader;
+  GstGLEffects *effects = GST_GL_EFFECTS (data);
+  GstGLFilter *filter = GST_GL_FILTER (effects);
+  GstGLContext *context = filter->context;
+  GstGLFuncs *gl = context->gl_vtable;
+
+  shader = g_hash_table_lookup (effects->shaderstable, "glow1");
+
+  if (!shader) {
+    shader = gst_gl_shader_new (context);
+    g_hash_table_insert (effects->shaderstable, (gchar *) "glow1", shader);
+  }
 
   if (!kernel_ready) {
     fill_gaussian_kernel (gauss_kernel, 7, 10.0);
     kernel_ready = TRUE;
   }
 
-  /* threshold */
-  shader = gst_gl_effects_get_fragment_shader (effects, "luma_threshold",
-      luma_threshold_fragment_source_gles2);
-  gst_gl_filter_render_to_target_with_shader (filter, effects->intexture,
-      effects->midtexture[0], shader);
+  if (!gst_gl_shader_compile_and_check (shader,
+          hconv7_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
+    gst_gl_context_set_error (context, "Failed to initialize hconv7 shader");
+    GST_ELEMENT_ERROR (effects, RESOURCE, NOT_FOUND,
+        ("%s", gst_gl_context_get_error ()), (NULL));
+    return;
+  }
 
-  /* blur */
-  shader = gst_gl_effects_get_fragment_shader (effects, "hconv7",
-      hconv7_fragment_source_gles2);
+  gl->MatrixMode (GL_PROJECTION);
+  gl->LoadIdentity ();
+
   gst_gl_shader_use (shader);
-  gst_gl_shader_set_uniform_1fv (shader, "kernel", 7, gauss_kernel);
-  gst_gl_shader_set_uniform_1f (shader, "gauss_width",
-      GST_VIDEO_INFO_WIDTH (&filter->out_info));
-  gst_gl_filter_render_to_target_with_shader (filter, effects->midtexture[0],
-      effects->midtexture[1], shader);
 
-  shader = gst_gl_effects_get_fragment_shader (effects, "vconv7",
-      vconv7_fragment_source_gles2);
+  gl->ActiveTexture (GL_TEXTURE1);
+  gl->Enable (GL_TEXTURE_2D);
+  gl->BindTexture (GL_TEXTURE_2D, texture);
+  gl->Disable (GL_TEXTURE_2D);
+
+  gst_gl_shader_set_uniform_1i (shader, "tex", 1);
+  gst_gl_shader_set_uniform_1fv (shader, "kernel", 7, gauss_kernel);
+  gst_gl_shader_set_uniform_1f (shader, "height", height);
+
+  gst_gl_filter_draw_texture (filter, texture, width, height);
+}
+
+static void
+gst_gl_effects_glow_step_three (gint width, gint height, guint texture,
+    gpointer data)
+{
+  GstGLShader *shader;
+  GstGLEffects *effects = GST_GL_EFFECTS (data);
+  GstGLFilter *filter = GST_GL_FILTER (effects);
+  GstGLContext *context = filter->context;
+  GstGLFuncs *gl = context->gl_vtable;
+
+  shader = g_hash_table_lookup (effects->shaderstable, "glow2");
+
+  if (!shader) {
+    shader = gst_gl_shader_new (context);
+    g_hash_table_insert (effects->shaderstable, (gchar *) "glow2", shader);
+  }
+
+  if (!gst_gl_shader_compile_and_check (shader,
+          vconv7_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
+    gst_gl_context_set_error (context, "Failed to initialize vcon7 shader");
+    GST_ELEMENT_ERROR (effects, RESOURCE, NOT_FOUND,
+        ("%s", gst_gl_context_get_error ()), (NULL));
+    return;
+  }
+
+  gl->MatrixMode (GL_PROJECTION);
+  gl->LoadIdentity ();
+
   gst_gl_shader_use (shader);
-  gst_gl_shader_set_uniform_1fv (shader, "kernel", 7, gauss_kernel);
-  gst_gl_shader_set_uniform_1f (shader, "gauss_height",
-      GST_VIDEO_INFO_HEIGHT (&filter->out_info));
-  gst_gl_filter_render_to_target_with_shader (filter, effects->midtexture[1],
-      effects->midtexture[2], shader);
 
-  /* add blurred luma to intexture */
-  shader = gst_gl_effects_get_fragment_shader (effects, "sum",
-      sum_fragment_source_gles2);
+  gl->ActiveTexture (GL_TEXTURE1);
+  gl->Enable (GL_TEXTURE_2D);
+  gl->BindTexture (GL_TEXTURE_2D, texture);
+  gl->Disable (GL_TEXTURE_2D);
+
+  gst_gl_shader_set_uniform_1i (shader, "tex", 1);
+  gst_gl_shader_set_uniform_1fv (shader, "kernel", 7, gauss_kernel);
+  gst_gl_shader_set_uniform_1f (shader, "width", width);
+
+  gst_gl_filter_draw_texture (filter, texture, width, height);
+}
+
+static void
+gst_gl_effects_glow_step_four (gint width, gint height, guint texture,
+    gpointer data)
+{
+  GstGLShader *shader;
+  GstGLEffects *effects = GST_GL_EFFECTS (data);
+  GstGLFilter *filter = GST_GL_FILTER (effects);
+  GstGLContext *context = filter->context;
+  GstGLFuncs *gl = context->gl_vtable;
+
+  shader = g_hash_table_lookup (effects->shaderstable, "glow3");
+
+  if (!shader) {
+    shader = gst_gl_shader_new (context);
+    g_hash_table_insert (effects->shaderstable, (gchar *) "glow3", shader);
+  }
+
+  if (!gst_gl_shader_compile_and_check (shader,
+          sum_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
+    gst_gl_context_set_error (context, "Failed to initialize sum shader");
+    GST_ELEMENT_ERROR (effects, RESOURCE, NOT_FOUND,
+        ("%s", gst_gl_context_get_error ()), (NULL));
+    return;
+  }
+
+  gl->MatrixMode (GL_PROJECTION);
+  gl->LoadIdentity ();
+
   gst_gl_shader_use (shader);
 
   gl->ActiveTexture (GL_TEXTURE2);
-  gl->BindTexture (GL_TEXTURE_2D,
-      gst_gl_memory_get_texture_id (effects->intexture));
+  gl->Enable (GL_TEXTURE_2D);
+  gl->BindTexture (GL_TEXTURE_2D, effects->intexture);
+  gl->Disable (GL_TEXTURE_2D);
 
-  gst_gl_shader_set_uniform_1f (shader, "alpha", 1.0f);
+  gst_gl_shader_set_uniform_1f (shader, "alpha", 1.0);
   gst_gl_shader_set_uniform_1i (shader, "base", 2);
 
   gl->ActiveTexture (GL_TEXTURE1);
-  gl->BindTexture (GL_TEXTURE_2D,
-      gst_gl_memory_get_texture_id (effects->midtexture[2]));
+  gl->Enable (GL_TEXTURE_2D);
+  gl->BindTexture (GL_TEXTURE_2D, texture);
+  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1f (shader, "beta", (gfloat) 1 / 3.5f);
   gst_gl_shader_set_uniform_1i (shader, "blend", 1);
-  gst_gl_filter_render_to_target_with_shader (filter, effects->midtexture[2],
-      effects->outtexture, shader);
+
+  gst_gl_filter_draw_texture (filter, texture, width, height);
+}
+
+void
+gst_gl_effects_glow (GstGLEffects * effects)
+{
+  GstGLFilter *filter = GST_GL_FILTER (effects);
+
+  /* threshold */
+  gst_gl_filter_render_to_target (filter, TRUE, effects->intexture,
+      effects->midtexture[0], gst_gl_effects_glow_step_one, effects);
+  /* blur */
+  gst_gl_filter_render_to_target (filter, FALSE, effects->midtexture[0],
+      effects->midtexture[1], gst_gl_effects_glow_step_two, effects);
+  gst_gl_filter_render_to_target (filter, FALSE, effects->midtexture[1],
+      effects->midtexture[2], gst_gl_effects_glow_step_three, effects);
+  /* add blurred luma to intexture */
+  gst_gl_filter_render_to_target (filter, FALSE, effects->midtexture[2],
+      effects->outtexture, gst_gl_effects_glow_step_four, effects);
 }

@@ -28,8 +28,8 @@ G_BEGIN_DECLS
 void gst_gl_effects_luma_to_curve (GstGLEffects *effects,
                                    const GstGLEffectsCurve *curve,
                                    gint curve_index,
-                                   GstGLMemory *in_tex,
-                                   GstGLMemory *out_tex);
+                                   gint width, gint height,
+                                   GLuint texture);
 G_END_DECLS
 
 #endif /* __GST_GL_LUMA_TO_CURVE_H__ */

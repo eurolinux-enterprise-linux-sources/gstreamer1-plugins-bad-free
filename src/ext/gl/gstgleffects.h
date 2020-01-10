@@ -26,6 +26,7 @@
 
 G_BEGIN_DECLS
 
+
 #define GST_TYPE_GL_EFFECTS            (gst_gl_effects_get_type())
 #define GST_GL_EFFECTS(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_GL_EFFECTS,GstGLEffects))
 #define GST_IS_GL_EFFECTS(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_GL_EFFECTS))
@@ -33,21 +34,8 @@ G_BEGIN_DECLS
 #define GST_IS_GL_EFFECTS_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass) , GST_TYPE_GL_EFFECTS))
 #define GST_GL_EFFECTS_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) , GST_TYPE_GL_EFFECTS,GstGLEffectsClass))
 
-#define USING_OPENGL(context) (gst_gl_context_check_gl_version (context, GST_GL_API_OPENGL, 1, 0))
-#define USING_OPENGL3(context) (gst_gl_context_check_gl_version (context, GST_GL_API_OPENGL3, 3, 1))
-#define USING_GLES(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES, 1, 0))
-#define USING_GLES2(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES2, 2, 0))
-#define USING_GLES3(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES2, 3, 0))
-
 typedef struct _GstGLEffects GstGLEffects;
 typedef struct _GstGLEffectsClass GstGLEffectsClass;
-
-typedef struct {
-  gint effect;
-  guint supported_properties;
-  const gchar *filter_name;
-  const gchar *filter_longname;
-} GstGLEffectsFilterDescriptor;
 
 typedef void (* GstGLEffectProcessFunc) (GstGLEffects *effects);
 
@@ -69,28 +57,31 @@ struct _GstGLEffects
   GstGLEffectProcessFunc effect;
   gint current_effect;
 
-  GstGLMemory *intexture;
-  GstGLMemory *midtexture[NEEDED_TEXTURES];
-  GstGLMemory *outtexture;
+  GLuint intexture;
+  GLuint midtexture[NEEDED_TEXTURES];
+  GLuint outtexture;
 
   GLuint curve[GST_GL_EFFECTS_N_CURVES];
 
   GHashTable *shaderstable;
 
   gboolean horizontal_swap; /* switch left to right */
-  gboolean invert; /* colours */
 };
 
 struct _GstGLEffectsClass
 {
   GstGLFilterClass filter_class;
-  const GstGLEffectsFilterDescriptor *filter_descriptor;
 };
 
+enum
+{
+  PROP_0,
+  PROP_EFFECT,
+  PROP_HSWAP
+};
+
+
 GType gst_gl_effects_get_type (void);
-gboolean gst_gl_effects_register_filters (GstPlugin *, GstRank);
-GstGLShader* gst_gl_effects_get_fragment_shader (GstGLEffects *effects,
-    const gchar * shader_name, const gchar * shader_source_gles2);
 
 void gst_gl_effects_identity (GstGLEffects *effects);
 void gst_gl_effects_mirror (GstGLEffects *effects);
@@ -108,9 +99,6 @@ void gst_gl_effects_xray (GstGLEffects *effects);
 void gst_gl_effects_luma_xpro (GstGLEffects *effects);
 void gst_gl_effects_sin (GstGLEffects *effects);
 void gst_gl_effects_glow (GstGLEffects *effects);
-void gst_gl_effects_sobel (GstGLEffects *effects);
-void gst_gl_effects_blur (GstGLEffects *effects);
-void gst_gl_effects_laplacian (GstGLEffects *effects);
 
 G_END_DECLS
 

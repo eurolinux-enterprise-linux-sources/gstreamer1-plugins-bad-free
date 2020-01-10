@@ -26,7 +26,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v audiotestsrc num-buffers=10 ! chopmydata min-size=100
+ * gst-launch -v audiotestsrc num-buffers=10 ! gstchopmydata min-size=100
  * max-size=200 step-size=2 ! fakesink -v
  * ]|
  * 
@@ -121,10 +121,10 @@ gst_chop_my_data_class_init (GstChopMyDataClass * klass)
           "Step increment for random buffer sizes", 1, G_MAXINT,
           DEFAULT_MAX_SIZE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_chop_my_data_src_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_chop_my_data_sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_chop_my_data_src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_chop_my_data_sink_template));
 
   gst_element_class_set_static_metadata (element_class, "FIXME",
       "Generic", "FIXME", "David Schleef <ds@schleef.org>");
@@ -283,9 +283,6 @@ gst_chop_my_data_process (GstChopMyData * chopmydata, gboolean flush)
   while (gst_adapter_available (chopmydata->adapter) >= chopmydata->next_size) {
     buffer =
         gst_adapter_take_buffer (chopmydata->adapter, chopmydata->next_size);
-
-    GST_BUFFER_PTS (buffer) = gst_adapter_prev_pts (chopmydata->adapter, NULL);
-    GST_BUFFER_DTS (buffer) = gst_adapter_prev_dts (chopmydata->adapter, NULL);
 
     chopmydata->next_size = 0;
 

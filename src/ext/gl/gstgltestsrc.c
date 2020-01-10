@@ -3,7 +3,6 @@
  * Copyright (C) <1999> Erik Walthinsen <omega@cse.ogi.edu>
  * Copyright (C) 2002,2007 David A. Schleef <ds@schleef.org>
  * Copyright (C) 2008 Julien Isorce <julien.isorce@gmail.com>
- * Copyright (C) 2015 Matthew Waters <matthew@centricular.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -33,7 +32,7 @@
  * <title>Example launch line</title>
  * <para>
  * <programlisting>
- * gst-launch-1.0 -v gltestsrc pattern=smpte ! glimagesink
+ * gst-launch -v gltestsrc pattern=smpte ! glimagesink
  * </programlisting>
  * Shows original SMPTE color bars in a window.
  * </para>
@@ -48,8 +47,11 @@
 #include "gltestsrc.h"
 #include <gst/gst-i18n-plugin.h>
 
+#if GST_GL_HAVE_PLATFORM_EGL
+#include <gst/gl/egl/gsteglimagememory.h>
+#endif
+
 #define USE_PEER_BUFFERALLOC
-#define SUPPORTED_GL_APIS (GST_GL_API_OPENGL | GST_GL_API_OPENGL3 | GST_GL_API_GLES2)
 
 GST_DEBUG_CATEGORY_STATIC (gl_test_src_debug);
 #define GST_CAT_DEFAULT gl_test_src_debug
@@ -63,18 +65,20 @@ enum
       /* FILL ME */
 };
 
-/* *INDENT-OFF* */
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-raw(" GST_CAPS_FEATURE_MEMORY_GL_MEMORY "), "
-        "format = (string) RGBA, "
-        "width = " GST_VIDEO_SIZE_RANGE ", "
-        "height = " GST_VIDEO_SIZE_RANGE ", "
-        "framerate = " GST_VIDEO_FPS_RANGE ","
-        "texture-target = (string) 2D")
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE_WITH_FEATURES
+        (GST_CAPS_FEATURE_MEMORY_GL_MEMORY,
+            "RGBA") "; "
+#if GST_GL_HAVE_PLATFORM_EGL
+        GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_MEMORY_EGL_IMAGE,
+            "RGBA") "; "
+#endif
+        GST_VIDEO_CAPS_MAKE_WITH_FEATURES
+        (GST_CAPS_FEATURE_META_GST_VIDEO_GL_TEXTURE_UPLOAD_META,
+            "RGBA") "; " GST_VIDEO_CAPS_MAKE (GST_GL_COLOR_CONVERT_FORMATS))
     );
-/* *INDENT-ON* */
 
 #define gst_gl_test_src_parent_class parent_class
 G_DEFINE_TYPE (GstGLTestSrc, gst_gl_test_src, GST_TYPE_PUSH_SRC);
@@ -95,8 +99,6 @@ static gboolean gst_gl_test_src_do_seek (GstBaseSrc * bsrc,
 static gboolean gst_gl_test_src_query (GstBaseSrc * bsrc, GstQuery * query);
 static void gst_gl_test_src_set_context (GstElement * element,
     GstContext * context);
-static GstStateChangeReturn gst_gl_test_src_change_state (GstElement * element,
-    GstStateChange transition);
 
 static void gst_gl_test_src_get_times (GstBaseSrc * basesrc,
     GstBuffer * buffer, GstClockTime * start, GstClockTime * end);
@@ -107,9 +109,7 @@ static gboolean gst_gl_test_src_stop (GstBaseSrc * basesrc);
 static gboolean gst_gl_test_src_decide_allocation (GstBaseSrc * basesrc,
     GstQuery * query);
 
-static gboolean gst_gl_test_src_callback (gpointer stuff);
-
-static gboolean gst_gl_test_src_init_shader (GstGLTestSrc * gltestsrc);
+static void gst_gl_test_src_callback (gpointer stuff);
 
 #define GST_TYPE_GL_TEST_SRC_PATTERN (gst_gl_test_src_pattern_get_type ())
 static GType
@@ -130,7 +130,6 @@ gst_gl_test_src_pattern_get_type (void)
     {GST_GL_TEST_SRC_CHECKERS8, "Checkers 8px", "checkers-8"},
     {GST_GL_TEST_SRC_CIRCULAR, "Circular", "circular"},
     {GST_GL_TEST_SRC_BLINK, "Blink", "blink"},
-    {GST_GL_TEST_SRC_MANDELBROT, "Mandelbrot Fractal", "mandelbrot"},
     {0, NULL, NULL}
   };
 
@@ -178,10 +177,10 @@ gst_gl_test_src_class_init (GstGLTestSrcClass * klass)
       "Source/Video", "Creates a test video stream",
       "David A. Schleef <ds@schleef.org>");
 
-  gst_element_class_add_static_pad_template (element_class, &src_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_factory));
 
   element_class->set_context = gst_gl_test_src_set_context;
-  element_class->change_state = gst_gl_test_src_change_state;
 
   gstbasesrc_class->set_caps = gst_gl_test_src_setcaps;
   gstbasesrc_class->is_seekable = gst_gl_test_src_is_seekable;
@@ -231,7 +230,53 @@ gst_gl_test_src_fixate (GstBaseSrc * bsrc, GstCaps * caps)
 static void
 gst_gl_test_src_set_pattern (GstGLTestSrc * gltestsrc, gint pattern_type)
 {
-  gltestsrc->set_pattern = pattern_type;
+  gltestsrc->pattern_type = pattern_type;
+
+  GST_DEBUG_OBJECT (gltestsrc, "setting pattern to %d", pattern_type);
+
+  switch (pattern_type) {
+    case GST_GL_TEST_SRC_SMPTE:
+      gltestsrc->make_image = gst_gl_test_src_smpte;
+      break;
+    case GST_GL_TEST_SRC_SNOW:
+      gltestsrc->make_image = gst_gl_test_src_snow;
+      break;
+    case GST_GL_TEST_SRC_BLACK:
+      gltestsrc->make_image = gst_gl_test_src_black;
+      break;
+    case GST_GL_TEST_SRC_WHITE:
+      gltestsrc->make_image = gst_gl_test_src_white;
+      break;
+    case GST_GL_TEST_SRC_RED:
+      gltestsrc->make_image = gst_gl_test_src_red;
+      break;
+    case GST_GL_TEST_SRC_GREEN:
+      gltestsrc->make_image = gst_gl_test_src_green;
+      break;
+    case GST_GL_TEST_SRC_BLUE:
+      gltestsrc->make_image = gst_gl_test_src_blue;
+      break;
+    case GST_GL_TEST_SRC_CHECKERS1:
+      gltestsrc->make_image = gst_gl_test_src_checkers1;
+      break;
+    case GST_GL_TEST_SRC_CHECKERS2:
+      gltestsrc->make_image = gst_gl_test_src_checkers2;
+      break;
+    case GST_GL_TEST_SRC_CHECKERS4:
+      gltestsrc->make_image = gst_gl_test_src_checkers4;
+      break;
+    case GST_GL_TEST_SRC_CHECKERS8:
+      gltestsrc->make_image = gst_gl_test_src_checkers8;
+      break;
+    case GST_GL_TEST_SRC_CIRCULAR:
+      gltestsrc->make_image = gst_gl_test_src_circular;
+      break;
+    case GST_GL_TEST_SRC_BLINK:
+      gltestsrc->make_image = gst_gl_test_src_black;
+      break;
+    default:
+      g_assert_not_reached ();
+  }
 }
 
 static void
@@ -263,7 +308,7 @@ gst_gl_test_src_get_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_PATTERN:
-      g_value_set_enum (value, src->set_pattern);
+      g_value_set_enum (value, src->pattern_type);
       break;
     case PROP_TIMESTAMP_OFFSET:
       g_value_set_int64 (value, src->timestamp_offset);
@@ -306,13 +351,7 @@ gst_gl_test_src_set_context (GstElement * element, GstContext * context)
 {
   GstGLTestSrc *src = GST_GL_TEST_SRC (element);
 
-  gst_gl_handle_set_context (element, context, &src->display,
-      &src->other_context);
-
-  if (src->display)
-    gst_gl_display_filter_gl_api (src->display, SUPPORTED_GL_APIS);
-
-  GST_ELEMENT_CLASS (parent_class)->set_context (element, context);
+  gst_gl_handle_set_context (element, context, &src->display);
 }
 
 static gboolean
@@ -326,39 +365,8 @@ gst_gl_test_src_query (GstBaseSrc * bsrc, GstQuery * query)
   switch (GST_QUERY_TYPE (query)) {
     case GST_QUERY_CONTEXT:
     {
-      const gchar *context_type;
-      GstContext *context, *old_context;
-
       res = gst_gl_handle_context_query ((GstElement *) src, query,
-          &src->display, &src->other_context);
-      if (src->display)
-        gst_gl_display_filter_gl_api (src->display, SUPPORTED_GL_APIS);
-
-      gst_query_parse_context_type (query, &context_type);
-
-      if (g_strcmp0 (context_type, "gst.gl.local_context") == 0) {
-        GstStructure *s;
-
-        gst_query_parse_context (query, &old_context);
-
-        if (old_context)
-          context = gst_context_copy (old_context);
-        else
-          context = gst_context_new ("gst.gl.local_context", FALSE);
-
-        s = gst_context_writable_structure (context);
-        gst_structure_set (s, "context", GST_GL_TYPE_CONTEXT, src->context,
-            NULL);
-        gst_query_set_context (query, context);
-        gst_context_unref (context);
-
-        res = src->context != NULL;
-      }
-      GST_LOG_OBJECT (src, "context query of type %s %i", context_type, res);
-
-      if (res)
-        return res;
-
+          &src->display);
       break;
     }
     case GST_QUERY_CONVERT:
@@ -371,14 +379,13 @@ gst_gl_test_src_query (GstBaseSrc * bsrc, GstQuery * query)
           gst_video_info_convert (&src->out_info, src_fmt, src_val, dest_fmt,
           &dest_val);
       gst_query_set_convert (query, src_fmt, src_val, dest_fmt, dest_val);
-
-      return res;
+      break;
     }
     default:
-      break;
+      res = GST_BASE_SRC_CLASS (parent_class)->query (bsrc, query);
   }
 
-  return GST_BASE_SRC_CLASS (parent_class)->query (bsrc, query);
+  return res;
 }
 
 static void
@@ -441,62 +448,83 @@ gst_gl_test_src_is_seekable (GstBaseSrc * psrc)
   return TRUE;
 }
 
-static gboolean
-gst_gl_test_src_init_shader (GstGLTestSrc * gltestsrc)
-{
-  if (gst_gl_context_get_gl_api (gltestsrc->context)) {
-    /* blocking call, wait until the opengl thread has compiled the shader */
-//    if (gltestsrc->vertex_src == NULL)
-//      return FALSE;
-//    return gst_gl_context_gen_shader (gltestsrc->context, gltestsrc->vertex_src,
-//        gltestsrc->fragment_src, &gltestsrc->shader);
-  }
-  return TRUE;
-}
-
-static void
-_fill_gl (GstGLContext * context, GstGLTestSrc * src)
-{
-  src->gl_result = gst_gl_framebuffer_draw_to_texture (src->fbo, src->out_tex,
-      gst_gl_test_src_callback, src);
-}
-
 static GstFlowReturn
 gst_gl_test_src_fill (GstPushSrc * psrc, GstBuffer * buffer)
 {
   GstGLTestSrc *src = GST_GL_TEST_SRC (psrc);
   GstClockTime next_time;
+  gint width, height;
   GstVideoFrame out_frame;
-  GstGLSyncMeta *sync_meta;
+  guint out_tex;
+  gboolean to_download =
+      gst_caps_features_is_equal (GST_CAPS_FEATURES_MEMORY_SYSTEM_MEMORY,
+      gst_caps_get_features (src->out_caps, 0));
+  GstMapFlags out_map_flags = GST_MAP_WRITE;
+
+  to_download |= !gst_is_gl_memory (gst_buffer_peek_memory (buffer, 0));
+
+  if (!to_download)
+    out_map_flags |= GST_MAP_GL;
 
   if (G_UNLIKELY (!src->negotiated || !src->context))
     goto not_negotiated;
+
+  width = GST_VIDEO_INFO_WIDTH (&src->out_info);
+  height = GST_VIDEO_INFO_HEIGHT (&src->out_info);
 
   /* 0 framerate and we are at the second frame, eos */
   if (G_UNLIKELY (GST_VIDEO_INFO_FPS_N (&src->out_info) == 0
           && src->n_frames == 1))
     goto eos;
 
-  if (!gst_video_frame_map (&out_frame, &src->out_info, buffer,
-          GST_MAP_WRITE | GST_MAP_GL)) {
+  if (src->pattern_type == GST_GL_TEST_SRC_BLINK) {
+    if (src->n_frames & 0x1)
+      src->make_image = gst_gl_test_src_white;
+    else
+      src->make_image = gst_gl_test_src_black;
+  }
+
+  if (!gst_video_frame_map (&out_frame, &src->out_info, buffer, out_map_flags)) {
     return GST_FLOW_NOT_NEGOTIATED;
   }
 
-  src->out_tex = (GstGLMemory *) out_frame.map[0].memory;
+  if (!to_download) {
+    out_tex = *(guint *) out_frame.data[0];
+  } else {
+    GST_INFO ("Output Buffer does not contain correct meta, "
+        "attempting to wrap for download");
 
-  gst_gl_context_thread_add (src->context, (GstGLContextThreadFunc) _fill_gl,
-      src);
-  if (!src->gl_result) {
-    gst_video_frame_unmap (&out_frame);
-    goto gl_error;
+    if (!src->download)
+      src->download = gst_gl_download_new (src->context);
+
+    gst_gl_download_set_format (src->download, &out_frame.info);
+
+    if (!src->out_tex_id) {
+      gst_gl_context_gen_texture (src->context, &src->out_tex_id,
+          GST_VIDEO_FORMAT_RGBA, GST_VIDEO_FRAME_WIDTH (&out_frame),
+          GST_VIDEO_FRAME_HEIGHT (&out_frame));
+    }
+    out_tex = src->out_tex_id;
+  }
+
+  gst_buffer_replace (&src->buffer, buffer);
+
+  //blocking call, generate a FBO
+  if (!gst_gl_context_use_fbo_v2 (src->context, width, height, src->fbo,
+          src->depthbuffer, out_tex, gst_gl_test_src_callback,
+          (gpointer) src)) {
+    goto not_negotiated;
+  }
+
+  if (to_download) {
+    if (!gst_gl_download_perform_with_data (src->download, out_tex,
+            out_frame.data)) {
+      GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND, ("%s",
+              "Failed to init upload format"), (NULL));
+      return FALSE;
+    }
   }
   gst_video_frame_unmap (&out_frame);
-  if (!src->gl_result)
-    goto gl_error;
-
-  sync_meta = gst_buffer_get_gl_sync_meta (buffer);
-  if (sync_meta)
-    gst_gl_sync_meta_set_sync_point (sync_meta, src->context);
 
   GST_BUFFER_TIMESTAMP (buffer) = src->timestamp_offset + src->running_time;
   GST_BUFFER_OFFSET (buffer) = src->n_frames;
@@ -516,12 +544,6 @@ gst_gl_test_src_fill (GstPushSrc * psrc, GstBuffer * buffer)
 
   return GST_FLOW_OK;
 
-gl_error:
-  {
-    GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND, (_("failed to draw pattern")),
-        (_("A GL error occured")));
-    return GST_FLOW_NOT_NEGOTIATED;
-  }
 not_negotiated:
   {
     GST_ELEMENT_ERROR (src, CORE, NEGOTIATION, (NULL),
@@ -540,10 +562,8 @@ gst_gl_test_src_start (GstBaseSrc * basesrc)
 {
   GstGLTestSrc *src = GST_GL_TEST_SRC (basesrc);
 
-  if (!gst_gl_ensure_element_data (src, &src->display, &src->other_context))
+  if (!gst_gl_ensure_display (src, &src->display))
     return FALSE;
-
-  gst_gl_display_filter_gl_api (src->display, SUPPORTED_GL_APIS);
 
   src->running_time = 0;
   src->n_frames = 0;
@@ -560,72 +580,26 @@ gst_gl_test_src_stop (GstBaseSrc * basesrc)
   gst_caps_replace (&src->out_caps, NULL);
 
   if (src->context) {
-    if (src->shader) {
-      gst_object_unref (src->shader);
-      src->shader = NULL;
+    if (src->out_tex_id) {
+      gst_gl_context_del_texture (src->context, &src->out_tex_id);
     }
 
-    if (src->fbo)
-      gst_object_unref (src->fbo);
-    src->fbo = NULL;
-
+    if (src->download) {
+      gst_object_unref (src->download);
+      src->download = NULL;
+    }
+    //blocking call, delete the FBO
+    gst_gl_context_del_fbo (src->context, src->fbo, src->depthbuffer);
     gst_object_unref (src->context);
     src->context = NULL;
   }
 
-  if (src->src_impl) {
-    src->src_funcs->free (src->src_impl);
-    src->src_impl = NULL;
+  if (src->display) {
+    gst_object_unref (src->display);
+    src->display = NULL;
   }
 
   return TRUE;
-}
-
-static gboolean
-_find_local_gl_context (GstGLTestSrc * src)
-{
-  GstQuery *query;
-  GstContext *context;
-  const GstStructure *s;
-
-  if (src->context)
-    return TRUE;
-
-  query = gst_query_new_context ("gst.gl.local_context");
-  if (!src->context && gst_gl_run_query (GST_ELEMENT (src), query, GST_PAD_SRC)) {
-    gst_query_parse_context (query, &context);
-    if (context) {
-      s = gst_context_get_structure (context);
-      gst_structure_get (s, "context", GST_GL_TYPE_CONTEXT, &src->context,
-          NULL);
-    }
-  }
-  if (!src->context
-      && gst_gl_run_query (GST_ELEMENT (src), query, GST_PAD_SINK)) {
-    gst_query_parse_context (query, &context);
-    if (context) {
-      s = gst_context_get_structure (context);
-      gst_structure_get (s, "context", GST_GL_TYPE_CONTEXT, &src->context,
-          NULL);
-    }
-  }
-
-  GST_DEBUG_OBJECT (src, "found local context %p", src->context);
-
-  gst_query_unref (query);
-
-  if (src->context)
-    return TRUE;
-
-  return FALSE;
-}
-
-static void
-_src_generate_fbo_gl (GstGLContext * context, GstGLTestSrc * src)
-{
-  src->fbo = gst_gl_framebuffer_new_with_default_depth (src->context,
-      GST_VIDEO_INFO_WIDTH (&src->out_info),
-      GST_VIDEO_INFO_HEIGHT (&src->out_info));
 }
 
 static gboolean
@@ -638,41 +612,62 @@ gst_gl_test_src_decide_allocation (GstBaseSrc * basesrc, GstQuery * query)
   guint min, max, size;
   gboolean update_pool;
   GError *error = NULL;
+  guint idx;
+  guint out_width, out_height;
+  GstGLContext *other_context = NULL;
 
-  if (!gst_gl_ensure_element_data (src, &src->display, &src->other_context))
+  if (!gst_gl_ensure_display (src, &src->display))
     return FALSE;
 
-  gst_gl_display_filter_gl_api (src->display, SUPPORTED_GL_APIS);
+  if (gst_query_find_allocation_meta (query,
+          GST_VIDEO_GL_TEXTURE_UPLOAD_META_API_TYPE, &idx)) {
+    GstGLContext *context;
+    const GstStructure *upload_meta_params;
+    gpointer handle;
+    gchar *type;
+    gchar *apis;
 
-  _find_local_gl_context (src);
+    gst_query_parse_nth_allocation_meta (query, idx, &upload_meta_params);
+    if (upload_meta_params) {
+      if (gst_structure_get (upload_meta_params, "gst.gl.GstGLContext",
+              GST_GL_TYPE_CONTEXT, &context, NULL) && context) {
+        GstGLContext *old = src->context;
 
-  if (!src->context) {
-    GST_OBJECT_LOCK (src->display);
-    do {
-      if (src->context) {
-        gst_object_unref (src->context);
-        src->context = NULL;
+        src->context = context;
+        if (old)
+          gst_object_unref (old);
+      } else if (gst_structure_get (upload_meta_params, "gst.gl.context.handle",
+              G_TYPE_POINTER, &handle, "gst.gl.context.type", G_TYPE_STRING,
+              &type, "gst.gl.context.apis", G_TYPE_STRING, &apis, NULL)
+          && handle) {
+        GstGLPlatform platform = GST_GL_PLATFORM_NONE;
+        GstGLAPI gl_apis;
+
+        GST_DEBUG ("got GL context handle 0x%p with type %s and apis %s",
+            handle, type, apis);
+
+        platform = gst_gl_platform_from_string (type);
+        gl_apis = gst_gl_api_from_string (apis);
+
+        if (gl_apis && platform)
+          other_context =
+              gst_gl_context_new_wrapped (src->display, (guintptr) handle,
+              platform, gl_apis);
       }
-      /* just get a GL context.  we don't care */
-      src->context =
-          gst_gl_display_get_gl_context_for_thread (src->display, NULL);
-      if (!src->context) {
-        if (!gst_gl_display_create_context (src->display, src->other_context,
-                &src->context, &error)) {
-          GST_OBJECT_UNLOCK (src->display);
-          goto context_error;
-        }
-      }
-    } while (!gst_gl_display_add_context (src->display, src->context));
-    GST_OBJECT_UNLOCK (src->display);
+    }
   }
 
-  if ((gst_gl_context_get_gl_api (src->context) & SUPPORTED_GL_APIS) == 0)
-    goto unsupported_gl_api;
+  if (!src->context) {
+    src->context = gst_gl_context_new (src->display);
+    if (!gst_gl_context_create (src->context, other_context, &error))
+      goto context_error;
+  }
 
-  gst_gl_context_thread_add (src->context,
-      (GstGLContextThreadFunc) _src_generate_fbo_gl, src);
-  if (!src->fbo)
+  out_width = GST_VIDEO_INFO_WIDTH (&src->out_info);
+  out_height = GST_VIDEO_INFO_HEIGHT (&src->out_info);
+
+  if (!gst_gl_context_gen_fbo (src->context, out_width, out_height,
+          &src->fbo, &src->depthbuffer))
     goto context_error;
 
   gst_query_parse_allocation (query, &caps, NULL);
@@ -691,22 +686,12 @@ gst_gl_test_src_decide_allocation (GstBaseSrc * basesrc, GstQuery * query)
     update_pool = FALSE;
   }
 
-  if (!pool || !GST_IS_GL_BUFFER_POOL (pool)) {
-    /* can't use this pool */
-    if (pool)
-      gst_object_unref (pool);
+  if (!pool)
     pool = gst_gl_buffer_pool_new (src->context);
-  }
-  config = gst_buffer_pool_get_config (pool);
 
+  config = gst_buffer_pool_get_config (pool);
   gst_buffer_pool_config_set_params (config, caps, size, min, max);
   gst_buffer_pool_config_add_option (config, GST_BUFFER_POOL_OPTION_VIDEO_META);
-  if (gst_query_find_allocation_meta (query, GST_GL_SYNC_META_API_TYPE, NULL))
-    gst_buffer_pool_config_add_option (config,
-        GST_BUFFER_POOL_OPTION_GL_SYNC_META);
-  gst_buffer_pool_config_add_option (config,
-      GST_BUFFER_POOL_OPTION_VIDEO_GL_TEXTURE_UPLOAD_META);
-
   gst_buffer_pool_set_config (pool, config);
 
   if (update_pool)
@@ -714,108 +699,29 @@ gst_gl_test_src_decide_allocation (GstBaseSrc * basesrc, GstQuery * query)
   else
     gst_query_add_allocation_pool (query, pool, size, min, max);
 
-  gst_gl_test_src_init_shader (src);
-
   gst_object_unref (pool);
 
   return TRUE;
 
-unsupported_gl_api:
-  {
-    GstGLAPI gl_api = gst_gl_context_get_gl_api (src->context);
-    gchar *gl_api_str = gst_gl_api_to_string (gl_api);
-    gchar *supported_gl_api_str = gst_gl_api_to_string (SUPPORTED_GL_APIS);
-    GST_ELEMENT_ERROR (src, RESOURCE, BUSY,
-        ("GL API's not compatible context: %s supported: %s", gl_api_str,
-            supported_gl_api_str), (NULL));
-
-    g_free (supported_gl_api_str);
-    g_free (gl_api_str);
-    return FALSE;
-  }
 context_error:
   {
     GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND, ("%s", error->message),
         (NULL));
-    g_clear_error (&error);
-    if (src->context)
-      gst_object_unref (src->context);
+    gst_object_unref (src->context);
     src->context = NULL;
     return FALSE;
   }
 }
 
-static gboolean
+//opengl scene
+static void
 gst_gl_test_src_callback (gpointer stuff)
 {
   GstGLTestSrc *src = GST_GL_TEST_SRC (stuff);
-  const struct SrcFuncs *funcs;
 
-  funcs = src->src_funcs;
+  src->make_image (src, src->buffer, GST_VIDEO_INFO_WIDTH (&src->out_info),
+      GST_VIDEO_INFO_HEIGHT (&src->out_info));
 
-  if (!funcs || src->set_pattern != src->active_pattern) {
-    if (src->src_impl && funcs)
-      funcs->free (src->src_impl);
-    src->src_funcs = funcs =
-        gst_gl_test_src_get_src_funcs_for_pattern (src->set_pattern);
-    if (funcs == NULL) {
-      GST_ERROR_OBJECT (src, "Could not find an implementation of the "
-          "requested pattern");
-      return FALSE;
-    }
-    src->src_impl = funcs->new (src);
-    if (!(src->gl_result =
-            funcs->init (src->src_impl, src->context, &src->out_info))) {
-      GST_ERROR_OBJECT (src, "Failed to initialize pattern");
-      return FALSE;
-    }
-    src->active_pattern = src->set_pattern;
-  }
-
-  return funcs->fill_bound_fbo (src->src_impl);
-}
-
-static GstStateChangeReturn
-gst_gl_test_src_change_state (GstElement * element, GstStateChange transition)
-{
-  GstGLTestSrc *src = GST_GL_TEST_SRC (element);
-  GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
-
-  GST_DEBUG_OBJECT (src, "changing state: %s => %s",
-      gst_element_state_get_name (GST_STATE_TRANSITION_CURRENT (transition)),
-      gst_element_state_get_name (GST_STATE_TRANSITION_NEXT (transition)));
-
-  switch (transition) {
-    case GST_STATE_CHANGE_NULL_TO_READY:
-      if (!gst_gl_ensure_element_data (element, &src->display,
-              &src->other_context))
-        return GST_STATE_CHANGE_FAILURE;
-
-      gst_gl_display_filter_gl_api (src->display, SUPPORTED_GL_APIS);
-      break;
-    default:
-      break;
-  }
-
-  ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
-  if (ret == GST_STATE_CHANGE_FAILURE)
-    return ret;
-
-  switch (transition) {
-    case GST_STATE_CHANGE_READY_TO_NULL:
-      if (src->other_context) {
-        gst_object_unref (src->other_context);
-        src->other_context = NULL;
-      }
-
-      if (src->display) {
-        gst_object_unref (src->display);
-        src->display = NULL;
-      }
-      break;
-    default:
-      break;
-  }
-
-  return ret;
+  gst_buffer_unref (src->buffer);
+  src->buffer = NULL;
 }

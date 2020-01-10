@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>shmsink: GStreamer Bad Plugins 1.0 Plugins Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<title>GStreamer Bad Plugins 1.0 Plugins Reference Manual: shmsink</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 1.0 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-rtmpsrc.html" title="rtmpsrc">
 <link rel="next" href="gst-plugins-bad-plugins-shmsrc.html" title="shmsrc">
-<meta name="generator" content="GTK-Doc V1.25 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -30,13 +30,13 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="gst-plugins-bad-plugins-shmsink.top_of_page"></a>shmsink</span></h2>
-<p>shmsink</p>
+<p>shmsink — Send data over shared memory to the matching source</p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-shmsink.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table class="informaltable" border="0">
+<div class="informaltable"><table border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -44,28 +44,28 @@
 </colgroup>
 <tbody>
 <tr>
-<td class="property_type"><a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#guint"><span class="type">guint</span></a></td>
+<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a></td>
 <td class="property_name"><a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink--perms" title="The “perms” property">perms</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#guint"><span class="type">guint</span></a></td>
+<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a></td>
 <td class="property_name"><a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink--shm-size" title="The “shm-size” property">shm-size</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type">
-<a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink--socket-path" title="The “socket-path” property">socket-path</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink--wait-for-connection" title="The “wait-for-connection” property">wait-for-connection</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gint64"><span class="type">gint64</span></a></td>
+<td class="property_type"><span class="type">gint64</span></td>
 <td class="property_name"><a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink--buffer-time" title="The “buffer-time” property">buffer-time</a></td>
 <td class="property_flags">Read / Write / Construct</td>
 </tr>
@@ -74,7 +74,7 @@
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-shmsink.signals"></a><h2>Signals</h2>
-<div class="informaltable"><table class="informaltable" border="0">
+<div class="informaltable"><table border="0">
 <colgroup>
 <col width="150px" class="signals_return">
 <col width="300px" class="signals_name">
@@ -84,19 +84,19 @@
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink-client-connected" title="The “client-connected” signal">client-connected</a></td>
-<td class="signal_flags"><a href="/usr/share/gtk-doc/html/gobjectgobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink-client-disconnected" title="The “client-disconnected” signal">client-disconnected</a></td>
-<td class="signal_flags"><a href="/usr/share/gtk-doc/html/gobjectgobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 </tbody>
 </table></div>
 </div>
 <a name="GstShmSink"></a><div class="refsect1">
 <a name="gst-plugins-bad-plugins-shmsink.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -109,35 +109,20 @@
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-shmsink.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
-    <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
-        <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstObject.html#GstObject-struct">GstObject</a>
-            <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstElement.html#GstElement-struct">GstElement</a>
-                <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-libs-1.0GstBaseSink.html#GstBaseSink-struct">GstBaseSink</a>
+<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+    <span class="lineart">╰──</span> <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
+        <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
+            <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
+                <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSink.html">GstBaseSink</a>
                     <span class="lineart">╰──</span> GstShmSink
 </pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-shmsink.description"></a><h2>Description</h2>
-<p>Send data over shared memory to the matching source.</p>
-<div class="refsect2">
-<a name="id-1.2.111.8.3"></a><h3>Example launch lines</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch<span class="gtkdoc opt">-</span><span class="number">1.0</span> <span class="gtkdoc opt">-</span>v videotestsrc <span class="gtkdoc opt">!</span>  shmsink socket<span class="gtkdoc opt">-</span>path<span class="gtkdoc opt">=/</span>tmp<span class="gtkdoc opt">/</span>blah shm<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">=</span><span class="number">1000000</span></pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
- Send video to shm buffers.
-</div>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="id-1.2.111.8.4.1"></a><h3>Element Information</h3>
+<a name="id-1.2.58.8.2.1"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -163,7 +148,7 @@
 </div>
 <hr>
 <div class="refsect2">
-<a name="id-1.2.111.8.4.2"></a><h3>Element Pads</h3>
+<a name="id-1.2.58.8.2.2"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -190,23 +175,26 @@
 </table></div>
 </div>
 </div>
+<p>
+</p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-shmsink.functions_details"></a><h2>Functions</h2>
-<p></p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-shmsink.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
 <a name="GstShmSink-struct"></a><h3>struct GstShmSink</h3>
 <pre class="programlisting">struct GstShmSink;</pre>
+<p>
+</p>
 </div>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-shmsink.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="GstShmSink--perms"></a><h3>The <code class="literal">“perms”</code> property</h3>
-<pre class="programlisting">  “perms”                    <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#guint"><span class="type">guint</span></a></pre>
+<pre class="programlisting">  “perms”                    <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a></pre>
 <p>Permissions to set on the shm area.</p>
 <p>Flags: Read / Write</p>
 <p>Allowed values: &lt;= 4095</p>
@@ -215,7 +203,7 @@
 <hr>
 <div class="refsect2">
 <a name="GstShmSink--shm-size"></a><h3>The <code class="literal">“shm-size”</code> property</h3>
-<pre class="programlisting">  “shm-size”                 <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#guint"><span class="type">guint</span></a></pre>
+<pre class="programlisting">  “shm-size”                 <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a></pre>
 <p>Size of the shared memory area.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: 67108864</p>
@@ -223,7 +211,7 @@
 <hr>
 <div class="refsect2">
 <a name="GstShmSink--socket-path"></a><h3>The <code class="literal">“socket-path”</code> property</h3>
-<pre class="programlisting">  “socket-path”              <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “socket-path”              <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The path to the control socket used to control the shared memory transport. This may be modified during the NULL-&gt;READY transition.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
@@ -231,7 +219,7 @@
 <hr>
 <div class="refsect2">
 <a name="GstShmSink--wait-for-connection"></a><h3>The <code class="literal">“wait-for-connection”</code> property</h3>
-<pre class="programlisting">  “wait-for-connection”      <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<pre class="programlisting">  “wait-for-connection”      <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Block the stream until the shm pipe is connected.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: TRUE</p>
@@ -239,7 +227,7 @@
 <hr>
 <div class="refsect2">
 <a name="GstShmSink--buffer-time"></a><h3>The <code class="literal">“buffer-time”</code> property</h3>
-<pre class="programlisting">  “buffer-time”              <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gint64"><span class="type">gint64</span></a></pre>
+<pre class="programlisting">  “buffer-time”              <span class="type">gint64</span></pre>
 <p>Maximum Size of the shm buffer in nanoseconds (-1 to disable).</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Allowed values: &gt;= G_MAXULONG</p>
@@ -252,22 +240,71 @@
 <a name="GstShmSink-client-connected"></a><h3>The <code class="literal">“client-connected”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink"><span class="type">GstShmSink</span></a> *gstshmsink,
-               <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gint"><span class="type">gint</span></a>        arg1,
-               <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>    user_data)</pre>
-<p>Flags: <a href="/usr/share/gtk-doc/html/gobjectgobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>        arg1,
+               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>    user_data)</pre>
+<p>
+</p>
+<div class="refsect3">
+<a name="id-1.2.58.12.2.5"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>gstshmsink</p></td>
+<td class="parameter_description"><p>the object which received the signal.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>user_data</p></td>
+<td class="parameter_description"><p>user data set when the signal handler was connected.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="GstShmSink-client-disconnected"></a><h3>The <code class="literal">“client-disconnected”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="gst-plugins-bad-plugins-shmsink.html#GstShmSink"><span class="type">GstShmSink</span></a> *gstshmsink,
-               <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gint"><span class="type">gint</span></a>        arg1,
-               <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>    user_data)</pre>
-<p>Flags: <a href="/usr/share/gtk-doc/html/gobjectgobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>        arg1,
+               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>    user_data)</pre>
+<p>
+</p>
+<div class="refsect3">
+<a name="id-1.2.58.12.3.5"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>gstshmsink</p></td>
+<td class="parameter_description"><p>the object which received the signal.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>user_data</p></td>
+<td class="parameter_description"><p>user data set when the signal handler was connected.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p>Flags: Run Last</p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25</div>
+<hr>
+          Generated by GTK-Doc V1.21</div>
 </body>
 </html>

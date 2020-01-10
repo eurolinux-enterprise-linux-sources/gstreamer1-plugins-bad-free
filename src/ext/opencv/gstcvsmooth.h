@@ -1,7 +1,7 @@
 /*
  * GStreamer
  * Copyright (C) 2010 Thiago Santos <thiago.sousa.santos@collabora.co.uk>
- *
+ * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -44,6 +44,8 @@
 #ifndef __GST_CV_SMOOTH_H__
 #define __GST_CV_SMOOTH_H__
 
+#include <gst/gst.h>
+#include <cv.h>
 #include <gstopencvvideofilter.h>
 
 G_BEGIN_DECLS
@@ -69,13 +71,13 @@ struct _GstCvSmooth
 
   gint type;
 
-  gint width;
-  gint height;
-  gdouble colorsigma;
-  gdouble spatialsigma;
+  gint param1;
+  gint param2;
+  gdouble param3;
+  gdouble param4;
 };
 
-struct _GstCvSmoothClass
+struct _GstCvSmoothClass 
 {
   GstOpencvVideoFilterClass parent_class;
 };

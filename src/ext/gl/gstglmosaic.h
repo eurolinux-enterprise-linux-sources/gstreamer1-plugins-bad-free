@@ -40,7 +40,7 @@ struct _GstGLMosaic
     GstGLMixer mixer;
 
     GstGLShader *shader;
-    GstGLMemory *out_tex;
+    GPtrArray *input_frames;
 };
 
 struct _GstGLMosaicClass

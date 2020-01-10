@@ -78,13 +78,13 @@ gst_gsmenc_class_init (GstGSMEncClass * klass)
   element_class = (GstElementClass *) klass;
   base_class = (GstAudioEncoderClass *) klass;
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gsmenc_sink_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &gsmenc_src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gsmenc_sink_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gsmenc_src_template));
   gst_element_class_set_static_metadata (element_class, "GSM audio encoder",
-      "Codec/Encoder/Audio", "Encodes GSM audio",
-      "Philippe Khalaf <burger@speedy.org>");
+      "Codec/Encoder/Audio",
+      "Encodes GSM audio", "Philippe Khalaf <burger@speedy.org>");
 
   base_class->start = GST_DEBUG_FUNCPTR (gst_gsmenc_start);
   base_class->stop = GST_DEBUG_FUNCPTR (gst_gsmenc_stop);
@@ -97,7 +97,6 @@ gst_gsmenc_class_init (GstGSMEncClass * klass)
 static void
 gst_gsmenc_init (GstGSMEnc * gsmenc)
 {
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_ENCODER_SINK_PAD (gsmenc));
 }
 
 static gboolean

@@ -1,15 +1,28 @@
 
-Release notes for GStreamer Bad Plugins 1.10.4
+Release notes for GStreamer Bad Plugins 1.4.5
 
-The GStreamer team is proud to announce the fourth bugfix release in the stable
-1.10 release series of your favourite cross-platform multimedia framework!
+The GStreamer team is pleased to announce a bugfix release of the stable
+1.4 release series. The 1.4 release series is adding new features on top
+of the 1.2 series and is part of the API and ABI-stable 1.x release
+series of the GStreamer multimedia framework that contains new features.
+The 1.4.x bugfix releases only contain important bugfixes compared to 1.4.0.
 
 
-This release only contains bugfixes and it is safe to update from 1.10.x. For a
-full list of bugfixes see Bugzilla.
+Binaries for Android, iOS, Mac OS X and Windows are provided by the
+GStreamer project for this release.
 
 
-See /releases/1.10/ for the full release notes.
+The 1.x series is a stable series targeted at end users. It is not API
+or ABI compatible with the 0.10.x series. It can, however, be installed
+in parallel with the 0.10.x series and will not affect an existing
+0.10.x installation.
+
+
+The stable 1.4.x release series is API and ABI compatible with 1.0.x and
+any other 1.x release series in the future. Compared to 1.0.x it contains
+some new features and more intrusive changes that were considered too
+risky as a bugfix.
+
 
 
 "That an accusation?"
@@ -60,26 +73,26 @@ contains a set of codecs plugins based on libav (formerly gst-ffmpeg)
 
 Bugs fixed in this release
      
-      * 776612 : adaptivedemux: Handle SEEK event only once
-      * 777841 : waylandsink: fix buffer size when copying to pool
-      * 777957 : mpegdemux: Invalid memory read in gst_ps_demux_parse_psm
-      * 777979 : Vulkan fails to build on i386
-      * 778297 : gl/window: X11 also need attach the GMaincontext in window struct to GSource
-      * 778434 : applemedia: race condition in videotexturecache.m
-      * 778452 : glsinkbin: leaks sink element
-      * 778828 : hlsdemux: Fix GHashTable leak
+      * 722764 : rawparse: fix SEEKING query handling
+      * 729768 : mpegtsbase: Raise limit to read more bytes initially to find PCR
+      * 739152 : gl/cocoa: build with GNUStep fails
+      * 740191 : dvbbasesink: segfaults on 32-bit (rpi)
+      * 740201 : gl/cocoa: Does not compile on OSX < 10.7 anymore
+      * 740451 : srtpdec: leaks rtp/rtcp sink events
+      * 740953 : configure.ac: unportable test(1) comparison operator
+      * 741321 : opusparse: fix header parsing esp. of encoded output of libopus
 
 ==== Download ====
 
 You can find source releases of gst-plugins-bad in the download
-directory: https://gstreamer.freedesktop.org/src/gst-plugins-bad/
+directory: http://gstreamer.freedesktop.org/src/gst-plugins-bad/
 
 The git repository and details how to clone it can be found at
 http://cgit.freedesktop.org/gstreamer/gst-plugins-bad/
 
 ==== Homepage ====
 
-The project's website is https://gstreamer.freedesktop.org/
+The project's website is http://gstreamer.freedesktop.org/
 
 ==== Support and Bugs ====
 
@@ -104,13 +117,17 @@ subscribe to the gstreamer-devel list.
         
 Contributors to this release
     
-      * Arun Raghavan
-      * Fabien Dessenne
-      * Haihua Hu
-      * Jan Schmidt
-      * Juan Pablo Ugarte
+      * Aleix Conchillo Flaqué
+      * Alessandro Decina
+      * Gwenole Beauchesne
+      * Mathieu Duponchelle
       * Matthew Waters
-      * Nick Kallen
       * Sebastian Dröge
-      * Seungha Yang
+      * Sudip Jain
+      * Thibault Saunier
+      * Thomas Klausner
+      * Tim-Philipp Müller
+      * Vincent Penquerc'h
+      * Wim Taymans
+      * Wonchul Lee
  

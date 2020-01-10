@@ -29,8 +29,8 @@ G_BEGIN_DECLS
 #define GST_GL_TYPE_CONTEXT_EAGL         (gst_gl_context_eagl_get_type())
 #define GST_GL_CONTEXT_EAGL(o)           (G_TYPE_CHECK_INSTANCE_CAST((o), GST_GL_TYPE_CONTEXT_EAGL, GstGLContextEagl))
 #define GST_GL_CONTEXT_EAGL_CLASS(k)     (G_TYPE_CHECK_CLASS((k), GST_GL_TYPE_CONTEXT_EAGL, GstGLContextEaglClass))
-#define GST_IS_GL_CONTEXT_EAGL(o)        (G_TYPE_CHECK_INSTANCE_TYPE((o), GST_GL_TYPE_CONTEXT_EAGL))
-#define GST_IS_GL_CONTEXT_EAGL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE((k), GST_GL_TYPE_CONTEXT_EAGL))
+#define GST_GL_IS_CONTEXT_EAGL(o)        (G_TYPE_CHECK_INSTANCE_TYPE((o), GST_GL_TYPE_CONTEXT_EAGL))
+#define GST_GL_IS_CONTEXT_EAGL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE((k), GST_GL_TYPE_CONTEXT_EAGL))
 #define GST_GL_CONTEXT_EAGL_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS((o), GST_GL_TYPE_CONTEXT_EAGL, GstGLContextEaglClass))
 
 typedef struct _GstGLContextEagl        GstGLContextEagl;
@@ -57,13 +57,10 @@ struct _GstGLContextEaglClass {
 
 GType gst_gl_context_eagl_get_type (void);
 
-GstGLContextEagl * gst_gl_context_eagl_new (GstGLDisplay * display);
+GstGLContextEagl * gst_gl_context_eagl_new (void);
 
-void gst_gl_context_eagl_update_layer (GstGLContext * context);
-void gst_gl_context_eagl_resize (GstGLContextEagl * eagl_context);
 void gst_gl_context_eagl_prepare_draw (GstGLContextEagl * context);
 void gst_gl_context_eagl_finish_draw (GstGLContextEagl * context);
-guintptr gst_gl_context_eagl_get_current_context (void);
 
 G_END_DECLS
 

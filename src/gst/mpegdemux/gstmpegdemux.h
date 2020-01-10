@@ -42,8 +42,8 @@
  *                 Jan Schmidt <thaytan@noraisin.net>
  */
 
-#ifndef __GST_PS_DEMUX_H__
-#define __GST_PS_DEMUX_H__
+#ifndef __GST_FLUPS_DEMUX_H__
+#define __GST_FLUPS_DEMUX_H__
 
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
@@ -53,39 +53,39 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_PS_DEMUX		(gst_ps_demux_get_type())
-#define GST_PS_DEMUX(obj)		(G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_PS_DEMUX,GstPsDemux))
-#define GST_PS_DEMUX_CLASS(klass)	(G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_PS_DEMUX,GstPsDemuxClass))
-#define GST_PS_DEMUX_GET_CLASS(klass) (G_TYPE_INSTANCE_GET_CLASS((klass),GST_TYPE_PS_DEMUX,GstPsDemuxClass))
-#define GST_IS_PS_DEMUX(obj)		(G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_PS_DEMUX))
-#define GST_IS_PS_DEMUX_CLASS(obj)	(G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_PS_DEMUX))
+#define GST_TYPE_FLUPS_DEMUX		(gst_flups_demux_get_type())
+#define GST_FLUPS_DEMUX(obj)		(G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_FLUPS_DEMUX,GstFluPSDemux))
+#define GST_FLUPS_DEMUX_CLASS(klass)	(G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_FLUPS_DEMUX,GstFluPSDemuxClass))
+#define GST_FLUPS_DEMUX_GET_CLASS(klass) (G_TYPE_INSTANCE_GET_CLASS((klass),GST_TYPE_FLUPS_DEMUX,GstFluPSDemuxClass))
+#define GST_IS_FLUPS_DEMUX(obj)		(G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_FLUPS_DEMUX))
+#define GST_IS_FLUPS_DEMUX_CLASS(obj)	(G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_FLUPS_DEMUX))
 
-typedef struct _GstPsStream GstPsStream;
-typedef struct _GstPsDemux GstPsDemux;
-typedef struct _GstPsDemuxClass GstPsDemuxClass;
+typedef struct _GstFluPSStream GstFluPSStream;
+typedef struct _GstFluPSDemux GstFluPSDemux;
+typedef struct _GstFluPSDemuxClass GstFluPSDemuxClass;
 
-#define GST_PS_DEMUX_MAX_STREAMS	256
-#define GST_PS_DEMUX_MAX_PSM		256
+#define GST_FLUPS_DEMUX_MAX_STREAMS	256
+#define GST_FLUPS_DEMUX_MAX_PSM		256
 
 #define MAX_DVD_AUDIO_STREAMS       8
 #define MAX_DVD_SUBPICTURE_STREAMS  32
 
 typedef enum
 {
-  GST_PS_DEMUX_SYNC_AUTO = 0,
-  GST_PS_DEMUX_SYNC_SCR = 1,
-  GST_PS_DEMUX_SYNC_DTS = 2
-} GstPsDemuxSync;
+  GST_FLUPS_DEMUX_SYNC_AUTO = 0,
+  GST_FLUPS_DEMUX_SYNC_SCR = 1,
+  GST_FLUPS_DEMUX_SYNC_DTS = 2
+} GstFluPSDemuxSync;
 
 typedef enum
 {
-  STATE_PS_DEMUX_NEED_SYNC,
-  STATE_PS_DEMUX_SYNCED,
-  STATE_PS_DEMUX_NEED_MORE_DATA,
-} GstPsDemuxState;
+  STATE_FLUPS_DEMUX_NEED_SYNC,
+  STATE_FLUPS_DEMUX_SYNCED,
+  STATE_FLUPS_DEMUX_NEED_MORE_DATA,
+} GstFluPSDemuxState;
 
 /* Information associated with a single FluPS stream. */
-struct _GstPsStream
+struct _GstFluPSStream
 {
   GstPad *pad;
 
@@ -102,7 +102,7 @@ struct _GstPsStream
   GstTagList *pending_tags;
 };
 
-struct _GstPsDemux
+struct _GstFluPSDemux
 {
   GstElement parent;
 
@@ -137,18 +137,18 @@ struct _GstPsDemux
   guint64 first_pts;
   guint64 last_pts;
 
-  gint16 psm[GST_PS_DEMUX_MAX_PSM];
+  gint16 psm[GST_FLUPS_DEMUX_MAX_PSM];
 
   GstSegment sink_segment;
   GstSegment src_segment;
   gboolean adjust_segment;
 
   /* stream output */
-  GstPsStream *current_stream;
+  GstFluPSStream *current_stream;
   guint64 next_pts;
   guint64 next_dts;
-  GstPsStream **streams;
-  GstPsStream **streams_found;
+  GstFluPSStream **streams;
+  GstFluPSStream **streams_found;
   gint found_count;
   gboolean need_no_more_pads;
 
@@ -158,7 +158,7 @@ struct _GstPsDemux
   gboolean is_mpeg2_pack;
 };
 
-struct _GstPsDemuxClass
+struct _GstFluPSDemuxClass
 {
   GstElementClass parent_class;
 
@@ -169,7 +169,7 @@ struct _GstPsDemuxClass
   GstPadTemplate *private_template;
 };
 
-GType gst_ps_demux_get_type (void);
+GType gst_flups_demux_get_type (void);
 
 G_END_DECLS
-#endif /* __GST_PS_DEMUX_H__ */
+#endif /* __GST_FLUPS_DEMUX_H__ */

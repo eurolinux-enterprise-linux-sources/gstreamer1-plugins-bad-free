@@ -98,9 +98,10 @@ G_BEGIN_DECLS
 #define CLOCK_FREQ (CLOCK_BASE * 10000)   /* 90 kHz PTS clock */
 #define CLOCK_FREQ_SCR (CLOCK_FREQ * 300) /* 27 MHz SCR clock */
 
-#define GSTTIME_TO_MPEGTIME(time) \
-    (((time) > 0 ? (gint64) 1 : (gint64) -1) * \
-    (gint64) gst_util_uint64_scale (ABS(time), CLOCK_BASE, GST_MSECOND/10))
+#define MPEGTIME_TO_GSTTIME(time) (gst_util_uint64_scale ((time), \
+                        GST_MSECOND/10, CLOCK_BASE))
+#define GSTTIME_TO_MPEGTIME(time) (gst_util_uint64_scale ((time), \
+                        CLOCK_BASE, GST_MSECOND/10))
 
 /* 27 MHz SCR conversions: */
 #define MPEG_SYS_TIME_TO_GSTTIME(time) (gst_util_uint64_scale ((time), \
@@ -111,6 +112,7 @@ G_BEGIN_DECLS
 #define NORMAL_TS_PACKET_LENGTH 188
 #define M2TS_PACKET_LENGTH      192
 
+#define MAX_PROG_NUMBER	32
 #define DEFAULT_PROG_ID	0
 
 typedef struct MpegTsMux MpegTsMux;
@@ -130,7 +132,7 @@ struct MpegTsMux {
   GstCollectPads *collect;
 
   TsMux *tsmux;
-  GHashTable *programs;
+  TsMuxProgram *programs[MAX_PROG_NUMBER];
 
   /* properties */
   gboolean m2ts_mode;
@@ -147,10 +149,9 @@ struct MpegTsMux {
 
   /* write callback handling/state */
   GstFlowReturn last_flow_ret;
-  GQueue streamheader;
+  GList *streamheader;
   gboolean streamheader_sent;
   gboolean is_delta;
-  gboolean is_header;
   GstClockTime last_ts;
 
   /* m2ts specific */
@@ -175,6 +176,8 @@ struct MpegTsMuxClass {
   GstElementClass parent_class;
 };
 
+#define MPEG_TS_PAD_DATA(data)  ((MpegTsPadData *)(data))
+
 struct MpegTsPadData {
   /* parent */
   GstCollectData collect;
@@ -182,8 +185,8 @@ struct MpegTsPadData {
   gint pid;
   TsMuxStream *stream;
 
-  /* most recent DTS */
-  gint64 dts;
+  /* most recent valid TS for this stream */
+  GstClockTime min_dts;
 
 #if 0
   /* (optional) index writing */
@@ -201,9 +204,9 @@ struct MpegTsPadData {
   /* handler to free the private data */
   MpegTsPadDataFreePrepareDataFunction free_func;
 
-  /* program id to which it is attached to (not program pid) */
+  /* program id == idx to which it is attached to (not program pid) */
   gint prog_id;
-  /* program this stream belongs to */
+  /* program this stream belongs to == mux->programs[prog_id] */
   TsMuxProgram *prog;
 
   gchar *language;

@@ -44,7 +44,6 @@ struct _GstVTEncoderDetails
   const gchar * element_name;
   const gchar * mimetype;
   CMVideoCodecType format_id;
-  gboolean require_hardware;
 };
 
 struct _GstVTEncClass
@@ -77,7 +76,7 @@ struct _GstVTEnc
   GstVideoCodecState *input_state;
   GstVideoInfo video_info;
   VTCompressionSessionRef session;
-  CFDictionaryRef keyframe_props;
+  CFMutableDictionaryRef options;
 
   GAsyncQueue * cur_outframes;
 };

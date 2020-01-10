@@ -30,7 +30,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! ffenc_flv ! flvmux ! rtmpsink location='rtmp://localhost/path/to/stream live=1'
+ * gst-launch -v videotestsrc ! ffenc_flv ! flvmux ! rtmpsink location='rtmp://localhost/path/to/stream live=1'
  * ]| Encode a test video stream to FLV video format and stream it via RTMP.
  * </refsect2>
  */
@@ -75,8 +75,6 @@ static void gst_rtmp_sink_get_property (GObject * object, guint prop_id,
 static void gst_rtmp_sink_finalize (GObject * object);
 static gboolean gst_rtmp_sink_stop (GstBaseSink * sink);
 static gboolean gst_rtmp_sink_start (GstBaseSink * sink);
-static gboolean gst_rtmp_sink_event (GstBaseSink * sink, GstEvent * event);
-static gboolean gst_rtmp_sink_setcaps (GstBaseSink * sink, GstCaps * caps);
 static GstFlowReturn gst_rtmp_sink_render (GstBaseSink * sink, GstBuffer * buf);
 
 #define gst_rtmp_sink_parent_class parent_class
@@ -109,13 +107,12 @@ gst_rtmp_sink_class_init (GstRTMPSinkClass * klass)
       "Sink/Network", "Sends FLV content to a server via RTMP",
       "Jan Schmidt <thaytan@noraisin.net>");
 
-  gst_element_class_add_static_pad_template (gstelement_class, &sink_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sink_template));
 
   gstbasesink_class->start = GST_DEBUG_FUNCPTR (gst_rtmp_sink_start);
   gstbasesink_class->stop = GST_DEBUG_FUNCPTR (gst_rtmp_sink_stop);
   gstbasesink_class->render = GST_DEBUG_FUNCPTR (gst_rtmp_sink_render);
-  gstbasesink_class->set_caps = GST_DEBUG_FUNCPTR (gst_rtmp_sink_setcaps);
-  gstbasesink_class->event = GST_DEBUG_FUNCPTR (gst_rtmp_sink_event);
 
   GST_DEBUG_CATEGORY_INIT (gst_rtmp_sink_debug, "rtmpsink", 0,
       "RTMP server element");
@@ -163,17 +160,15 @@ gst_rtmp_sink_start (GstBaseSink * basesink)
 
   sink->rtmp_uri = g_strdup (sink->uri);
   sink->rtmp = RTMP_Alloc ();
-
-  if (!sink->rtmp) {
-    GST_ERROR_OBJECT (sink, "Could not allocate librtmp's RTMP context");
-    goto error;
-  }
-
   RTMP_Init (sink->rtmp);
   if (!RTMP_SetupURL (sink->rtmp, sink->rtmp_uri)) {
     GST_ELEMENT_ERROR (sink, RESOURCE, OPEN_WRITE, (NULL),
         ("Failed to setup URL '%s'", sink->uri));
-    goto error;
+    RTMP_Free (sink->rtmp);
+    sink->rtmp = NULL;
+    g_free (sink->rtmp_uri);
+    sink->rtmp_uri = NULL;
+    return FALSE;
   }
 
   GST_DEBUG_OBJECT (sink, "Created RTMP object");
@@ -182,18 +177,8 @@ gst_rtmp_sink_start (GstBaseSink * basesink)
   RTMP_EnableWrite (sink->rtmp);
 
   sink->first = TRUE;
-  sink->have_write_error = FALSE;
 
   return TRUE;
-
-error:
-  if (sink->rtmp) {
-    RTMP_Free (sink->rtmp);
-    sink->rtmp = NULL;
-  }
-  g_free (sink->rtmp_uri);
-  sink->rtmp_uri = NULL;
-  return FALSE;
 }
 
 static gboolean
@@ -201,10 +186,8 @@ gst_rtmp_sink_stop (GstBaseSink * basesink)
 {
   GstRTMPSink *sink = GST_RTMP_SINK (basesink);
 
-  if (sink->header) {
-    gst_buffer_unref (sink->header);
-    sink->header = NULL;
-  }
+  gst_buffer_replace (&sink->cache, NULL);
+
   if (sink->rtmp) {
     RTMP_Close (sink->rtmp);
     RTMP_Free (sink->rtmp);
@@ -222,19 +205,8 @@ static GstFlowReturn
 gst_rtmp_sink_render (GstBaseSink * bsink, GstBuffer * buf)
 {
   GstRTMPSink *sink = GST_RTMP_SINK (bsink);
-  gboolean need_unref = FALSE;
-  GstMapInfo map = GST_MAP_INFO_INIT;
-
-  if (sink->rtmp == NULL) {
-    /* Do not crash */
-    GST_ELEMENT_ERROR (sink, RESOURCE, WRITE, (NULL), ("Failed to write data"));
-    return GST_FLOW_ERROR;
-  }
-
-  /* Ignore buffers that are in the stream headers (caps) */
-  if (GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_HEADER)) {
-    return GST_FLOW_OK;
-  }
+  GstBuffer *reffed_buf = NULL;
+  GstMapInfo map;
 
   if (sink->first) {
     /* open the connection */
@@ -247,24 +219,27 @@ gst_rtmp_sink_render (GstBaseSink * bsink, GstBuffer * buf)
         sink->rtmp = NULL;
         g_free (sink->rtmp_uri);
         sink->rtmp_uri = NULL;
-        sink->have_write_error = TRUE;
         return GST_FLOW_ERROR;
       }
       GST_DEBUG_OBJECT (sink, "Opened connection to %s", sink->rtmp_uri);
     }
 
-    /* Prepend the header from the caps to the first non header buffer */
-    if (sink->header) {
-      buf = gst_buffer_append (gst_buffer_ref (sink->header),
-          gst_buffer_ref (buf));
-      need_unref = TRUE;
-    }
-
+    /* FIXME: Parse the first buffer and see if it contains a header plus a packet instead
+     * of just assuming it's only the header */
+    GST_LOG_OBJECT (sink, "Caching first buffer of size %" G_GSIZE_FORMAT
+        " for concatenation", gst_buffer_get_size (buf));
+    gst_buffer_replace (&sink->cache, buf);
     sink->first = FALSE;
+    return GST_FLOW_OK;
   }
 
-  if (sink->have_write_error)
-    goto write_failed;
+  if (sink->cache) {
+    GST_LOG_OBJECT (sink, "Joining 2nd buffer of size %" G_GSIZE_FORMAT
+        " to cached buf", gst_buffer_get_size (buf));
+    gst_buffer_ref (buf);
+    reffed_buf = buf = gst_buffer_append (sink->cache, buf);
+    sink->cache = NULL;
+  }
 
   GST_LOG_OBJECT (sink, "Sending %" G_GSIZE_FORMAT " bytes to RTMP server",
       gst_buffer_get_size (buf));
@@ -275,8 +250,8 @@ gst_rtmp_sink_render (GstBaseSink * bsink, GstBuffer * buf)
     goto write_failed;
 
   gst_buffer_unmap (buf, &map);
-  if (need_unref)
-    gst_buffer_unref (buf);
+  if (reffed_buf)
+    gst_buffer_unref (reffed_buf);
 
   return GST_FLOW_OK;
 
@@ -285,9 +260,8 @@ write_failed:
   {
     GST_ELEMENT_ERROR (sink, RESOURCE, WRITE, (NULL), ("Failed to write data"));
     gst_buffer_unmap (buf, &map);
-    if (need_unref)
-      gst_buffer_unref (buf);
-    sink->have_write_error = TRUE;
+    if (reffed_buf)
+      gst_buffer_unref (reffed_buf);
     return GST_FLOW_ERROR;
   }
 }
@@ -356,10 +330,8 @@ gst_rtmp_sink_uri_set_uri (GstURIHandler * handler, const gchar * uri,
       free (playpath.av_val);
   }
 
-  if (ret) {
-    sink->have_write_error = FALSE;
+  if (ret)
     GST_DEBUG_OBJECT (sink, "Changed URI to %s", GST_STR_NULL (uri));
-  }
 
   return ret;
 }
@@ -390,65 +362,6 @@ gst_rtmp_sink_set_property (GObject * object, guint prop_id,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
-}
-
-static gboolean
-gst_rtmp_sink_setcaps (GstBaseSink * sink, GstCaps * caps)
-{
-  GstRTMPSink *rtmpsink = GST_RTMP_SINK (sink);
-  GstStructure *s;
-  const GValue *sh;
-  GArray *buffers;
-  gint i;
-
-  GST_DEBUG_OBJECT (sink, "caps set to %" GST_PTR_FORMAT, caps);
-
-  /* Clear our current header buffer */
-  if (rtmpsink->header) {
-    gst_buffer_unref (rtmpsink->header);
-    rtmpsink->header = NULL;
-  }
-
-  rtmpsink->header = gst_buffer_new ();
-
-  s = gst_caps_get_structure (caps, 0);
-
-  sh = gst_structure_get_value (s, "streamheader");
-  buffers = g_value_peek_pointer (sh);
-
-  /* Concatenate all buffers in streamheader into one */
-  for (i = 0; i < buffers->len; ++i) {
-    GValue *val;
-    GstBuffer *buf;
-
-    val = &g_array_index (buffers, GValue, i);
-    buf = g_value_peek_pointer (val);
-
-    gst_buffer_ref (buf);
-
-    rtmpsink->header = gst_buffer_append (rtmpsink->header, buf);
-  }
-
-  GST_DEBUG_OBJECT (rtmpsink, "have %" G_GSIZE_FORMAT " bytes of header data",
-      gst_buffer_get_size (rtmpsink->header));
-
-  return TRUE;
-}
-
-static gboolean
-gst_rtmp_sink_event (GstBaseSink * sink, GstEvent * event)
-{
-  GstRTMPSink *rtmpsink = GST_RTMP_SINK (sink);
-
-  switch (event->type) {
-    case GST_EVENT_FLUSH_STOP:
-      rtmpsink->have_write_error = FALSE;
-      break;
-    default:
-      break;
-  }
-
-  return GST_BASE_SINK_CLASS (parent_class)->event (sink, event);
 }
 
 static void

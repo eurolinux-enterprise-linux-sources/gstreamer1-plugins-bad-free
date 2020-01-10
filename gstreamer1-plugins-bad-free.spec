@@ -9,7 +9,7 @@
 %endif
 
 Name:           gstreamer1-plugins-bad-free
-Version:        1.10.4
+Version:        1.4.5
 Release:        3%{?dist}
 Summary:        GStreamer streaming media framework "bad" plugins
 
@@ -20,6 +20,9 @@ URL:            http://gstreamer.freedesktop.org/
 # modified with gst-p-bad-cleanup.sh from SOURCE1
 Source0:        gst-plugins-bad-free-%{version}.tar.xz
 Source1:        gst-p-bad-cleanup.sh
+Patch0:         0001-bayer-update-ORC-files.patch
+Patch1:         update-test-check-orc-bayer.patch
+Patch2:         0001-tests-fix-audiomixer-test-on-big-endian-systems.patch
 
 BuildRequires:  gstreamer1-devel >= %{version}
 BuildRequires:  gstreamer1-plugins-base-devel >= %{version}
@@ -43,7 +46,6 @@ BuildRequires:  liboil-devel
 BuildRequires:  librsvg2-devel
 BuildRequires:  libsndfile-devel
 BuildRequires:  mesa-libGL-devel
-BuildRequires:  mesa-libGLES-devel
 BuildRequires:  mesa-libGLU-devel
 BuildRequires:  openssl-devel
 BuildRequires:  orc-devel
@@ -57,35 +59,26 @@ BuildRequires:  libwayland-client-devel
 %endif
 BuildRequires:  gnutls-devel
 BuildRequires:  libsrtp-devel
-BuildRequires:  pkgconfig(gudev-1.0)
-BuildRequires:  pkgconfig(libusb-1.0)
-BuildRequires:  gtk3-devel >= 3.4
 
 BuildRequires:  chrpath
 
 %if %{with extras}
-BuildRequires:  bluez-libs-devel >= 5.0
-BuildRequires:  libbs2b-devel >= 3.1.0
 ## Plugins not ported
 #BuildRequires:  dirac-devel
 #BuildRequires:  gmyth-devel >= 0.4
 BuildRequires:  fluidsynth-devel
 BuildRequires:  libass-devel
-BuildRequires:  libchromaprint-devel
 ## Plugin not ported
 #BuildRequires:  libcdaudio-devel
 BuildRequires:  libcurl-devel
-BuildRequires:  game-music-emu-devel
 BuildRequires:  libkate-devel
 BuildRequires:  libmodplug-devel
-BuildRequires:  libofa-devel
 ## Plugins not ported
 #BuildRequires:  libmusicbrainz-devel
 #BuildRequires:  libtimidity-devel
 BuildRequires:  libvdpau-devel
-BuildRequires:  openal-soft-devel
+# Requires opencv version < 2.3.1, Rawhide currently has 2.4.2
 #BuildRequires:  opencv-devel
-BuildRequires:  openjpeg-devel
 BuildRequires:  schroedinger-devel
 ## Plugins not ported
 #BuildRequires:  SDL-devel
@@ -103,19 +96,6 @@ operate on media data.
 
 This package contains plug-ins that aren't tested well enough, or the code
 is not of good enough quality.
-
-%package gtk
-Summary:         GStreamer "bad" plugins gtk plugin
-Requires:        %{name} = %{version}-%{release}
-
-%description gtk
-GStreamer is a streaming media framework, based on graphs of elements which
-operate on media data.
-
-gstreamer-plugins-bad contains plug-ins that aren't tested well enough,
-or the code is not of good enough quality.
-
-This package (%{name}-gtk) contains the gtksink output plugin.
 
 
 %if %{with extras}
@@ -149,23 +129,8 @@ operate on media data.
 gstreamer-plugins-bad contains plug-ins that aren't tested well enough,
 or the code is not of good enough quality.
 
-This package (%{name}-fluidsynth) contains the fluidsynth
-plugin which allows playback of midi files.
-
-
-%package wildmidi
-Summary:         GStreamer "bad" plugins wildmidi plugin
-Requires:        %{name} = %{version}-%{release}
-
-%description wildmidi
-GStreamer is a streaming media framework, based on graphs of elements which
-operate on media data.
-
-gstreamer-plugins-bad contains plug-ins that aren't tested well enough,
-or the code is not of good enough quality.
-
-This package (%{name}-wildmidi) contains the wildmidi
-plugin which allows playback of midi files.
+This package (%{name}-fluidsynth) contains the fluidsynth plugin which allows
+playback of midi files.
 %endif
 
 
@@ -185,104 +150,36 @@ aren't tested well enough, or the code is not of good enough quality.
 
 %prep
 %setup -q -n gst-plugins-bad-%{version}
+%patch0 -p1
+%patch1 -p1
+%patch2 -p1
 
 
 %build
-%configure --disable-silent-rules --disable-fatal-warnings \
-    --with-package-name="GStreamer-plugins-bad-free package" \
-    --with-package-origin="http://www.redhat.com" \
-    %{!?with_extras:--disable-fbdev --disable-decklink --disable-linsys \
-      --disable-assrender --disable-bluez --disable-bs2b --disable-curl \
-      --disable-dc1394 --disable-fluidsynth --disable-gme --disable-kate \
-      --disable-modplug --disable-openexr --disable-qt --disable-schro \
-      --disable-teletextdec --disable-vdpau --disable-webrtcdsp \
-      --disable-wildmidi --disable-zbar --disable-wayland } \
+%configure \
+    --with-package-name="Fedora GStreamer-plugins-bad package" \
+    --with-package-origin="http://download.fedoraproject.org" \
+    %{!?with_extras:--disable-fbdev --disable-decklink --disable-linsys} \
     --enable-debug --disable-static --enable-gtk-doc --enable-experimental \
     --disable-dts --disable-faac --disable-faad --disable-nas \
     --disable-mimic --disable-libmms --disable-mpeg2enc --disable-mplex \
     --disable-neon --disable-openal --disable-rtmp --disable-xvid \
     --disable-chromaprint --disable-eglgles --disable-flite \
-    --disable-ofa --disable-opencv --disable-sbc \
+    --disable-mpg123 --disable-ofa --disable-opencv --disable-sbc \
     --disable-spandsp --disable-uvch264 --disable-voamrwbenc \
-    --disable-webp --disable-openjpeg --disable-x265
+    --disable-webp --disable-openjpeg
 make %{?_smp_mflags}
 
 
 %install
+rm -rf $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
-
-# Register as an AppStream component to be visible in the software center
-#
-# NOTE: It would be *awesome* if this file was maintained by the upstream
-# project, translated and installed into the right place during `make install`.
-#
-# See http://www.freedesktop.org/software/appstream/docs/ for more details.
-#
-mkdir -p $RPM_BUILD_ROOT%{_datadir}/appdata
-cat > $RPM_BUILD_ROOT%{_datadir}/appdata/gstreamer-bad-free.appdata.xml <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Copyright 2013 Richard Hughes <richard@hughsie.com> -->
-<component type="codec">
-  <id>gstreamer-bad-free</id>
-  <metadata_license>CC0-1.0</metadata_license>
-  <name>GStreamer Multimedia Codecs - Extra</name>
-  <summary>Multimedia playback for AIFF, DVB, GSM, MIDI, MXF and Opus</summary>
-  <description>
-    <p>
-      This addon includes several additional codecs that are missing
-      something - perhaps a good code review, some documentation, a set of
-      tests, a real live maintainer, or some actual wide use.
-      However, they might be good enough to play your media files.
-    </p>
-    <p>
-      These codecs can be used to encode and decode media files where the
-      format is not patent encumbered.
-    </p>
-    <p>
-      A codec decodes audio and video for for playback or editing and is also
-      used for transmission or storage.
-      Different codecs are used in video-conferencing, streaming media and
-      video editing applications.
-    </p>
-  </description>
-  <keywords>
-    <keyword>AIFF</keyword>
-    <keyword>DVB</keyword>
-    <keyword>GSM</keyword>
-    <keyword>MIDI</keyword>
-    <keyword>MXF</keyword>
-    <keyword>Opus</keyword>
-  </keywords>
-  <url type="homepage">http://gstreamer.freedesktop.org/</url>
-  <url type="bugtracker">https://bugzilla.gnome.org/enter_bug.cgi?product=GStreamer</url>
-  <url type="help">http://gstreamer.freedesktop.org/documentation/</url>
-  <url type="donation">http://www.gnome.org/friends/</url>
-  <update_contact><!-- upstream-contact_at_email.com --></update_contact>
-</component>
-EOF
 
 %find_lang gst-plugins-bad-%{majorminor}
 find $RPM_BUILD_ROOT -name '*.la' -exec rm -f {} ';'
 # Kill rpath
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstaudiomixer.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstcamerabin2.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstcompositor.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstdashdemux.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstdvb.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstgtksink.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgsthls.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstmpegtsdemux.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstmpegtsmux.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstmxf.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstopengl.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstsmoothstreaming.so
-%if %{with extras}
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstvdpau.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstwaylandsink.so
-%endif
 chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstvideoparsersbad.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstadaptivedemux-%{majorminor}.so
-chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
+chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstcamerabin2.so
 
 
 %post -p /sbin/ldconfig
@@ -292,40 +189,23 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
 
 
 %files -f gst-plugins-bad-%{majorminor}.lang
-%license COPYING COPYING.LIB
-%doc AUTHORS README REQUIREMENTS
+%doc AUTHORS COPYING COPYING.LIB README REQUIREMENTS
 
-%{_datadir}/appdata/*.appdata.xml
-
-# presets
-%dir %{_datadir}/gstreamer-%{majorminor}/presets/
-%{_datadir}/gstreamer-%{majorminor}/presets/GstFreeverb.prs
-
-# opencv data
-#%dir %{_datadir}/gst-plugins-bad/%{majorminor}/opencv_haarcascades/
-#%{_datadir}/gst-plugins-bad/%{majorminor}/opencv_haarcascades/fist.xml
-#%{_datadir}/gst-plugins-bad/%{majorminor}/opencv_haarcascades/palm.xml
-
-%{_libdir}/libgstadaptivedemux-%{majorminor}.so.*
 %{_libdir}/libgstbasecamerabinsrc-%{majorminor}.so.*
-%{_libdir}/libgstbadaudio-%{majorminor}.so.*
 %{_libdir}/libgstbadbase-%{majorminor}.so.*
 %{_libdir}/libgstbadvideo-%{majorminor}.so.*
 %{_libdir}/libgstcodecparsers-%{majorminor}.so.*
 %{_libdir}/libgstgl-%{majorminor}.so.*
 %{_libdir}/libgstinsertbin-%{majorminor}.so.*
 %{_libdir}/libgstmpegts-%{majorminor}.so.*
-%{_libdir}/libgstplayer-%{majorminor}.so.*
 %{_libdir}/libgstphotography-%{majorminor}.so.*
 %{_libdir}/libgsturidownloader-%{majorminor}.so.*
 %if 0%{?fedora}
 %{_libdir}/libgstwayland-%{majorminor}.so.*
 %endif
 
-%{_libdir}/girepository-1.0/GstGL-1.0.typelib
 %{_libdir}/girepository-1.0/GstInsertBin-1.0.typelib
 %{_libdir}/girepository-1.0/GstMpegts-1.0.typelib
-%{_libdir}/girepository-1.0/GstPlayer-1.0.typelib
 
 # Plugins without external dependencies
 %{_libdir}/gstreamer-%{majorminor}/libgstaccurip.so
@@ -360,13 +240,13 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
 %{_libdir}/gstreamer-%{majorminor}/libgstivtc.so
 %{_libdir}/gstreamer-%{majorminor}/libgstjp2kdecimator.so
 %{_libdir}/gstreamer-%{majorminor}/libgstjpegformat.so
+%{_libdir}/gstreamer-%{majorminor}/libgstliveadder.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmidi.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmpegpsdemux.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmpegtsdemux.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmpegpsmux.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmpegtsmux.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmxf.so
-%{_libdir}/gstreamer-%{majorminor}/libgstnetsim.so
 %{_libdir}/gstreamer-%{majorminor}/libgstpcapparse.so
 %{_libdir}/gstreamer-%{majorminor}/libgstpnm.so
 %{_libdir}/gstreamer-%{majorminor}/libgstrawparse.so
@@ -374,7 +254,6 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
 %{_libdir}/gstreamer-%{majorminor}/libgstresindvd.so
 %{_libdir}/gstreamer-%{majorminor}/libgstrfbsrc.so
 %{_libdir}/gstreamer-%{majorminor}/libgstrsvg.so
-%{_libdir}/gstreamer-%{majorminor}/libgstrtponvif.so
 %{_libdir}/gstreamer-%{majorminor}/libgstsdpelem.so
 %{_libdir}/gstreamer-%{majorminor}/libgstsegmentclip.so
 %{_libdir}/gstreamer-%{majorminor}/libgstshm.so
@@ -383,12 +262,10 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
 %{_libdir}/gstreamer-%{majorminor}/libgstspeed.so
 %{_libdir}/gstreamer-%{majorminor}/libgststereo.so
 %{_libdir}/gstreamer-%{majorminor}/libgstsubenc.so
-%{_libdir}/gstreamer-%{majorminor}/libgsttimecode.so
 %if %{with extras}
 %{_libdir}/gstreamer-%{majorminor}/libgstvdpau.so
 %endif
 %{_libdir}/gstreamer-%{majorminor}/libgstvideofiltersbad.so
-%{_libdir}/gstreamer-%{majorminor}/libgstvideoframe_audiolevel.so
 %{_libdir}/gstreamer-%{majorminor}/libgstvideoparsersbad.so
 %{_libdir}/gstreamer-%{majorminor}/libgstvideosignal.so
 %{_libdir}/gstreamer-%{majorminor}/libgstvmnc.so
@@ -397,18 +274,14 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
 
 # System (Linux) specific plugins
 %{_libdir}/gstreamer-%{majorminor}/libgstdvb.so
-%{_libdir}/gstreamer-%{majorminor}/libgstvcdsrc.so
 
 # Plugins with external dependencies
 %{_libdir}/gstreamer-%{majorminor}/libgstbz2.so
-%{_libdir}/gstreamer-%{majorminor}/libgstdtls.so
-%{_libdir}/gstreamer-%{majorminor}/libgsthls.so
+%{_libdir}/gstreamer-%{majorminor}/libgstfragmented.so
 %{_libdir}/gstreamer-%{majorminor}/libgstgsm.so
-%{_libdir}/gstreamer-%{majorminor}/libgstkmssink.so
 %{_libdir}/gstreamer-%{majorminor}/libgstladspa.so
-%{_libdir}/gstreamer-%{majorminor}/libgstmusepack.so
 %{_libdir}/gstreamer-%{majorminor}/libgstopengl.so
-%{_libdir}/gstreamer-%{majorminor}/libgstopusparse.so
+%{_libdir}/gstreamer-%{majorminor}/libgstopus.so
 %{_libdir}/gstreamer-%{majorminor}/libgstsndfile.so
 %{_libdir}/gstreamer-%{majorminor}/libgstsoundtouch.so
 %{_libdir}/gstreamer-%{majorminor}/libgstsrtp.so
@@ -419,40 +292,24 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
 #debugging plugin
 %{_libdir}/gstreamer-%{majorminor}/libgstdebugutilsbad.so
 
-%files gtk
-# Plugins with external dependencies
-%{_libdir}/gstreamer-%{majorminor}/libgstgtksink.so
-
 
 %if %{with extras}
 %files extras
 # Plugins with external dependencies
 %{_libdir}/gstreamer-%{majorminor}/libgstassrender.so
-%{_libdir}/gstreamer-%{majorminor}/libgstbluez.so
-%{_libdir}/gstreamer-%{majorminor}/libgstbs2b.so
-%{_libdir}/gstreamer-%{majorminor}/libgstchromaprint.so
 %{_libdir}/gstreamer-%{majorminor}/libgstcurl.so
 %{_libdir}/gstreamer-%{majorminor}/libgstdecklink.so
-%{_libdir}/gstreamer-%{majorminor}/libgstgme.so
 %{_libdir}/gstreamer-%{majorminor}/libgstkate.so
 %{_libdir}/gstreamer-%{majorminor}/libgstmodplug.so
-%{_libdir}/gstreamer-%{majorminor}/libgstofa.so
-%{_libdir}/gstreamer-%{majorminor}/libgstopenal.so
-#%{_libdir}/gstreamer-%{majorminor}/libgstopencv.so
 %{_libdir}/gstreamer-%{majorminor}/libgstopenexr.so
-%{_libdir}/gstreamer-%{majorminor}/libgstopenjpeg.so
 %{_libdir}/gstreamer-%{majorminor}/libgstschro.so
-%{_libdir}/gstreamer-%{majorminor}/libgstteletextdec.so
 %{_libdir}/gstreamer-%{majorminor}/libgstzbar.so
+%{_libdir}/gstreamer-%{majorminor}/libgstwildmidi.so
 
 
 %files fluidsynth
 # Plugins with external dependencies
 %{_libdir}/gstreamer-%{majorminor}/libgstfluidsynthmidi.so
-
-%files wildmidi
-# Plugins with external dependencies
-%{_libdir}/gstreamer-%{majorminor}/libgstwildmidi.so
 %endif
 
 
@@ -460,80 +317,38 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
 %doc %{_datadir}/gtk-doc/html/gst-plugins-bad-plugins-%{majorminor}
 %doc %{_datadir}/gtk-doc/html/gst-plugins-bad-libs-%{majorminor}
 
-%{_datadir}/gir-1.0/GstGL-1.0.gir
 %{_datadir}/gir-1.0/GstInsertBin-%{majorminor}.gir
 %{_datadir}/gir-1.0/GstMpegts-%{majorminor}.gir
-%{_datadir}/gir-1.0/GstPlayer-%{majorminor}.gir
 
-%{_libdir}/libgstadaptivedemux-%{majorminor}.so
 %{_libdir}/libgstbasecamerabinsrc-%{majorminor}.so
-%{_libdir}/libgstbadaudio-%{majorminor}.so
 %{_libdir}/libgstbadbase-%{majorminor}.so
 %{_libdir}/libgstbadvideo-%{majorminor}.so
 %{_libdir}/libgstcodecparsers-%{majorminor}.so
 %{_libdir}/libgstgl-%{majorminor}.so
 %{_libdir}/libgstinsertbin-%{majorminor}.so
 %{_libdir}/libgstmpegts-%{majorminor}.so
-%{_libdir}/libgstplayer-%{majorminor}.so
 %{_libdir}/libgstphotography-%{majorminor}.so
 %{_libdir}/libgsturidownloader-%{majorminor}.so
 %if 0%{?fedora}
 %{_libdir}/libgstwayland-%{majorminor}.so
 %endif
 
-%{_libdir}/gstreamer-%{majorminor}/include/gst/gl/gstglconfig.h
-
-%{_includedir}/gstreamer-%{majorminor}/gst/audio
-%{_includedir}/gstreamer-%{majorminor}/gst/base
 %{_includedir}/gstreamer-%{majorminor}/gst/basecamerabinsrc
 %{_includedir}/gstreamer-%{majorminor}/gst/codecparsers
 %{_includedir}/gstreamer-%{majorminor}/gst/insertbin
 %{_includedir}/gstreamer-%{majorminor}/gst/interfaces/photography*
 %{_includedir}/gstreamer-%{majorminor}/gst/mpegts
-%{_includedir}/gstreamer-%{majorminor}/gst/player
 %{_includedir}/gstreamer-%{majorminor}/gst/uridownloader
 %{_includedir}/gstreamer-%{majorminor}/gst/gl
-%{_includedir}/gstreamer-%{majorminor}/gst/video
 
 # pkg-config files
-%{_libdir}/pkgconfig/gstreamer-bad-audio-%{majorminor}.pc
-%{_libdir}/pkgconfig/gstreamer-bad-base-%{majorminor}.pc
-%{_libdir}/pkgconfig/gstreamer-bad-video-%{majorminor}.pc
 %{_libdir}/pkgconfig/gstreamer-codecparsers-%{majorminor}.pc
 %{_libdir}/pkgconfig/gstreamer-gl-%{majorminor}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{majorminor}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{majorminor}.pc
-%{_libdir}/pkgconfig/gstreamer-player-%{majorminor}.pc
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{majorminor}.pc
 
 %changelog
-* Mon Oct 09 2017 Wim Taymans <wtaymans@redhat.com> - 1.10.4-3
-- Disable wayland sink plugin
-- Resolves: #1488978
-
-* Thu Mar 09 2017 Wim Taymans <wtaymans@redhat.com> - 1.10.4-2
-- Disable plugins
-- Fix origin
-- Resolves: #1429587
-
-* Mon Mar 06 2017 Wim Taymans <wtaymans@redhat.com> - 1.10.4-1
-- Update to 1.10.4
-- Remove unbuilt plugins
-- Resolves: #1429587
-
-* Wed Dec 07 2016 Wim Taymans <wtaymans@redhat.com> - 1.4.5-6
-- Fix h264 and h265 buffer size checks
-- Fix mpegts pat parsing and add more size checks
-Resolves: rhbz#1400898
-
-* Tue Dec 06 2016 Wim Taymans <wtaymans@redhat.com> - 1.4.5-5
-- vmncdec: Sanity-check width/height before using it
-Resolves: rhbz#1400898
-
-* Thu May 26 2016 Wim Taymans <wtaymans@redhat.com> - 1.4.5-4
-- rebuild for libdvdnav update
-- Resolves: #1340047
-
 * Thu Jul 30 2015 Wim Taymans <wtaymans@redhat.com> - 1.4.5-3
 - Update audiomixer unit test for big endian
 - add missing patch

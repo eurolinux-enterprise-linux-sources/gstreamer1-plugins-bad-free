@@ -47,7 +47,7 @@ typedef struct
   const gchar *description;
 } CamTagMessage;
 
-static const CamTagMessage debugmessage[] = {
+static CamTagMessage debugmessage[] = {
   {TAG_PROFILE_ENQUIRY, "PROFILE_ENQUIRY"},
   {TAG_PROFILE_REPLY, "PROFILE_REPLY"},
   {TAG_PROFILE_CHANGE, "PROFILE_CHANGE"},

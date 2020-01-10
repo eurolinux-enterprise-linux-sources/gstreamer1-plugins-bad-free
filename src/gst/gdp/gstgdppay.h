@@ -52,11 +52,10 @@ struct _GstGDPPay
 
   GstCaps *caps; /* incoming caps */
 
-  gboolean  have_streamstartid;
-  gboolean  have_caps;
-  gboolean  have_segment;
-
-  gboolean reset_streamheader;
+  GstBuffer *streamstartid_buf;
+  GstBuffer *caps_buf;
+  GstBuffer *new_segment_buf;
+  GstBuffer *tag_buf;
 
   gboolean sent_streamheader; /* TRUE after the first streamheaders are sent */
   GList *queue; /* list of queued buffers before streamheaders are sent */
@@ -65,6 +64,8 @@ struct _GstGDPPay
   gboolean crc_header;
   gboolean crc_payload;
   GstDPHeaderFlag header_flag;
+  GstDPVersion version;
+  GstDPPacketizer *packetizer;
 };
 
 struct _GstGDPPayClass

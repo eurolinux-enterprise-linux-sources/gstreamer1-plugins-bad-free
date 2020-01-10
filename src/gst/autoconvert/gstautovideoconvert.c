@@ -20,11 +20,11 @@
 /*
  * test autovideoconvert:
  * if rgb2bayer is present
- * gst-launch-1.0 videotestsrc num-buffers=2 ! "video/x-raw,width=100,height=100,framerate=10/1" ! autovideoconvert ! "video/x-bayer,width=100,height=100,format=bggr,framerate=10/1" ! fakesink -v
+ * gst-launch videotestsrc num-buffers=2 ! "video/x-raw,width=100,height=100,framerate=10/1" ! autovideoconvert ! "video/x-raw-bayer,width=100,height=100,format=bggr,framerate=10/1" ! fakesink -v
  * if bayer2rgb is present
- * gst-launch-1.0 videotestsrc num-buffers=2 ! "video/x-bayer,width=100,height=100,format=bggr,framerate=10/1" ! autovideoconvert ! "video/x-raw,width=100,height=100,framerate=10/1" ! fakesink -v
+ * gst-launch videotestsrc num-buffers=2 ! "video/x-raw-bayer,width=100,height=100,format=bggr,framerate=10/1" ! autovideoconvert ! "video/x-raw,width=100,height=100,framerate=10/1" ! fakesink -v
  * test with videoconvert
- * gst-launch-1.0 videotestsrc num-buffers=2 ! "video/x-raw,format=RGBx,width=100,height=100,framerate=10/1" ! autovideoconvert ! "video/x-raw,format=RGB16,width=100,height=100,framerate=10/1" ! fakesink -v
+ * gst-launch videotestsrc num-buffers=2 ! "video/x-raw,format=RGBx,width=100,height=100,framerate=10/1" ! autovideoconvert ! "video/x-raw,format=RGB16,width=100,height=100,framerate=10/1" ! fakesink -v
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -140,8 +140,10 @@ gst_auto_video_convert_class_init (GstAutoVideoConvertClass * klass)
   GST_DEBUG_CATEGORY_INIT (autovideoconvert_debug, "autovideoconvert", 0,
       "Auto color space converter");
 
-  gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
-  gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&srctemplate));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sinktemplate));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Select color space convertor based on caps", "Generic/Bin",

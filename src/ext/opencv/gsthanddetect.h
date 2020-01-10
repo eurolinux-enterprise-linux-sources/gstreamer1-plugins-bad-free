@@ -45,18 +45,18 @@
 #ifndef __GST_HANDDETECT_H__
 #define __GST_HANDDETECT_H__
 
-#include <cv.h>
+#include <gst/gst.h>
+#include <gst/video/video.h>
+#include <gst/video/navigation.h>
 
 #include "gstopencvvideofilter.h"
 /* opencv */
-#include <opencv2/core/version.hpp>
-#ifdef HAVE_HIGHGUI_H
-#include <highgui.h>            // includes highGUI definitions
-#endif
-#ifdef HAVE_OPENCV2_HIGHGUI_HIGHGUI_C_H
-#include <opencv2/highgui/highgui_c.h>            // includes highGUI definitions
-#endif
+#include <cv.h>
+#include <cxcore.h>
+#include <highgui.h>
+#if (CV_MAJOR_VERSION >= 2) && (CV_MINOR_VERSION >= 2)
 #include <opencv2/objdetect/objdetect.hpp>
+#endif
 
 G_BEGIN_DECLS
 /* #defines don't like whitespacey bits */
@@ -81,19 +81,21 @@ struct _GstHanddetect
   gchar *profile_fist;
   gchar *profile_palm;
   /* region of interest */
-  gint roi_x;
-  gint roi_y;
-  gint roi_width;
-  gint roi_height;
+  guint roi_x;
+  guint roi_y;
+  guint roi_width;
+  guint roi_height;
 
   /* opencv
    * cvGray - image to gray colour
    */
   IplImage *cvGray;
-  cv::CascadeClassifier *cvCascade_fist;
-  cv::CascadeClassifier *cvCascade_palm;
-  cv::Rect *prev_r;
-  cv::Rect *best_r;
+  CvHaarClassifierCascade *cvCascade_fist;
+  CvHaarClassifierCascade *cvCascade_palm;
+  CvMemStorage *cvStorage;
+  CvMemStorage *cvStorage_palm;
+  CvRect *prev_r;
+  CvRect *best_r;
 };
 
 struct _GstHanddetectClass

@@ -48,7 +48,4 @@ on_viewfinderArea_realize (GtkWidget * widget, gpointer data);
 void
 on_formatComboBox_changed (GtkWidget * widget, gpointer data);
 
-void
-on_zoomScale_value_changed (GtkWidget * widget, gpointer data);
-
 #endif /* __GST_CAMERA_BIN_H__ */

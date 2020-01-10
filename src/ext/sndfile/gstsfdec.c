@@ -157,8 +157,8 @@ gst_sf_dec_class_init (GstSFDecClass * klass)
       "Read audio streams using libsndfile",
       "Stefan Sauer <ensonic@user.sf.net>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &sf_dec_src_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sf_dec_src_factory));
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_pad_template_new ("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
@@ -206,7 +206,7 @@ gst_sf_dec_do_seek (GstSFDec * self, GstEvent * event)
 
   /* FIXME: we should be using GstSegment for all this */
   if (cur_type != GST_SEEK_TYPE_SET || stop_type != GST_SEEK_TYPE_NONE)
-    goto unsupported_type;
+    goto unsuported_type;
 
   if (stop_type == GST_SEEK_TYPE_NONE)
     stop = GST_CLOCK_TIME_NONE;
@@ -270,7 +270,7 @@ unsupported_format:
     GST_DEBUG_OBJECT (self, "seeking is only supported in TIME format");
     return FALSE;
   }
-unsupported_type:
+unsuported_type:
   {
     GST_DEBUG_OBJECT (self, "unsupported seek type");
     return FALSE;

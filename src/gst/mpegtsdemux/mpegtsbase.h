@@ -64,8 +64,6 @@ struct _MpegTSBaseStream
   guint32             registration_id;
 
   GstMpegtsPMTStream *stream;
-  GstStream          *stream_object;
-  gchar              *stream_id;
 };
 
 struct _MpegTSBaseProgram
@@ -83,8 +81,6 @@ struct _MpegTSBaseProgram
   MpegTSBaseStream  **streams;
   GList              *stream_list;
   gint                patcount;
-
-  GstStreamCollection *collection;
 
   /* Pending Tags for the program */
   GstTagList *tags;
@@ -145,6 +141,11 @@ struct _MpegTSBase {
   /* Whether we saw a PAT yet */
   gboolean seen_pat;
 
+  /* Whether upstream is live or not */
+  gboolean upstream_live;
+  /* Whether we queried the upstream latency or not */
+  gboolean queried_latency;
+
   /* Upstream segment */
   GstSegment segment;
 
@@ -157,10 +158,6 @@ struct _MpegTSBase {
   /* Whether to push data and/or sections to subclasses */
   gboolean push_data;
   gboolean push_section;
-
-  /* Whether the parent bin is streams-aware, meaning we can
-   * add/remove streams at any point in time */
-  gboolean streams_aware;
 };
 
 struct _MpegTSBaseClass {
@@ -169,7 +166,6 @@ struct _MpegTSBaseClass {
   /* Virtual methods */
   void (*reset) (MpegTSBase *base);
   GstFlowReturn (*push) (MpegTSBase *base, MpegTSPacketizerPacket *packet, GstMpegtsSection * section);
-  void (*inspect_packet) (MpegTSBase *base, MpegTSPacketizerPacket *packet);
   /* takes ownership of @event */
   gboolean (*push_event) (MpegTSBase *base, GstEvent * event);
 
@@ -177,14 +173,9 @@ struct _MpegTSBaseClass {
   void (*program_started) (MpegTSBase *base, MpegTSBaseProgram *program);
   /* program_stopped gets called when pat no longer has program's pmt */
   void (*program_stopped) (MpegTSBase *base, MpegTSBaseProgram *program);
-  void (*update_program) (MpegTSBase *base, MpegTSBaseProgram *program);
-  /* Whether mpegtbase can deactivate/free a program or whether the subclass will do it
-   * If the subclass responds TRUE, it should call mpegts_base_deactivate_and_free_program()
-   * when it wants to remove it */
-  gboolean (*can_remove_program) (MpegTSBase *base, MpegTSBaseProgram *program);
 
   /* stream_added is called whenever a new stream has been identified */
-  gboolean (*stream_added) (MpegTSBase *base, MpegTSBaseStream *stream, MpegTSBaseProgram *program);
+  void (*stream_added) (MpegTSBase *base, MpegTSBaseStream *stream, MpegTSBaseProgram *program);
   /* stream_removed is called whenever a stream is no longer referenced */
   void (*stream_removed) (MpegTSBase *base, MpegTSBaseStream *stream);
 
@@ -230,8 +221,9 @@ mpegts_base_handle_seek_event(MpegTSBase * base, GstPad * pad, GstEvent * event)
 
 G_GNUC_INTERNAL gboolean gst_mpegtsbase_plugin_init (GstPlugin * plugin);
 
-G_GNUC_INTERNAL void mpegts_base_deactivate_and_free_program (MpegTSBase *base, MpegTSBaseProgram *program);
+G_GNUC_INTERNAL void mpegts_base_program_remove_stream (MpegTSBase * base, MpegTSBaseProgram * program, guint16 pid);
 
+G_GNUC_INTERNAL void mpegts_base_remove_program(MpegTSBase *base, gint program_number);
 G_END_DECLS
 
 #endif /* GST_MPEG_TS_BASE_H */

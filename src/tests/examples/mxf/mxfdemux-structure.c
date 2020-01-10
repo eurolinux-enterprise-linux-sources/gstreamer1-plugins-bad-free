@@ -29,25 +29,31 @@ static GtkTreeStore *treestore = NULL;
 static gchar *
 g_value_to_string (const GValue * val)
 {
-  gchar *ret = NULL;
-
   if (G_VALUE_TYPE (val) == GST_TYPE_BUFFER) {
     GstBuffer *buf = gst_value_get_buffer (val);
     GstMapInfo map;
+    gchar *ret;
 
     gst_buffer_map (buf, &map, GST_MAP_READ);
     ret = g_base64_encode (map.data, map.size);
     gst_buffer_unmap (buf, &map);
+
+    return ret;
   } else {
     GValue s = { 0, };
+    gchar *ret;
 
     g_value_init (&s, G_TYPE_STRING);
-    if (g_value_transform (val, &s)) {
-      ret = g_value_dup_string (&s);
-      g_value_unset (&s);
+
+    if (!g_value_transform (val, &s)) {
+      return NULL;
     }
+
+    ret = g_value_dup_string (&s);
+    g_value_unset (&s);
+
+    return ret;
   }
-  return ret;
 }
 
 static gboolean
@@ -118,32 +124,15 @@ insert_structure (const GstStructure * s, GtkTreeIter * iter)
   gst_structure_foreach (s, insert_field, iter);
 }
 
-static gboolean
-bus_callback (GstBus * bus, GstMessage * message, gpointer data)
+static void
+on_message (GstBus * bus, GstMessage * message, gpointer data)
 {
   switch (GST_MESSAGE_TYPE (message)) {
-    case GST_MESSAGE_WARNING:{
-      GError *err;
-      gchar *debug;
-
-      gst_message_parse_warning (message, &err, &debug);
-      g_print ("Warning: %s\n", err->message);
-      g_error_free (err);
-      g_free (debug);
-      break;
-    }
-    case GST_MESSAGE_ERROR:{
-      GError *err;
-      gchar *debug = NULL;
-
-      gst_message_parse_error (message, &err, &debug);
-      g_print ("Error: %s : %s\n", err->message, debug);
-      g_error_free (err);
-      g_free (debug);
-
+    case GST_MESSAGE_WARNING:
+    case GST_MESSAGE_ERROR:
+      g_error ("Got error");
       gtk_main_quit ();
       break;
-    }
     case GST_MESSAGE_TAG:{
       GstTagList *tags;
       GValue v = { 0, };
@@ -171,7 +160,6 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
     default:
       break;
   }
-  return TRUE;
 }
 
 static void
@@ -182,7 +170,6 @@ on_pad_added (GstElement * src, GstPad * pad, gpointer data)
   GstElement *bin = (GstElement *) gst_element_get_parent (src);
 
   gst_bin_add (GST_BIN (bin), fakesink);
-  gst_element_sync_state_with_parent (fakesink);
 
   gst_pad_link (pad, sinkpad);
 
@@ -190,8 +177,8 @@ on_pad_added (GstElement * src, GstPad * pad, gpointer data)
   gst_object_unref (bin);
 }
 
-int
-main (int argc, char **argv)
+gint
+main (gint argc, gchar ** argv)
 {
   GstElement *pipeline, *src, *mxfdemux;
   GstBus *bus;
@@ -202,8 +189,8 @@ main (int argc, char **argv)
     return -1;
   }
 
-  gst_init (&argc, &argv);
-  gtk_init (&argc, &argv);
+  gst_init (NULL, NULL);
+  gtk_init (NULL, NULL);
 
   pipeline = gst_pipeline_new ("pipeline");
 
@@ -225,7 +212,8 @@ main (int argc, char **argv)
   }
 
   bus = gst_element_get_bus (pipeline);
-  gst_bus_add_watch (bus, bus_callback, NULL);
+  gst_bus_add_signal_watch (bus);
+  g_signal_connect (bus, "message", G_CALLBACK (on_message), NULL);
   gst_object_unref (bus);
 
   window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -243,12 +231,8 @@ main (int argc, char **argv)
 
   gtk_container_add (GTK_CONTAINER (scrolled_window), treeview);
   gtk_container_add (GTK_CONTAINER (window), scrolled_window);
-  gtk_widget_show_all (window);
 
-  if (gst_element_set_state (pipeline,
-          GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
-    g_error ("Failed to change state to PLAYING");
-  }
+  gst_element_set_state (pipeline, GST_STATE_PLAYING);
 
   gtk_main ();
 

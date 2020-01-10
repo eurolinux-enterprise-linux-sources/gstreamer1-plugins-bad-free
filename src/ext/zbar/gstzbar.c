@@ -22,8 +22,6 @@
  *
  * Detect bar codes in the video streams and send them as element messages to
  * the #GstBus if .#GstZBar:message property is %TRUE.
- * If the .#GstZBar:attach-frame property is %TRUE, the posted barcode message
- * includes a sample of the frame where the barcode was detected (Since 1.6).
  *
  * The element generate messages named
  * <classname>&quot;barcode&quot;</classname>. The structure containes these
@@ -58,23 +56,15 @@
  *   values.
  *   </para>
  * </listitem>
- * <listitem>
- *   <para>
- *   GstSample
- *   <classname>&quot;frame&quot;</classname>:
- *   the frame in which the barcode message was detected, if
- *   the .#GstZBar:attach-frame property was set to %TRUE (Since 1.6)
- *   </para>
- * </listitem>
  * </itemizedlist>
  *
  * <refsect2>
  * <title>Example launch lines</title>
  * |[
- * gst-launch-1.0 -m v4l2src ! videoconvert ! zbar ! videoconvert ! xvimagesink
+ * gst-launch -m v4l2src ! videoconvert ! zbar ! videoconvert ! xvimagesink
  * ]| This pipeline will detect barcodes and send them as messages.
  * |[
- * gst-launch-1.0 -m v4l2src ! tee name=t ! queue ! videoconvert ! zbar ! fakesink t. ! queue ! xvimagesink
+ * gst-launch -m v4l2src ! tee name=t ! queue ! videoconvert ! zbar ! fakesink t. ! queue ! xvimagesink
  * ]| Same as above, but running the filter on a branch to keep the display in color
  * </refsect2>
  */
@@ -105,16 +95,15 @@ enum
 {
   PROP_0,
   PROP_MESSAGE,
-  PROP_ATTACH_FRAME,
   PROP_CACHE
 };
 
 #define DEFAULT_CACHE    FALSE
 #define DEFAULT_MESSAGE  TRUE
-#define DEFAULT_ATTACH_FRAME FALSE
 
+/* FIXME: add YVU9 and YUV9 once we have a GstVideoFormat for that */
 #define ZBAR_YUV_CAPS \
-    "{ Y800, I420, YV12, NV12, NV21, Y41B, Y42B, YUV9, YVU9 }"
+    "{ Y800, I420, YV12, NV12, NV21, Y41B, Y42B }"
 
 static GstStaticPadTemplate gst_zbar_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
@@ -167,19 +156,6 @@ gst_zbar_class_init (GstZBarClass * g_class)
           "Post a barcode message for each detected code",
           DEFAULT_MESSAGE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  /**
-   * GstZBar::attach-frame:
-   *
-   * Attach the frame in which the barcode was detected to the posted
-   * barcode message.
-   *
-   * Since: 1.6
-   */
-  g_object_class_install_property (gobject_class, PROP_ATTACH_FRAME,
-      g_param_spec_boolean ("attach-frame", "Attach frame",
-          "Attach a frame dump to each barcode message",
-          DEFAULT_ATTACH_FRAME, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
   g_object_class_install_property (gobject_class, PROP_CACHE,
       g_param_spec_boolean ("cache", "cache",
           "Enable or disable the inter-image result cache",
@@ -192,10 +168,10 @@ gst_zbar_class_init (GstZBarClass * g_class)
       "Detect bar codes in the video streams",
       "Stefan Kost <ensonic@users.sf.net>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_zbar_sink_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_zbar_src_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_zbar_sink_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_zbar_src_template));
 
   trans_class->start = GST_DEBUG_FUNCPTR (gst_zbar_start);
   trans_class->stop = GST_DEBUG_FUNCPTR (gst_zbar_stop);
@@ -210,7 +186,6 @@ gst_zbar_init (GstZBar * zbar)
 {
   zbar->cache = DEFAULT_CACHE;
   zbar->message = DEFAULT_MESSAGE;
-  zbar->attach_frame = DEFAULT_ATTACH_FRAME;
 
   zbar->scanner = zbar_image_scanner_create ();
 }
@@ -241,9 +216,6 @@ gst_zbar_set_property (GObject * object, guint prop_id, const GValue * value,
     case PROP_MESSAGE:
       zbar->message = g_value_get_boolean (value);
       break;
-    case PROP_ATTACH_FRAME:
-      zbar->attach_frame = g_value_get_boolean (value);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -265,9 +237,6 @@ gst_zbar_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_MESSAGE:
       g_value_set_boolean (value, zbar->message);
-      break;
-    case PROP_ATTACH_FRAME:
-      g_value_set_boolean (value, zbar->attach_frame);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -299,10 +268,6 @@ gst_zbar_transform_frame_ip (GstVideoFilter * vfilter, GstVideoFrame * frame)
 
   /* scan the image for barcodes */
   n = zbar_scan_image (zbar->scanner, image);
-  if (G_UNLIKELY (n == -1)) {
-    GST_WARNING_OBJECT (zbar, "Error trying to scan frame. Skipping");
-    goto out;
-  }
   if (n == 0)
     goto out;
 
@@ -322,29 +287,15 @@ gst_zbar_transform_frame_ip (GstVideoFilter * vfilter, GstVideoFrame * frame)
     if (zbar->message) {
       GstMessage *m;
       GstStructure *s;
-      GstSample *sample;
-      GstCaps *sample_caps;
 
+      /* post a message */
       s = gst_structure_new ("barcode",
           "timestamp", G_TYPE_UINT64, GST_BUFFER_TIMESTAMP (frame->buffer),
           "type", G_TYPE_STRING, zbar_get_symbol_name (typ),
           "symbol", G_TYPE_STRING, data, "quality", G_TYPE_INT, quality, NULL);
-
-      if (zbar->attach_frame) {
-        /* create a sample from image */
-        sample_caps = gst_video_info_to_caps (&frame->info);
-        sample = gst_sample_new (frame->buffer, sample_caps, NULL, NULL);
-        gst_caps_unref (sample_caps);
-        gst_structure_set (s, "frame", GST_TYPE_SAMPLE, sample, NULL);
-        gst_sample_unref (sample);
-      }
-
       m = gst_message_new_element (GST_OBJECT (zbar), s);
       gst_element_post_message (GST_ELEMENT (zbar), m);
-
-    } else if (zbar->attach_frame)
-      GST_WARNING_OBJECT (zbar,
-          "attach-frame=true has no effect if message=false");
+    }
   }
 
 out:

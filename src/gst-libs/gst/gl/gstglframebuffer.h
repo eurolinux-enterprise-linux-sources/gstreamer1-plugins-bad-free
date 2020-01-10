@@ -25,7 +25,6 @@
 
 G_BEGIN_DECLS
 
-GST_EXPORT
 GType gst_gl_framebuffer_get_type (void);
 
 #define GST_TYPE_GL_FRAMEBUFFER             (gst_gl_framebuffer_get_type())
@@ -35,86 +34,42 @@ GType gst_gl_framebuffer_get_type (void);
 #define GST_IS_GL_FRAMEBUFFER_CLASS(klass)  (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_GL_FRAMEBUFFER))
 #define GST_GL_FRAMEBUFFER_CAST(obj)        ((GstGLFramebuffer*)(obj))
 
+typedef struct _GstGLFramebuffer GstGLFramebuffer;
 typedef struct _GstGLFramebufferClass GstGLFramebufferClass;
 typedef struct _GstGLFramebufferPrivate GstGLFramebufferPrivate;
 
-/**
- * GstGLFramebufferFunc:
- * @stuff: user data
- *
- * callback definition for operating through a #GstGLFramebuffer object
- */
-typedef gboolean (*GstGLFramebufferFunc) (gpointer stuff);
-
-/**
- * GstGLFramebuffer:
- *
- * Opaque #GstGLFramebuffer struct
- */
 struct _GstGLFramebuffer
 {
+  GObject             object;
+
   /* <private> */
-  GstObject             object;
-
   GstGLContext *context;
-
-  guint fbo_id;
-  GArray *attachments;
-
-  gpointer          _padding[GST_PADDING];
 
   GstGLFramebufferPrivate  *priv;
 };
 
-/**
- * GstGLFramebufferClass:
- *
- * Opaque #GstGLFramebufferClass struct
- */
 struct _GstGLFramebufferClass
 {
-  /* <private> */
-  GstObjectClass object_class;
-
-  gpointer          _padding[GST_PADDING];
+  GObjectClass object_class;
 };
 
-GST_EXPORT
-GstGLFramebuffer *      gst_gl_framebuffer_new                      (GstGLContext *context);
-GST_EXPORT
-GstGLFramebuffer *      gst_gl_framebuffer_new_with_default_depth   (GstGLContext *context,
-                                                                     guint width,
-                                                                     guint height);
+GstGLFramebuffer *gst_gl_framebuffer_new (GstGLContext *context);
 
-GST_EXPORT
-guint                   gst_gl_framebuffer_get_id                   (GstGLFramebuffer * fb);
+gboolean gst_gl_framebuffer_generate (GstGLFramebuffer *frame, gint width, gint height,
+    guint * fbo, guint * depthbuffer);
 
-GST_EXPORT
-void                    gst_gl_framebuffer_attach                   (GstGLFramebuffer * fb,
-                                                                     guint attachment_point,
-                                                                     GstGLBaseMemory * mem);
-GST_EXPORT
-void                    gst_gl_framebuffer_bind                     (GstGLFramebuffer * fb);
-GST_EXPORT
-void                    gst_gl_context_clear_framebuffer            (GstGLContext * context);
+gboolean gst_gl_framebuffer_use (GstGLFramebuffer * frame, gint texture_fbo_width,
+    gint texture_fbo_height, GLuint fbo, GLuint depth_buffer,
+    GLuint texture_fbo, GLCB cb, gint input_tex_width,
+    gint input_tex_height, GLuint input_tex, gdouble proj_param1,
+    gdouble proj_param2, gdouble proj_param3, gdouble proj_param4,
+    GstGLDisplayProjection projection, gpointer stuff);
 
-GST_EXPORT
-void                    gst_gl_framebuffer_get_effective_dimensions (GstGLFramebuffer * fb,
-                                                                     guint * width,
-                                                                     guint * height);
+gboolean gst_gl_framebuffer_use_v2 (GstGLFramebuffer * frame, gint texture_fbo_width,
+    gint texture_fbo_height, GLuint fbo, GLuint depth_buffer,
+    GLuint texture_fbo, GLCB_V2 cb, gpointer stuff);
 
-GST_EXPORT
-gboolean                gst_gl_context_check_framebuffer_status     (GstGLContext * context);
-
-GST_EXPORT
-gboolean                gst_gl_framebuffer_draw_to_texture          (GstGLFramebuffer * fb,
-                                                                     GstGLMemory * mem,
-                                                                     GstGLFramebufferFunc func,
-                                                                     gpointer user_data);
-
-#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(GstGLFramebuffer, gst_object_unref)
-#endif
+void gst_gl_framebuffer_delete (GstGLFramebuffer *frame, guint fbo, guint depth);
 
 G_END_DECLS
 

@@ -3,20 +3,19 @@
  *
  * gstwavescope.c: simple oscilloscope
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Library General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 /**
  * SECTION:element-wavescope
@@ -28,7 +27,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 audiotestsrc ! audioconvert ! wavescope ! ximagesink
+ * gst-launch audiotestsrc ! audioconvert ! wavescope ! ximagesink
  * ]|
  * </refsect2>
  */
@@ -39,17 +38,15 @@
 #include <stdlib.h>
 #include "gstwavescope.h"
 
-#if G_BYTE_ORDER == G_BIG_ENDIAN
-#define RGB_ORDER "xRGB"
-#else
-#define RGB_ORDER "BGRx"
-#endif
-
 static GstStaticPadTemplate gst_wave_scope_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE (RGB_ORDER))
+#if G_BYTE_ORDER == G_BIG_ENDIAN
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("xRGB"))
+#else
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("BGRx"))
+#endif
     );
 
 static GstStaticPadTemplate gst_wave_scope_sink_template =
@@ -148,10 +145,12 @@ gst_wave_scope_class_init (GstWaveScopeClass * g_class)
       "Waveform oscilloscope", "Visualization", "Simple waveform oscilloscope",
       "Stefan Kost <ensonic@users.sf.net>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_wave_scope_src_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_wave_scope_sink_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_wave_scope_src_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_wave_scope_sink_template));
+
+  scope_class->render = GST_DEBUG_FUNCPTR (gst_wave_scope_render);
 }
 
 static void
@@ -178,7 +177,8 @@ gst_wave_scope_setup (GstAudioVisualizer * bscope)
 {
   GstWaveScope *scope = GST_WAVE_SCOPE (bscope);
 
-  g_free (scope->flt);
+  if (scope->flt)
+    g_free (scope->flt);
 
   scope->flt = g_new0 (gdouble, 6 * GST_AUDIO_INFO_CHANNELS (&bscope->ainfo));
 
@@ -325,15 +325,15 @@ render_color_dots (GstAudioVisualizer * base, guint32 * vdata,
       filter ((gfloat) adata[s]);
 
       y = (guint) (oy + flt[0] * dy);
-      y = MIN (y, h1);
+      y = CLAMP (y, 0, h1);
       draw_dot_c (vdata, x, y, w, 0x00FF0000);
 
       y = (guint) (oy + flt[3] * dy);
-      y = MIN (y, h1);
+      y = CLAMP (y, 0, h1);
       draw_dot_c (vdata, x, y, w, 0x0000FF00);
 
       y = (guint) (oy + (flt[4] + flt[5]) * dy);
-      y = MIN (y, h1);
+      y = CLAMP (y, 0, h1);
       draw_dot_c (vdata, x, y, w, 0x000000FF);
 
       s += channels;
@@ -367,30 +367,30 @@ render_color_lines (GstAudioVisualizer * base, guint32 * vdata,
     filter ((gfloat) adata[s]);
 
     y = (guint) (oy + flt[0] * dy);
-    y2 = MIN (y, h1);
+    y2 = CLAMP (y, 0, h1);
 
     y = (guint) (oy + flt[3] * dy);
-    y3 = MIN (y, h1);
+    y3 = CLAMP (y, 0, h1);
 
     y = (guint) (oy + (flt[4] + flt[5]) * dy);
-    y4 = MIN (y, h1);
+    y4 = CLAMP (y, 0, h1);
 
     for (i = 1; i < num_samples; i++) {
       x = (guint) ((gfloat) i * dx);
       filter ((gfloat) adata[s]);
 
       y = (guint) (oy + flt[0] * dy);
-      y = MIN (y, h1);
+      y = CLAMP (y, 0, h1);
       draw_line_aa (vdata, x2, x, y2, y, w, 0x00FF0000);
       y2 = y;
 
       y = (guint) (oy + flt[3] * dy);
-      y = MIN (y, h1);
+      y = CLAMP (y, 0, h1);
       draw_line_aa (vdata, x2, x, y3, y, w, 0x0000FF00);
       y3 = y;
 
       y = (guint) (oy + (flt[4] + flt[5]) * dy);
-      y = MIN (y, h1);
+      y = CLAMP (y, 0, h1);
       draw_line_aa (vdata, x2, x, y4, y, w, 0x000000FF);
       y4 = y;
 

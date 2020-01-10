@@ -25,7 +25,6 @@
 #endif
 
 #include "gstopenjpegenc.h"
-#include <gst/codecparsers/gstjpeg2000sampling.h>
 
 #include <string.h>
 
@@ -116,14 +115,12 @@ static GstStaticPadTemplate gst_openjpeg_enc_src_template =
         "width = (int) [1, MAX], "
         "height = (int) [1, MAX], "
         "num-components = (int) [1, 4], "
-        GST_JPEG2000_SAMPLING_LIST ","
-        GST_JPEG2000_COLORSPACE_LIST "; "
+        "colorspace = (string) { sRGB, sYUV, GRAY }; "
         "image/x-jpc, "
         "width = (int) [1, MAX], "
         "height = (int) [1, MAX], "
         "num-components = (int) [1, 4], "
-        GST_JPEG2000_SAMPLING_LIST ","
-        GST_JPEG2000_COLORSPACE_LIST "; "
+        "colorspace = (string) { sRGB, sYUV, GRAY }; "
         "image/jp2, " "width = (int) [1, MAX], " "height = (int) [1, MAX]")
     );
 
@@ -180,10 +177,10 @@ gst_openjpeg_enc_class_init (GstOpenJPEGEncClass * klass)
           "Tile Height", 0, G_MAXINT, DEFAULT_TILE_HEIGHT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_openjpeg_enc_src_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_openjpeg_enc_sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_openjpeg_enc_src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_openjpeg_enc_sink_template));
 
   gst_element_class_set_static_metadata (element_class,
       "OpenJPEG JPEG2000 encoder",
@@ -206,8 +203,6 @@ gst_openjpeg_enc_class_init (GstOpenJPEGEncClass * klass)
 static void
 gst_openjpeg_enc_init (GstOpenJPEGEnc * self)
 {
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_VIDEO_ENCODER_SINK_PAD (self));
-
   opj_set_default_encoder_parameters (&self->params);
 
   self->params.cp_fixed_quality = 1;
@@ -374,7 +369,7 @@ fill_image_packed16_4 (opj_image_t * image, GstVideoFrame * frame)
       data_out[2]++;
       data_out[3]++;
     }
-    data_in += sstride;
+    data_in += sstride;;
   }
 }
 
@@ -411,7 +406,7 @@ fill_image_packed8_4 (opj_image_t * image, GstVideoFrame * frame)
       data_out[2]++;
       data_out[3]++;
     }
-    data_in += sstride;
+    data_in += sstride;;
   }
 }
 
@@ -560,8 +555,7 @@ gst_openjpeg_enc_set_format (GstVideoEncoder * encoder,
   GstOpenJPEGEnc *self = GST_OPENJPEG_ENC (encoder);
   GstCaps *allowed_caps, *caps;
   GstStructure *s;
-  const gchar *colorspace = NULL;
-  GstJPEG2000Sampling sampling = GST_JPEG2000_SAMPLING_NONE;
+  const gchar *colorspace;
   gint ncomps;
 
   GST_DEBUG_OBJECT (self, "Setting format: %" GST_PTR_FORMAT, state->caps);
@@ -592,7 +586,6 @@ gst_openjpeg_enc_set_format (GstVideoEncoder * encoder,
       ncomps = 4;
       break;
     case GST_VIDEO_FORMAT_ARGB:
-    case GST_VIDEO_FORMAT_AYUV:
       self->fill_image = fill_image_packed8_4;
       ncomps = 4;
       break;
@@ -611,6 +604,10 @@ gst_openjpeg_enc_set_format (GstVideoEncoder * encoder,
     case GST_VIDEO_FORMAT_I420_10LE:
     case GST_VIDEO_FORMAT_I420_10BE:
       self->fill_image = fill_image_planar16_3;
+      ncomps = 3;
+      break;
+    case GST_VIDEO_FORMAT_AYUV:
+      self->fill_image = fill_image_packed8_3;
       ncomps = 3;
       break;
     case GST_VIDEO_FORMAT_Y444:
@@ -634,71 +631,18 @@ gst_openjpeg_enc_set_format (GstVideoEncoder * encoder,
       g_assert_not_reached ();
   }
 
-
-  /* sampling */
-  /* note: encoder re-orders channels so that alpha channel is encoded as the last channel */
-  switch (state->info.finfo->format) {
-    case GST_VIDEO_FORMAT_ARGB64:
-    case GST_VIDEO_FORMAT_ARGB:
-      sampling = GST_JPEG2000_SAMPLING_RGBA;
-      break;
-    case GST_VIDEO_FORMAT_AYUV64:
-    case GST_VIDEO_FORMAT_AYUV:
-      sampling = GST_JPEG2000_SAMPLING_YBRA4444_EXT;
-      break;
-    case GST_VIDEO_FORMAT_xRGB:
-      sampling = GST_JPEG2000_SAMPLING_RGB;
-      break;
-    case GST_VIDEO_FORMAT_Y444_10LE:
-    case GST_VIDEO_FORMAT_Y444_10BE:
-    case GST_VIDEO_FORMAT_Y444:
-      sampling = GST_JPEG2000_SAMPLING_YBR444;
-      break;
-
-    case GST_VIDEO_FORMAT_I422_10LE:
-    case GST_VIDEO_FORMAT_I422_10BE:
-    case GST_VIDEO_FORMAT_Y42B:
-      sampling = GST_JPEG2000_SAMPLING_YBR422;
-      break;
-    case GST_VIDEO_FORMAT_YUV9:
-      sampling = GST_JPEG2000_SAMPLING_YBR410;
-      break;
-    case GST_VIDEO_FORMAT_I420_10LE:
-    case GST_VIDEO_FORMAT_I420_10BE:
-    case GST_VIDEO_FORMAT_I420:
-      sampling = GST_JPEG2000_SAMPLING_YBR420;
-      break;
-    case GST_VIDEO_FORMAT_GRAY8:
-    case GST_VIDEO_FORMAT_GRAY16_LE:
-    case GST_VIDEO_FORMAT_GRAY16_BE:
-      sampling = GST_JPEG2000_SAMPLING_GRAYSCALE;
-      break;
-    default:
-      break;
-  }
-
-
-
-  if ((state->info.finfo->flags & GST_VIDEO_FORMAT_FLAG_YUV)) {
+  if ((state->info.finfo->flags & GST_VIDEO_FORMAT_FLAG_YUV))
     colorspace = "sYUV";
-  } else if ((state->info.finfo->flags & GST_VIDEO_FORMAT_FLAG_RGB)) {
+  else if ((state->info.finfo->flags & GST_VIDEO_FORMAT_FLAG_RGB))
     colorspace = "sRGB";
-  } else if ((state->info.finfo->flags & GST_VIDEO_FORMAT_FLAG_GRAY)) {
+  else if ((state->info.finfo->flags & GST_VIDEO_FORMAT_FLAG_GRAY))
     colorspace = "GRAY";
-  } else
+  else
     g_return_val_if_reached (FALSE);
 
-  if (sampling != GST_JPEG2000_SAMPLING_NONE) {
-    caps = gst_caps_new_simple (gst_structure_get_name (s),
-        "colorspace", G_TYPE_STRING, colorspace,
-        "sampling", G_TYPE_STRING, gst_jpeg2000_sampling_to_string (sampling),
-        "num-components", G_TYPE_INT, ncomps, NULL);
-  } else {
-    caps = gst_caps_new_simple (gst_structure_get_name (s),
-        "colorspace", G_TYPE_STRING, colorspace,
-        "num-components", G_TYPE_INT, ncomps, NULL);
-
-  }
+  caps = gst_caps_new_simple (gst_structure_get_name (s),
+      "colorspace", G_TYPE_STRING, colorspace,
+      "num-components", G_TYPE_INT, ncomps, NULL);
   gst_caps_unref (allowed_caps);
 
   if (self->output_state)
@@ -910,9 +854,6 @@ gst_openjpeg_enc_handle_frame (GstVideoEncoder * encoder,
     goto fill_image_error;
   gst_video_frame_unmap (&vframe);
 
-  if (vframe.info.finfo->flags & GST_VIDEO_FORMAT_FLAG_RGB) {
-    self->params.tcp_mct = 1;
-  }
   opj_setup_encoder (enc, &self->params, image);
 
 #ifdef HAVE_OPENJPEG_1
@@ -958,11 +899,7 @@ gst_openjpeg_enc_handle_frame (GstVideoEncoder * encoder,
   opj_stream_set_write_function (stream, write_fn);
   opj_stream_set_skip_function (stream, skip_fn);
   opj_stream_set_seek_function (stream, seek_fn);
-#ifdef HAVE_OPENJPEG_2_1
-  opj_stream_set_user_data (stream, &mstream, NULL);
-#else
   opj_stream_set_user_data (stream, &mstream);
-#endif
   opj_stream_set_user_data_length (stream, mstream.size);
 
   if (!opj_start_compress (enc, image, stream))
@@ -997,7 +934,6 @@ gst_openjpeg_enc_handle_frame (GstVideoEncoder * encoder,
           mstream.size, NULL, (GDestroyNotify) g_free));
 #endif
 
-  GST_VIDEO_CODEC_FRAME_SET_SYNC_POINT (frame);
   ret = gst_video_encoder_finish_frame (encoder, frame);
 
   return ret;

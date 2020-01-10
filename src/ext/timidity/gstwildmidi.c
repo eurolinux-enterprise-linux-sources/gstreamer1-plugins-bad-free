@@ -239,8 +239,10 @@ gst_wildmidi_class_init (GstWildmidiClass * klass)
           "High Quality", DEFAULT_HIGH_QUALITY,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
-  gst_element_class_add_static_pad_template (gstelement_class, &sink_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sink_factory));
   gst_element_class_set_static_metadata (gstelement_class, "WildMidi",
       "Codec/Decoder/Audio",
       "Midi Synthesizer Element", "Wouter Paesen <wouter@blue-gate.be>");
@@ -672,7 +674,7 @@ gst_wildmidi_get_buffer (GstWildmidi * wildmidi)
   gst_buffer_map (buffer, &info, GST_MAP_READWRITE);
 
   GST_OBJECT_LOCK (wildmidi);
-  size = WildMidi_GetOutput (wildmidi->song, (gpointer) info.data,
+  size = WildMidi_GetOutput (wildmidi->song, (char *) info.data,
       (unsigned long int) info.size);
   GST_OBJECT_UNLOCK (wildmidi);
 
@@ -898,7 +900,9 @@ pause:
       event = gst_event_new_eos ();
       /* for fatal errors we post an error message, post the error
        * first so the app knows about the error first. */
-      GST_ELEMENT_FLOW_ERROR (wildmidi, ret);
+      GST_ELEMENT_ERROR (wildmidi, STREAM, FAILED,
+          ("Internal data flow error."),
+          ("streaming task paused, reason %s (%d)", reason, ret));
       gst_pad_push_event (wildmidi->srcpad, event);
     }
   }

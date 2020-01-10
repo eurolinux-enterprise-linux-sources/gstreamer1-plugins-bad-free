@@ -37,6 +37,8 @@ typedef struct _GstGLFilterAppClass GstGLFilterAppClass;
 struct _GstGLFilterApp
 {
     GstGLFilter filter;
+
+    gboolean default_draw;
 };
 
 struct _GstGLFilterAppClass

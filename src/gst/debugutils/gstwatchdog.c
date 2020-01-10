@@ -35,7 +35,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v fakesrc ! watchdog ! fakesink
+ * gst-launch -v fakesrc ! watchdog ! fakesink
  * ]|
  * </refsect2>
  */
@@ -66,8 +66,7 @@ static gboolean gst_watchdog_src_event (GstBaseTransform * trans,
     GstEvent * event);
 static GstFlowReturn gst_watchdog_transform_ip (GstBaseTransform * trans,
     GstBuffer * buf);
-static void gst_watchdog_feed (GstWatchdog * watchdog, gpointer mini_object,
-    gboolean force);
+static void gst_watchdog_feed (GstWatchdog * watchdog);
 
 static GstStateChangeReturn
 gst_watchdog_change_state (GstElement * element, GstStateChange transition);
@@ -141,7 +140,7 @@ gst_watchdog_set_property (GObject * object, guint property_id,
     case PROP_TIMEOUT:
       GST_OBJECT_LOCK (watchdog);
       watchdog->timeout = g_value_get_int (value);
-      gst_watchdog_feed (watchdog, NULL, FALSE);
+      gst_watchdog_feed (watchdog);
       GST_OBJECT_UNLOCK (watchdog);
       break;
     default:
@@ -207,54 +206,19 @@ gst_watchdog_quit_mainloop (gpointer ptr)
   return FALSE;
 }
 
-/*  Call with OBJECT_LOCK taken */
 static void
-gst_watchdog_feed (GstWatchdog * watchdog, gpointer mini_object, gboolean force)
+gst_watchdog_feed (GstWatchdog * watchdog)
 {
   if (watchdog->source) {
-    if (watchdog->waiting_for_flush_start) {
-      if (mini_object && GST_IS_EVENT (mini_object) &&
-          GST_EVENT_TYPE (mini_object) == GST_EVENT_FLUSH_START) {
-        watchdog->waiting_for_flush_start = FALSE;
-        watchdog->waiting_for_flush_stop = TRUE;
-      }
-
-      force = TRUE;
-    } else if (watchdog->waiting_for_flush_stop) {
-      if (mini_object && GST_IS_EVENT (mini_object) &&
-          GST_EVENT_TYPE (mini_object) == GST_EVENT_FLUSH_STOP) {
-        watchdog->waiting_for_flush_stop = FALSE;
-        watchdog->waiting_for_a_buffer = TRUE;
-      }
-
-      force = TRUE;
-    } else if (watchdog->waiting_for_a_buffer) {
-      if (mini_object && GST_IS_BUFFER (mini_object)) {
-        watchdog->waiting_for_a_buffer = FALSE;
-        GST_DEBUG_OBJECT (watchdog, "Got a buffer \\o/");
-      } else {
-        GST_DEBUG_OBJECT (watchdog, "Waiting for a buffer and did not get it,"
-            " keep trying even in PAUSED state");
-        force = TRUE;
-      }
-    }
     g_source_destroy (watchdog->source);
     g_source_unref (watchdog->source);
     watchdog->source = NULL;
-
   }
 
-  if (watchdog->timeout == 0) {
-    GST_LOG_OBJECT (watchdog, "Timeout is 0 => nothing to do");
-  } else if (watchdog->main_context == NULL) {
-    GST_LOG_OBJECT (watchdog, "No maincontext => nothing to do");
-  } else if ((GST_STATE (watchdog) != GST_STATE_PLAYING) && force == FALSE) {
-    GST_LOG_OBJECT (watchdog,
-        "Not in playing and force is FALSE => Nothing to do");
-  } else {
+  if (watchdog->timeout != 0 && watchdog->main_context) {
     watchdog->source = g_timeout_source_new (watchdog->timeout);
-    g_source_set_callback (watchdog->source, gst_watchdog_trigger,
-        gst_object_ref (watchdog), gst_object_unref);
+    g_source_set_callback (watchdog->source, gst_watchdog_trigger, gst_object_ref (watchdog),
+        gst_object_unref);
     g_source_attach (watchdog->source, watchdog->main_context);
   }
 }
@@ -319,7 +283,7 @@ gst_watchdog_sink_event (GstBaseTransform * trans, GstEvent * event)
   GST_DEBUG_OBJECT (watchdog, "sink_event");
 
   GST_OBJECT_LOCK (watchdog);
-  gst_watchdog_feed (watchdog, event, FALSE);
+  gst_watchdog_feed (watchdog);
   GST_OBJECT_UNLOCK (watchdog);
 
   return
@@ -330,25 +294,12 @@ gst_watchdog_sink_event (GstBaseTransform * trans, GstEvent * event)
 static gboolean
 gst_watchdog_src_event (GstBaseTransform * trans, GstEvent * event)
 {
-  gboolean force = FALSE;
   GstWatchdog *watchdog = GST_WATCHDOG (trans);
 
   GST_DEBUG_OBJECT (watchdog, "src_event");
 
   GST_OBJECT_LOCK (watchdog);
-  if (GST_EVENT_TYPE (event) == GST_EVENT_SEEK) {
-    GstSeekFlags flags;
-
-    gst_event_parse_seek (event, NULL, NULL, &flags, NULL, NULL, NULL, NULL);
-
-    if (flags & GST_SEEK_FLAG_FLUSH) {
-      force = TRUE;
-      GST_DEBUG_OBJECT (watchdog, "Got a FLUSHING seek, we need a buffer now!");
-      watchdog->waiting_for_flush_start = TRUE;
-    }
-  }
-
-  gst_watchdog_feed (watchdog, event, force);
+  gst_watchdog_feed (watchdog);
   GST_OBJECT_UNLOCK (watchdog);
 
   return GST_BASE_TRANSFORM_CLASS (gst_watchdog_parent_class)->src_event (trans,
@@ -363,7 +314,7 @@ gst_watchdog_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   GST_DEBUG_OBJECT (watchdog, "transform_ip");
 
   GST_OBJECT_LOCK (watchdog);
-  gst_watchdog_feed (watchdog, buf, FALSE);
+  gst_watchdog_feed (watchdog);
   GST_OBJECT_UNLOCK (watchdog);
 
   return GST_FLOW_OK;
@@ -381,10 +332,11 @@ gst_watchdog_change_state (GstElement * element, GstStateChange transition)
   GST_DEBUG_OBJECT (watchdog, "gst_watchdog_change_state");
 
   switch (transition) {
+    case GST_STATE_CHANGE_READY_TO_PAUSED:
     case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
       /* Activate timer */
       GST_OBJECT_LOCK (watchdog);
-      gst_watchdog_feed (watchdog, NULL, FALSE);
+      gst_watchdog_feed (watchdog);
       GST_OBJECT_UNLOCK (watchdog);
       break;
     default:
@@ -396,12 +348,6 @@ gst_watchdog_change_state (GstElement * element, GstStateChange transition)
       transition);
 
   switch (transition) {
-    case GST_STATE_CHANGE_READY_TO_PAUSED:
-      GST_OBJECT_LOCK (watchdog);
-      watchdog->waiting_for_a_buffer = TRUE;
-      gst_watchdog_feed (watchdog, NULL, TRUE);
-      GST_OBJECT_UNLOCK (watchdog);
-      break;
     case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
       /* Disable the timer */
       GST_OBJECT_LOCK (watchdog);

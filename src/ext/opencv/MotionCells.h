@@ -45,15 +45,18 @@
 #ifndef MOTIONCELLS_H_
 #define MOTIONCELLS_H_
 
-#include <opencv2/core/core_c.h>
+#include <cv.h>                 // includes OpenCV definitions
 #ifdef HAVE_HIGHGUI_H
 #include <highgui.h>            // includes highGUI definitions
 #endif
 #ifdef HAVE_OPENCV2_HIGHGUI_HIGHGUI_C_H
 #include <opencv2/highgui/highgui_c.h>            // includes highGUI definitions
 #endif
+#include <iostream>
 #include <fstream>
 #include <vector>
+#include <cstdio>
+#include <cmath>
 #include <glib.h>
 
 //MotionCells defines
@@ -242,6 +245,7 @@ private:
 
   IplImage *m_pcurFrame, *m_pprevFrame, *m_pdifferenceImage,
       *m_pbwImage,*transparencyimg;
+  CvSize m_frameSize;
   bool m_isVisible, m_changed_datafile, m_useAlpha, m_saveInDatafile;
   Cell **m_pCells;
   vector < MotionCellsIdx > m_MotionCells;

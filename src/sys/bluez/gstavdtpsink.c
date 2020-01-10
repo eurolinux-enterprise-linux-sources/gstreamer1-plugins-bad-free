@@ -34,6 +34,8 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 
+#include <dbus/dbus.h>
+
 #include "a2dp-codecs.h"
 
 #include "gstavdtpsink.h"
@@ -244,7 +246,7 @@ gst_avdtp_sink_event (GstBaseSink * basesink, GstEvent * event)
     gst_tag_list_foreach (taglist, gst_avdtp_sink_tag, self);
   }
 
-  return GST_BASE_SINK_CLASS (parent_class)->event (basesink, event);
+  return TRUE;
 }
 
 static gboolean
@@ -261,7 +263,7 @@ gst_avdtp_sink_start (GstBaseSink * basesink)
   if (self->conn.transport == NULL)
     return FALSE;
 
-  if (!gst_avdtp_connection_acquire (&self->conn, FALSE)) {
+  if (!gst_avdtp_connection_acquire (&self->conn)) {
     GST_ERROR_OBJECT (self, "Failed to acquire connection");
     return FALSE;
   }
@@ -381,8 +383,8 @@ gst_avdtp_sink_class_init (GstAvdtpSinkClass * klass)
   GST_DEBUG_CATEGORY_INIT (avdtp_sink_debug, "avdtpsink", 0,
       "A2DP headset sink element");
 
-  gst_element_class_add_static_pad_template (element_class,
-      &avdtp_sink_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&avdtp_sink_factory));
 
   gst_element_class_set_static_metadata (element_class, "Bluetooth AVDTP sink",
       "Sink/Audio", "Plays audio to an A2DP device",
@@ -427,6 +429,21 @@ gst_avdtp_sink_get_device_caps (GstAvdtpSink * sink)
   return gst_caps_copy (sink->dev_caps);
 }
 
+gboolean
+gst_avdtp_sink_set_device_caps (GstAvdtpSink * self, GstCaps * caps)
+{
+  GST_DEBUG_OBJECT (self, "setting device caps");
+  GST_AVDTP_SINK_MUTEX_LOCK (self);
+
+  if (self->stream_caps)
+    gst_caps_unref (self->stream_caps);
+  self->stream_caps = gst_caps_ref (caps);
+
+  GST_AVDTP_SINK_MUTEX_UNLOCK (self);
+
+  return TRUE;
+}
+
 guint
 gst_avdtp_sink_get_link_mtu (GstAvdtpSink * sink)
 {
@@ -436,7 +453,8 @@ gst_avdtp_sink_get_link_mtu (GstAvdtpSink * sink)
 void
 gst_avdtp_sink_set_device (GstAvdtpSink * self, const gchar * dev)
 {
-  g_free (self->conn.device);
+  if (self->conn.device != NULL)
+    g_free (self->conn.device);
 
   GST_LOG_OBJECT (self, "Setting device: %s", dev);
   self->conn.device = g_strdup (dev);
@@ -445,7 +463,8 @@ gst_avdtp_sink_set_device (GstAvdtpSink * self, const gchar * dev)
 void
 gst_avdtp_sink_set_transport (GstAvdtpSink * self, const gchar * trans)
 {
-  g_free (self->conn.transport);
+  if (self->conn.transport != NULL)
+    g_free (self->conn.transport);
 
   GST_LOG_OBJECT (self, "Setting transport: %s", trans);
   self->conn.transport = g_strdup (trans);

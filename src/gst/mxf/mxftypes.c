@@ -22,7 +22,6 @@
 #endif
 
 #include <gst/gst.h>
-#include <gst/base/gstbytewriter.h>
 #include <string.h>
 
 #include "mxftypes.h"
@@ -216,8 +215,7 @@ mxf_uuid_init (MXFUUID * uuid, GHashTable * hashtable)
   do {
     for (i = 0; i < 4; i++)
       GST_WRITE_UINT32_BE (&uuid->u[i * 4], g_random_int ());
-    uuid->u[6] = 0x40 | (uuid->u[6] & 0x0f);
-    uuid->u[8] = (uuid->u[8] & 0xbf) | 0x80;
+
   } while (hashtable && (mxf_uuid_is_zero (uuid) ||
           g_hash_table_lookup_extended (hashtable, uuid, NULL, NULL)));
 }
@@ -326,11 +324,10 @@ mxf_uuid_array_parse (MXFUUID ** array, guint32 * count, const guint8 * data,
 
   g_return_val_if_fail (array != NULL, FALSE);
   g_return_val_if_fail (count != NULL, FALSE);
+  g_return_val_if_fail (data != NULL, FALSE);
 
   if (size < 8)
     return FALSE;
-
-  g_return_val_if_fail (data != NULL, FALSE);
 
   element_count = GST_READ_UINT32_BE (data);
   data += 4;
@@ -352,7 +349,7 @@ mxf_uuid_array_parse (MXFUUID ** array, guint32 * count, const guint8 * data,
     return FALSE;
   }
 
-  if (element_count > size / 16) {
+  if (16 * element_count < size) {
     *array = NULL;
     *count = 0;
     return FALSE;
@@ -493,14 +490,13 @@ mxf_umid_init (MXFUMID * umid)
 gboolean
 mxf_timestamp_parse (MXFTimestamp * timestamp, const guint8 * data, guint size)
 {
+  g_return_val_if_fail (data != NULL, FALSE);
   g_return_val_if_fail (timestamp != NULL, FALSE);
 
   memset (timestamp, 0, sizeof (MXFTimestamp));
 
   if (size < 8)
     return FALSE;
-
-  g_return_val_if_fail (data != NULL, FALSE);
 
   timestamp->year = GST_READ_UINT16_BE (data);
   timestamp->month = GST_READ_UINT8 (data + 2);
@@ -599,13 +595,12 @@ gboolean
 mxf_fraction_parse (MXFFraction * fraction, const guint8 * data, guint size)
 {
   g_return_val_if_fail (fraction != NULL, FALSE);
+  g_return_val_if_fail (data != NULL, FALSE);
 
   memset (fraction, 0, sizeof (MXFFraction));
 
   if (size < 8)
     return FALSE;
-
-  g_return_val_if_fail (data != NULL, FALSE);
 
   fraction->n = GST_READ_UINT32_BE (data);
   fraction->d = GST_READ_UINT32_BE (data + 4);
@@ -672,13 +667,12 @@ mxf_product_version_parse (MXFProductVersion * product_version,
     const guint8 * data, guint size)
 {
   g_return_val_if_fail (product_version != NULL, FALSE);
+  g_return_val_if_fail (data != NULL, FALSE);
 
   memset (product_version, 0, sizeof (MXFProductVersion));
 
   if (size < 9)
     return FALSE;
-
-  g_return_val_if_fail (data != NULL, FALSE);
 
   product_version->major = GST_READ_UINT16_BE (data);
   product_version->minor = GST_READ_UINT16_BE (data + 2);
@@ -752,13 +746,13 @@ mxf_op_set_generalized (MXFUL * ul, MXFOperationalPattern pattern,
   else if (pattern == MXF_OP_1c || pattern == MXF_OP_2c || pattern == MXF_OP_3c)
     ul->u[13] = 0x02;
 
-  ul->u[14] = 0x08;
+  ul->u[14] = 0x80;
   if (!internal_essence)
-    ul->u[14] |= 0x04;
+    ul->u[14] |= 0x40;
   if (!streamable)
-    ul->u[14] |= 0x02;
+    ul->u[14] |= 0x20;
   if (!single_track)
-    ul->u[14] |= 0x01;
+    ul->u[14] |= 0x10;
 
   ul->u[15] = 0;
 }
@@ -773,10 +767,8 @@ mxf_partition_pack_parse (const MXFUL * ul, MXFPartitionPack * pack,
   gchar str[48];
 #endif
 
-  if (size < 84)
-    return FALSE;
-
   g_return_val_if_fail (data != NULL, FALSE);
+  g_return_val_if_fail (size >= 84, FALSE);
 
   memset (pack, 0, sizeof (MXFPartitionPack));
 
@@ -997,12 +989,11 @@ mxf_random_index_pack_parse (const MXFUL * ul, const guint8 * data, guint size,
   guint len, i;
   MXFRandomIndexPackEntry entry;
 
+  g_return_val_if_fail (data != NULL, FALSE);
   g_return_val_if_fail (array != NULL, FALSE);
 
   if (size < 4)
     return FALSE;
-
-  g_return_val_if_fail (data != NULL, FALSE);
 
   if ((size - 4) % 12 != 0)
     return FALSE;
@@ -1070,7 +1061,8 @@ mxf_random_index_pack_to_buffer (const GArray * array)
 /* SMPTE 377M 10.2.3 */
 gboolean
 mxf_index_table_segment_parse (const MXFUL * ul,
-    MXFIndexTableSegment * segment, const guint8 * data, guint size)
+    MXFIndexTableSegment * segment, const MXFPrimerPack * primer,
+    const guint8 * data, guint size)
 {
 #ifndef GST_DISABLE_GST_DEBUG
   gchar str[48];
@@ -1079,22 +1071,19 @@ mxf_index_table_segment_parse (const MXFUL * ul,
   const guint8 *tag_data;
 
   g_return_val_if_fail (ul != NULL, FALSE);
+  g_return_val_if_fail (data != NULL, FALSE);
+  g_return_val_if_fail (primer != NULL, FALSE);
 
   memset (segment, 0, sizeof (MXFIndexTableSegment));
 
   if (size < 70)
     return FALSE;
 
-  g_return_val_if_fail (data != NULL, FALSE);
-
   GST_DEBUG ("Parsing index table segment:");
 
   while (mxf_local_tag_parse (data, size, &tag, &tag_size, &tag_data)) {
-    data += 4 + tag_size;
-    size -= 4 + tag_size;
-
     if (tag_size == 0 || tag == 0x0000)
-      continue;
+      goto next;
 
     switch (tag) {
       case 0x3c0a:
@@ -1165,7 +1154,7 @@ mxf_index_table_segment_parse (const MXFUL * ul,
         segment->n_delta_entries = len;
         GST_DEBUG ("  number of delta entries = %u", segment->n_delta_entries);
         if (len == 0)
-          continue;
+          goto next;
         tag_data += 4;
         tag_size -= 4;
 
@@ -1175,7 +1164,7 @@ mxf_index_table_segment_parse (const MXFUL * ul,
         tag_data += 4;
         tag_size -= 4;
 
-        if (tag_size / 6 < len)
+        if (tag_size < len * 6)
           goto error;
 
         segment->delta_entries = g_new (MXFDeltaEntry, len);
@@ -1213,7 +1202,7 @@ mxf_index_table_segment_parse (const MXFUL * ul,
         segment->n_index_entries = len;
         GST_DEBUG ("  number of index entries = %u", segment->n_index_entries);
         if (len == 0)
-          continue;
+          goto next;
         tag_data += 4;
         tag_size -= 4;
 
@@ -1224,8 +1213,7 @@ mxf_index_table_segment_parse (const MXFUL * ul,
         tag_data += 4;
         tag_size -= 4;
 
-        if (tag_size / (11 + 4 * segment->slice_count +
-                8 * segment->pos_table_count) < len)
+        if (tag_size < len * 11)
           goto error;
 
         segment->index_entries = g_new0 (MXFIndexEntry, len);
@@ -1277,11 +1265,18 @@ mxf_index_table_segment_parse (const MXFUL * ul,
         break;
       }
       default:
-        GST_WARNING
-            ("Unknown local tag 0x%04x of size %d in index table segment", tag,
-            tag_size);
+        if (!primer->mappings) {
+          GST_WARNING ("No valid primer pack for this partition");
+        } else if (!mxf_local_tag_add_to_hash_table (primer, tag, tag_data,
+                tag_size, &segment->other_tags)) {
+          goto error;
+        }
         break;
     }
+
+  next:
+    data += 4 + tag_size;
+    size -= 4 + tag_size;
   }
   return TRUE;
 
@@ -1298,136 +1293,18 @@ mxf_index_table_segment_reset (MXFIndexTableSegment * segment)
 
   g_return_if_fail (segment != NULL);
 
-  if (segment->index_entries) {
-    for (i = 0; i < segment->n_index_entries; i++) {
-      g_free (segment->index_entries[i].slice_offset);
-      g_free (segment->index_entries[i].pos_table);
-    }
+  for (i = 0; i < segment->n_index_entries; i++) {
+    g_free (segment->index_entries[i].slice_offset);
+    g_free (segment->index_entries[i].pos_table);
   }
 
   g_free (segment->index_entries);
   g_free (segment->delta_entries);
 
+  if (segment->other_tags)
+    g_hash_table_destroy (segment->other_tags);
+
   memset (segment, 0, sizeof (MXFIndexTableSegment));
-}
-
-GstBuffer *
-mxf_index_table_segment_to_buffer (const MXFIndexTableSegment * segment)
-{
-  guint len, slen, i;
-  guint8 ber[9];
-  GstBuffer *ret;
-  GstMapInfo map;
-  GstByteWriter bw;
-
-  g_return_val_if_fail (segment != NULL, NULL);
-  g_return_val_if_fail (segment->n_delta_entries * 6 < G_MAXUINT16, NULL);
-  g_return_val_if_fail (segment->n_index_entries * (11 +
-          4 * segment->slice_count + 8 * segment->pos_table_count) <
-      G_MAXUINT16, NULL);
-
-  len =
-      16 + 4 + 8 + 4 + 8 + 4 + 8 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 1 + 4 + 1 + 4 +
-      4 + 8 + segment->n_delta_entries * 6 + 4 + 8 +
-      segment->n_index_entries * (11 + 4 * segment->slice_count +
-      8 * segment->pos_table_count);
-  slen = mxf_ber_encode_size (len, ber);
-
-  ret = gst_buffer_new_and_alloc (16 + slen + len);
-  gst_buffer_map (ret, &map, GST_MAP_WRITE);
-
-  gst_byte_writer_init_with_data (&bw, map.data, map.size, FALSE);
-
-  gst_byte_writer_put_data_unchecked (&bw,
-      (const guint8 *) MXF_UL (INDEX_TABLE_SEGMENT), 16);
-  gst_byte_writer_put_data_unchecked (&bw, ber, slen);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3c0a);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 16);
-  gst_byte_writer_put_data_unchecked (&bw,
-      (const guint8 *) &segment->instance_id, 16);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f0b);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 8);
-  gst_byte_writer_put_uint32_be_unchecked (&bw, segment->index_edit_rate.n);
-  gst_byte_writer_put_uint32_be_unchecked (&bw, segment->index_edit_rate.d);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f0c);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 8);
-  gst_byte_writer_put_uint64_be_unchecked (&bw, segment->index_start_position);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f0d);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 8);
-  gst_byte_writer_put_uint64_be_unchecked (&bw, segment->index_duration);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f05);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 4);
-  gst_byte_writer_put_uint32_be_unchecked (&bw, segment->edit_unit_byte_count);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f06);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 4);
-  gst_byte_writer_put_uint32_be_unchecked (&bw, segment->index_sid);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f07);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 4);
-  gst_byte_writer_put_uint32_be_unchecked (&bw, segment->body_sid);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f08);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 1);
-  gst_byte_writer_put_uint8 (&bw, segment->slice_count);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f0e);
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 1);
-  gst_byte_writer_put_uint8 (&bw, segment->pos_table_count);
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f09);
-  gst_byte_writer_put_uint16_be_unchecked (&bw,
-      8 + segment->n_delta_entries * 6);
-  gst_byte_writer_put_uint32_be_unchecked (&bw, segment->n_delta_entries);
-  gst_byte_writer_put_uint32_be_unchecked (&bw, 6);
-  for (i = 0; i < segment->n_delta_entries; i++) {
-    gst_byte_writer_put_uint8_unchecked (&bw,
-        segment->delta_entries[i].pos_table_index);
-    gst_byte_writer_put_uint8_unchecked (&bw, segment->delta_entries[i].slice);
-    gst_byte_writer_put_uint32_be_unchecked (&bw,
-        segment->delta_entries[i].element_delta);
-  }
-
-  gst_byte_writer_put_uint16_be_unchecked (&bw, 0x3f0a);
-  gst_byte_writer_put_uint16_be_unchecked (&bw,
-      8 + segment->n_index_entries * (11 + 4 * segment->slice_count +
-          8 * segment->pos_table_count));
-  gst_byte_writer_put_uint32_be_unchecked (&bw, segment->n_index_entries);
-  gst_byte_writer_put_uint32_be_unchecked (&bw,
-      (11 + 4 * segment->slice_count + 8 * segment->pos_table_count));
-  for (i = 0; i < segment->n_index_entries; i++) {
-    guint j;
-
-    gst_byte_writer_put_uint8_unchecked (&bw,
-        segment->index_entries[i].temporal_offset);
-    gst_byte_writer_put_uint8_unchecked (&bw,
-        segment->index_entries[i].key_frame_offset);
-    gst_byte_writer_put_uint8_unchecked (&bw, segment->index_entries[i].flags);
-    gst_byte_writer_put_uint64_be_unchecked (&bw,
-        segment->index_entries[i].stream_offset);
-
-    for (j = 0; j < segment->slice_count; j++)
-      gst_byte_writer_put_uint32_be_unchecked (&bw,
-          segment->index_entries[i].slice_offset[j]);
-
-    for (j = 0; j < segment->pos_table_count; j++) {
-      gst_byte_writer_put_uint32_be_unchecked (&bw,
-          segment->index_entries[i].pos_table[j].n);
-      gst_byte_writer_put_uint32_be_unchecked (&bw,
-          segment->index_entries[i].pos_table[j].d);
-    }
-  }
-
-  g_assert (gst_byte_writer_get_pos (&bw) == map.size);
-
-  gst_buffer_unmap (ret, &map);
-
-  return ret;
 }
 
 /* SMPTE 377M 8.2 Table 1 and 2 */
@@ -1445,10 +1322,8 @@ mxf_primer_pack_parse (const MXFUL * ul, MXFPrimerPack * pack,
   guint i;
   guint32 n;
 
-  if (size < 8)
-    return FALSE;
-
   g_return_val_if_fail (data != NULL, FALSE);
+  g_return_val_if_fail (size >= 8, FALSE);
 
   memset (pack, 0, sizeof (MXFPrimerPack));
 
@@ -1460,16 +1335,14 @@ mxf_primer_pack_parse (const MXFUL * ul, MXFPrimerPack * pack,
 
   n = GST_READ_UINT32_BE (data);
   data += 4;
-  size -= 4;
 
   GST_DEBUG ("  number of mappings = %u", n);
 
   if (GST_READ_UINT32_BE (data) != 18)
     goto error;
   data += 4;
-  size -= 4;
 
-  if (size / 18 < n)
+  if (size < 8 + n * 18)
     goto error;
 
   for (i = 0; i < n; i++) {
@@ -1601,14 +1474,15 @@ mxf_primer_pack_to_buffer (const MXFPrimerPack * pack)
   data += 8;
 
   if (pack->mappings) {
-    gpointer local_tag;
+    guint local_tag;
     MXFUL *ul;
     GHashTableIter iter;
 
     g_hash_table_iter_init (&iter, pack->mappings);
 
-    while (g_hash_table_iter_next (&iter, &local_tag, (gpointer) & ul)) {
-      GST_WRITE_UINT16_BE (data, GPOINTER_TO_UINT (local_tag));
+    while (g_hash_table_iter_next (&iter, (gpointer) & local_tag,
+            (gpointer) & ul)) {
+      GST_WRITE_UINT16_BE (data, local_tag);
       memcpy (data + 2, ul, 16);
       data += 18;
     }
@@ -1625,21 +1499,18 @@ gboolean
 mxf_local_tag_parse (const guint8 * data, guint size, guint16 * tag,
     guint16 * tag_size, const guint8 ** tag_data)
 {
+  g_return_val_if_fail (data != NULL, FALSE);
+
   if (size < 4)
     return FALSE;
-
-  g_return_val_if_fail (data != NULL, FALSE);
 
   *tag = GST_READ_UINT16_BE (data);
   *tag_size = GST_READ_UINT16_BE (data + 2);
 
-  data += 4;
-  size -= 4;
-
-  if (size < *tag_size)
+  if (size < 4 + *tag_size)
     return FALSE;
 
-  *tag_data = data;
+  *tag_data = data + 4;
 
   return TRUE;
 }
@@ -1663,7 +1534,7 @@ mxf_local_tag_add_to_hash_table (const MXFPrimerPack * primer,
   MXFUL *ul;
 
   g_return_val_if_fail (primer != NULL, FALSE);
-  g_return_val_if_fail (tag_size == 0 || tag_data != NULL, FALSE);
+  g_return_val_if_fail (tag_data != NULL, FALSE);
   g_return_val_if_fail (hash_table != NULL, FALSE);
   g_return_val_if_fail (primer->mappings != NULL, FALSE);
 
@@ -1689,7 +1560,7 @@ mxf_local_tag_add_to_hash_table (const MXFPrimerPack * primer,
     local_tag = g_slice_new0 (MXFLocalTag);
     memcpy (&local_tag->ul, ul, sizeof (MXFUL));
     local_tag->size = tag_size;
-    local_tag->data = tag_size == 0 ? NULL : g_memdup (tag_data, tag_size);
+    local_tag->data = g_memdup (tag_data, tag_size);
     local_tag->g_slice = FALSE;
 
     g_hash_table_insert (*hash_table, &local_tag->ul, local_tag);

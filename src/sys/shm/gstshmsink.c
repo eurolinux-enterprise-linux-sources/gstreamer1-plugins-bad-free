@@ -26,7 +26,7 @@
  * <refsect2>
  * <title>Example launch lines</title>
  * |[
- * gst-launch-1.0 -v videotestsrc !  shmsink socket-path=/tmp/blah shm-size=1000000
+ * gst-launch -v videotestsrc !  shmsink socket-path=/tmp/blah shm-size=1000000
  * ]| Send video to shm buffers.
  * </refsect2>
  */
@@ -419,7 +419,8 @@ gst_shm_sink_class_init (GstShmSinkClass * klass)
       GST_TYPE_SHM_SINK, G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 
-  gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sinktemplate));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Shared Memory Sink",
@@ -714,8 +715,8 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
     while (self->wait_for_connection && !self->clients) {
       g_cond_wait (&self->cond, GST_OBJECT_GET_LOCK (self));
       if (self->unlock) {
-        GST_OBJECT_UNLOCK (self);
         gst_memory_unref (memory);
+        GST_OBJECT_UNLOCK (self);
         return GST_FLOW_FLUSHING;
       }
     }

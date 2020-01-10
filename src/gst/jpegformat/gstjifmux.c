@@ -31,7 +31,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc num-buffers=1 ! jpegenc ! jifmux ! filesink location=...
+ * gst-launch -v videotestsrc num-buffers=1 ! jpegenc ! jifmux ! filesink location=...
  * ]|
  * The above pipeline renders a frame, encodes to jpeg, adds metadata and writes
  * it to disk.
@@ -46,8 +46,8 @@ scan header : {DAC,DHT},DRI,SOS
 file trailer: EOI
 
 tests:
-gst-launch-1.0 videotestsrc num-buffers=1 ! jpegenc ! jifmux ! filesink location=test1.jpeg
-gst-launch-1.0 videotestsrc num-buffers=1 ! jpegenc ! taginject tags="comment=test image" ! jifmux ! filesink location=test2.jpeg
+gst-launch videotestsrc num-buffers=1 ! jpegenc ! jifmux ! filesink location=test1.jpeg
+gst-launch videotestsrc num-buffers=1 ! jpegenc ! taginject tags="comment=\"test image\"" ! jifmux ! filesink location=test2.jpeg
 */
 
 #ifdef HAVE_CONFIG_H
@@ -136,10 +136,10 @@ gst_jif_mux_class_init (GstJifMuxClass * klass)
 
   gstelement_class->change_state = GST_DEBUG_FUNCPTR (gst_jif_mux_change_state);
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_jif_mux_src_pad_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_jif_mux_sink_pad_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_jif_mux_src_pad_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_jif_mux_sink_pad_template));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "JPEG stream muxer",
@@ -312,6 +312,7 @@ gst_jif_mux_parse_image (GstJifMux * self, GstBuffer * buf)
         m = gst_jif_mux_new_marker (marker, 0, NULL, FALSE);
         self->priv->markers = g_list_prepend (self->priv->markers, m);
         goto done;
+        break;
       default:
         if (!gst_byte_reader_get_uint16_be (&reader, &size))
           goto error;

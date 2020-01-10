@@ -174,7 +174,6 @@ typedef enum {
   GST_MTS_DESC_ATSC_REDISTRIBUTION_CONTROL      = 0xAA,
   GST_MTS_DESC_ATSC_GENRE                       = 0xAB,
   GST_MTS_DESC_ATSC_PRIVATE_INFORMATION         = 0xAD,
-  GST_MTS_DESC_ATSC_EAC3                        = 0xCC,
 
   /* ATSC A/53:3 2009 */
   GST_MTS_DESC_ATSC_ENHANCED_SIGNALING          = 0xB2,
@@ -314,7 +313,6 @@ gboolean gst_mpegts_descriptor_parse_iso_639_language_idx (const GstMpegtsDescri
                                                            guint idx, gchar **lang,
                                                            GstMpegtsIso639AudioType *audio_type);
 guint gst_mpegts_descriptor_parse_iso_639_language_nb (const GstMpegtsDescriptor *descriptor);
-GstMpegtsDescriptor * gst_mpegts_descriptor_from_iso_639_language (const gchar * language);
 
 
 
@@ -343,8 +341,6 @@ gst_mpegts_descriptor_parse_logical_channel (const GstMpegtsDescriptor *descript
 
 GstMpegtsDescriptor *
 gst_mpegts_descriptor_from_custom (guint8 tag, const guint8 *data, gsize length);
-GstMpegtsDescriptor *
-gst_mpegts_descriptor_from_custom_with_extension (guint8 tag, guint8 tag_extension, const guint8 *data, gsize length);
 
 G_END_DECLS
 

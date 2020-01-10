@@ -24,6 +24,11 @@
 #define __GST_VIDEO_PARSE_H__
 
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
+#include <gst/base/gstadapter.h>
+#include <gst/video/video.h>
+
+#include "gstrawparse.h"
 
 #define GST_TYPE_VIDEO_PARSE \
   (gst_video_parse_get_type())
@@ -41,13 +46,20 @@ typedef struct _GstVideoParseClass GstVideoParseClass;
 
 struct _GstVideoParse
 {
-  GstBin parent;
-  GstElement *rawvideoparse;
+  GstRawParse parent;
+
+  /* properties */
+  GstVideoFormat format;
+  gint width;
+  gint height;
+  gint par_n, par_d;
+  gboolean interlaced;
+  gboolean top_field_first;
 };
 
 struct _GstVideoParseClass
 {
-  GstBinClass parent_class;
+  GstRawParseClass parent_class;
 };
 
 

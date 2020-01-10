@@ -40,7 +40,6 @@ struct _GstGLFilterCube
     GstGLFilter filter;
 
     GstGLShader *shader;
-    GstGLMemory *in_tex;
 
     /* background color */
     gfloat red;
@@ -52,12 +51,6 @@ struct _GstGLFilterCube
     gdouble aspect;
     gdouble znear;
     gdouble zfar;
-
-    GLuint             vao;
-    GLuint             vbo_indices;
-    GLuint             vertex_buffer;
-    GLint              attr_position;
-    GLint              attr_texture;
 };
 
 struct _GstGLFilterCubeClass

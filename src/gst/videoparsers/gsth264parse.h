@@ -28,7 +28,6 @@
 #include <gst/gst.h>
 #include <gst/base/gstbaseparse.h>
 #include <gst/codecparsers/gsth264parser.h>
-#include <gst/video/video.h>
 
 G_BEGIN_DECLS
 
@@ -71,12 +70,9 @@ struct _GstH264Parse
   /* state */
   GstH264NalParser *nalparser;
   guint state;
-  guint in_align;
   guint align;
   guint format;
   gint current_off;
-  /* True if input format and alignment match negotiated output */
-  gboolean can_passthrough;
 
   GstClockTime last_report;
   gboolean push_codec;
@@ -113,21 +109,15 @@ struct _GstH264Parse
   gboolean update_caps;
   GstAdapter *frame_out;
   gboolean keyframe;
-  gboolean header;
   gboolean frame_start;
   /* AU state */
   gboolean picture_start;
 
   /* props */
-  gint interval;
+  guint interval;
 
   GstClockTime pending_key_unit_ts;
   GstEvent *force_key_unit_event;
-
-  /* Stereo / multiview info */
-  GstVideoMultiviewMode multiview_mode;
-  GstVideoMultiviewFlags multiview_flags;
-  gboolean first_in_bundle;
 };
 
 struct _GstH264ParseClass

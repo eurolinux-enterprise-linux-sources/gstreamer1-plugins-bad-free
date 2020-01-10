@@ -27,10 +27,10 @@
  * <refsect2>
  * <title>Example launch lines</title>
  * |[
- * gst-launch-1.0 filesrc location=example.mp4 ! qtdemux ! faad ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch filesrc location=example.mp4 ! qtdemux ! faad ! audioconvert ! audioresample ! autoaudiosink
  * ]| Play aac from mp4 file.
  * |[
- * gst-launch-1.0 filesrc location=example.adts ! faad ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch filesrc location=example.adts ! faad ! audioconvert ! audioresample ! autoaudiosink
  * ]| Play standalone aac bitstream.
  * </refsect2>
  */
@@ -42,7 +42,48 @@
 #include <string.h>
 #include <gst/audio/audio.h>
 
+/* These are the correct types for these functions, as defined in the source,
+ * with types changed to match glib types, since those are defined for us.
+ * However, upstream FAAD is distributed with a broken header file that defined
+ * these wrongly (in a way which was broken on 64 bit systems).
+ *
+ * Upstream CVS still has the bug, but has also renamed all the public symbols
+ * for Better Corporate Branding (or whatever), so we need to take that
+ * (FAAD_IS_NEAAC) into account as well.
+ *
+ * We must call them using these definitions. Most distributions now have the
+ * corrected header file (they distribute a patch along with the source), 
+ * but not all, hence this Truly Evil Hack.
+ *
+ * Note: The prototypes don't need to be defined conditionaly, as the cpp will
+ * do that for us.
+ */
+#if FAAD2_MINOR_VERSION < 7
+#ifdef FAAD_IS_NEAAC
+#define NeAACDecInit NeAACDecInit_no_definition
+#define NeAACDecInit2 NeAACDecInit2_no_definition
+#else
+#define faacDecInit faacDecInit_no_definition
+#define faacDecInit2 faacDecInit2_no_definition
+#endif
+#endif /* FAAD2_MINOR_VERSION < 7 */
+
 #include "gstfaad.h"
+
+#if FAAD2_MINOR_VERSION < 7
+#ifdef FAAD_IS_NEAAC
+#undef NeAACDecInit
+#undef NeAACDecInit2
+#else
+#undef faacDecInit
+#undef faacDecInit2
+#endif
+
+extern long faacDecInit (faacDecHandle, guint8 *, guint32, guint32 *, guint8 *);
+extern gint8 faacDecInit2 (faacDecHandle, guint8 *, guint32,
+    guint32 *, guint8 *);
+
+#endif /* FAAD2_MINOR_VERSION < 7 */
 
 GST_DEBUG_CATEGORY_STATIC (faad_debug);
 #define GST_CAT_DEFAULT faad_debug
@@ -93,7 +134,7 @@ static void gst_faad_reset (GstFaad * faad);
 static gboolean gst_faad_start (GstAudioDecoder * dec);
 static gboolean gst_faad_stop (GstAudioDecoder * dec);
 static gboolean gst_faad_set_format (GstAudioDecoder * dec, GstCaps * caps);
-static GstFlowReturn gst_faad_parse (GstAudioDecoder * dec, GstAdapter * adapter,
+static gboolean gst_faad_parse (GstAudioDecoder * dec, GstAdapter * adapter,
     gint * offset, gint * length);
 static GstFlowReturn gst_faad_handle_frame (GstAudioDecoder * dec,
     GstBuffer * buffer);
@@ -111,8 +152,10 @@ gst_faad_class_init (GstFaadClass * klass)
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   GstAudioDecoderClass *base_class = GST_AUDIO_DECODER_CLASS (klass);
 
-  gst_element_class_add_static_pad_template (element_class, &src_template);
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
 
   gst_element_class_set_static_metadata (element_class, "AAC audio decoder",
       "Codec/Decoder/Audio",
@@ -132,9 +175,6 @@ gst_faad_class_init (GstFaadClass * klass)
 static void
 gst_faad_init (GstFaad * faad)
 {
-  gst_audio_decoder_set_use_default_pad_acceptcaps (GST_AUDIO_DECODER_CAST
-      (faad), TRUE);
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_DECODER_SINK_PAD (faad));
   gst_faad_reset (faad);
 }
 
@@ -234,7 +274,11 @@ gst_faad_set_format (GstAudioDecoder * dec, GstCaps * caps)
   faad->packetised = FALSE;
 
   if ((value = gst_structure_get_value (str, "codec_data"))) {
+#if FAAD2_MINOR_VERSION >= 7
     unsigned long samplerate;
+#else
+    guint32 samplerate;
+#endif
     guint8 channels;
 
     /* We have codec data, means packetised stream */
@@ -412,6 +456,7 @@ gst_faad_chanpos_to_gst (GstFaad * faad, guchar * fpos,
         GST_WARNING_OBJECT (faad,
             "Unsupported FAAD channel position 0x%x encountered", fpos[n]);
         return FALSE;
+        break;
       }
     }
   }
@@ -426,7 +471,6 @@ gst_faad_update_caps (GstFaad * faad, faacDecFrameInfo * info)
   gboolean fmt_change = FALSE;
   GstAudioInfo ainfo;
   gint i;
-  GstAudioChannelPosition position[6];
 
   /* see if we need to renegotiate */
   if (info->samplerate != faad->samplerate ||
@@ -452,6 +496,10 @@ gst_faad_update_caps (GstFaad * faad, faacDecFrameInfo * info)
   g_free (faad->channel_positions);
   faad->channel_positions = g_memdup (info->channel_position, faad->channels);
 
+  /* FIXME: Use the GstAudioInfo of GstAudioDecoder for all of this */
+  gst_audio_info_init (&ainfo);
+  gst_audio_info_set_format (&ainfo, GST_AUDIO_FORMAT_S16, faad->samplerate,
+      faad->channels, NULL);
   faad->bps = 16 / 8;
 
   if (!gst_faad_chanpos_to_gst (faad, faad->channel_positions,
@@ -459,11 +507,14 @@ gst_faad_update_caps (GstFaad * faad, faacDecFrameInfo * info)
     GST_DEBUG_OBJECT (faad, "Could not map channel positions");
     return FALSE;
   }
-
-  memcpy (position, faad->aac_positions, sizeof (position));
-  gst_audio_channel_positions_to_valid_order (position, faad->channels);
-  memcpy (faad->gst_positions, position,
+  memcpy (ainfo.position, faad->aac_positions,
       faad->channels * sizeof (GstAudioChannelPosition));
+  gst_audio_channel_positions_to_valid_order (ainfo.position, faad->channels);
+  memcpy (faad->gst_positions, ainfo.position,
+      faad->channels * sizeof (GstAudioChannelPosition));
+  /* Unset UNPOSITIONED flag */
+  if (ainfo.position[0] != GST_AUDIO_CHANNEL_POSITION_NONE)
+    ainfo.flags &= ~GST_AUDIO_FLAG_UNPOSITIONED;
 
   /* get the remap table */
   memset (faad->reorder_map, 0, sizeof (faad->reorder_map));
@@ -477,11 +528,6 @@ gst_faad_update_caps (GstFaad * faad, faacDecFrameInfo * info)
       }
     }
   }
-
-  /* FIXME: Use the GstAudioInfo of GstAudioDecoder for all of this */
-  gst_audio_info_init (&ainfo);
-  gst_audio_info_set_format (&ainfo, GST_AUDIO_FORMAT_S16, faad->samplerate,
-      faad->channels, position);
 
   ret = gst_audio_decoder_set_output_format (GST_AUDIO_DECODER (faad), &ainfo);
 
@@ -644,7 +690,11 @@ gst_faad_handle_frame (GstAudioDecoder * dec, GstBuffer * buffer)
 init:
   /* init if not already done during capsnego */
   if (!faad->init) {
+#if FAAD2_MINOR_VERSION >= 7
     unsigned long rate;
+#else
+    guint32 rate;
+#endif
     guint8 ch;
 
     GST_DEBUG_OBJECT (faad, "initialising ...");
@@ -840,8 +890,7 @@ gst_faad_close_decoder (GstFaad * faad)
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-  return gst_element_register (plugin, "faad", GST_RANK_SECONDARY,
-      GST_TYPE_FAAD);
+  return gst_element_register (plugin, "faad", GST_RANK_PRIMARY, GST_TYPE_FAAD);
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,

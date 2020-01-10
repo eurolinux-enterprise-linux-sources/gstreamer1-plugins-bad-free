@@ -23,15 +23,14 @@
 #define __GST_GL_WINDOW_ANDROID_EGL_H__
 
 #include <gst/gl/gl.h>
-#include <gst/gl/egl/gstegl.h>
 
 G_BEGIN_DECLS
 
 #define GST_GL_TYPE_WINDOW_ANDROID_EGL         (gst_gl_window_android_egl_get_type())
 #define GST_GL_WINDOW_ANDROID_EGL(o)           (G_TYPE_CHECK_INSTANCE_CAST((o), GST_GL_TYPE_WINDOW_ANDROID_EGL, GstGLWindowAndroidEGL))
 #define GST_GL_WINDOW_ANDROID_EGL_CLASS(k)     (G_TYPE_CHECK_CLASS((k), GST_GL_TYPE_WINDOW_ANDROID_EGL, GstGLWindowAndroidEGLClass))
-#define GST_IS_GL_WINDOW_ANDROID_EGL(o)        (G_TYPE_CHECK_INSTANCE_TYPE((o), GST_GL_TYPE_WINDOW_ANDROID_EGL))
-#define GST_IS_GL_WINDOW_ANDROID_EGL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE((k), GST_GL_TYPE_WINDOW_ANDROID_EGL))
+#define GST_GL_IS_WINDOW_ANDROID_EGL(o)        (G_TYPE_CHECK_INSTANCE_TYPE((o), GST_GL_TYPE_WINDOW_ANDROID_EGL))
+#define GST_GL_IS_WINDOW_ANDROID_EGL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE((k), GST_GL_TYPE_WINDOW_ANDROID_EGL))
 #define GST_GL_WINDOW_ANDROID_EGL_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS((o), GST_GL_TYPE_WINDOW_ANDROID_EGL, GstGLWindowAndroidEGL_Class))
 
 typedef struct _GstGLWindowAndroidEGL        GstGLWindowAndroidEGL;
@@ -44,6 +43,9 @@ struct _GstGLWindowAndroidEGL {
   /* This is actually an ANativeWindow */
   EGLNativeWindowType native_window;
   gint window_width, window_height;
+
+  GMainContext *main_context;
+  GMainLoop *loop;
 
   gpointer _reserved[GST_PADDING];
 };
@@ -58,7 +60,7 @@ struct _GstGLWindowAndroidEGLClass {
 
 GType gst_gl_window_android_egl_get_type     (void);
 
-GstGLWindowAndroidEGL * gst_gl_window_android_egl_new  (GstGLDisplay * display);
+GstGLWindowAndroidEGL * gst_gl_window_android_egl_new  (void);
 
 G_END_DECLS
 

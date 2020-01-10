@@ -25,6 +25,7 @@
 
 #include <gst/gst.h>
 #include <gst/audio/gstaudiosrc.h>
+#include <gst/interfaces/propertyprobe.h>
 
 #include "gstdshow.h"
 #include "gstdshowfakesink.h"
@@ -66,7 +67,7 @@ struct _GstDshowAudioSrc
 
   /* bytes array */
   GByteArray *gbarray;
-  GMutex gbarray_lock;
+  GMutex *gbarray_lock;
 
   gboolean is_running;
 };

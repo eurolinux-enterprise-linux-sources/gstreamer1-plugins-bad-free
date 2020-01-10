@@ -3,7 +3,7 @@
  * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
  * Copyright (C) 2008 Michael Sheldon <mike@mikeasoft.com>
- *
+ * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -46,8 +46,8 @@
 #ifndef __GST_EDGE_DETECT_H__
 #define __GST_EDGE_DETECT_H__
 
-#include <gstopencvvideofilter.h>
-#include <opencv2/core/core_c.h>
+#include <gst/gst.h>
+#include <cv.h>
 
 G_BEGIN_DECLS
 /* #defines don't like whitespacey bits */
@@ -61,24 +61,25 @@ G_BEGIN_DECLS
   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_EDGE_DETECT))
 #define GST_IS_EDGE_DETECT_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_EDGE_DETECT))
-
 typedef struct _GstEdgeDetect GstEdgeDetect;
 typedef struct _GstEdgeDetectClass GstEdgeDetectClass;
 
 struct _GstEdgeDetect
 {
-  GstOpencvVideoFilter element;
+  GstElement element;
+
+  GstPad *sinkpad, *srcpad;
 
   gboolean mask;
 
   int threshold1, threshold2, aperture;
 
-  IplImage *cvEdge, *cvGray, *cvCEdge;
+  IplImage *cvEdge, *cvGray, *cvImage, *cvCEdge;
 };
 
 struct _GstEdgeDetectClass
 {
-  GstOpencvVideoFilterClass parent_class;
+  GstElementClass parent_class;
 };
 
 GType gst_edge_detect_get_type (void);

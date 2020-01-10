@@ -32,7 +32,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -m uridecodebin uri=file:///path/to/song.ogg ! audioconvert ! chromaprint ! fakesink
+ * gst-launch -m uridecodebin uri=file:///path/to/song.ogg ! audioconvert ! chromaprint ! fakesink
  * ]|
  * </refsect2>
  */
@@ -87,6 +87,7 @@ gst_chromaprint_class_init (GstChromaprintClass * klass)
   gobject_class->set_property = gst_chromaprint_set_property;
   gobject_class->get_property = gst_chromaprint_get_property;
 
+  /* FIXME: do we need this in addition to the tag message ? */
   g_object_class_install_property (gobject_class, PROP_FINGERPRINT,
       g_param_spec_string ("fingerprint", "Resulting fingerprint",
           "Resulting fingerprint", NULL, G_PARAM_READABLE));
@@ -145,8 +146,6 @@ gst_chromaprint_create_fingerprint (GstChromaprint * chromaprint)
   chromaprint_finish (chromaprint->context);
   chromaprint_get_fingerprint (chromaprint->context, &chromaprint->fingerprint);
   chromaprint->record = FALSE;
-
-  g_object_notify ((GObject *) chromaprint, "fingerprint");
 
   tags = gst_tag_list_new (GST_TAG_CHROMAPRINT_FINGERPRINT,
       chromaprint->fingerprint, NULL);
@@ -218,7 +217,7 @@ gst_chromaprint_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   chromaprint->nsamples += nsamples;
   chromaprint->duration = chromaprint->nsamples / rate;
 
-  chromaprint_feed (chromaprint->context, (gint16 *) map_info.data,
+  chromaprint_feed (chromaprint->context, map_info.data,
       map_info.size / sizeof (guint16));
 
   if (chromaprint->duration >= chromaprint->max_duration

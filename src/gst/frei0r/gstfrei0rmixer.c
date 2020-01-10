@@ -216,12 +216,8 @@ gst_frei0r_mixer_set_caps (GstFrei0rMixer * self, GstPad * pad, GstCaps * caps)
       }
     }
   } else if (!gst_caps_is_equal (caps, self->caps)) {
-    GstCaps *upstream_caps;
-
-    upstream_caps = gst_pad_peer_query_caps (pad, NULL);
-    if (gst_caps_can_intersect (self->caps, upstream_caps))
+    if (gst_pad_peer_query_accept_caps (pad, self->caps))
       gst_pad_push_event (pad, gst_event_new_reconfigure ());
-    gst_caps_unref (upstream_caps);
     ret = FALSE;
   }
 
@@ -344,17 +340,15 @@ gst_frei0r_mixer_src_query_latency (GstFrei0rMixer * self, GstQuery * query)
         if (res) {
           gst_query_parse_latency (peerquery, &live_cur, &min_cur, &max_cur);
 
-          if (live_cur) {
-            if (min_cur > min)
-              min = min_cur;
+          if (min_cur > min)
+            min = min_cur;
 
-            if (max == GST_CLOCK_TIME_NONE)
-              max = max_cur;
-            else if (max_cur < max)
-              max = max_cur;
+          if (max_cur != GST_CLOCK_TIME_NONE &&
+              ((max != GST_CLOCK_TIME_NONE && max_cur > max) ||
+                  (max == GST_CLOCK_TIME_NONE)))
+            max = max_cur;
 
-            live = TRUE;
-          }
+          live = live || live_cur;
         }
 
         gst_query_unref (peerquery);

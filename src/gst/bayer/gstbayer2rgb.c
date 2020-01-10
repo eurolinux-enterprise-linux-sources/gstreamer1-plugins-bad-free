@@ -80,11 +80,7 @@
 #include <gst/video/video.h>
 #include <string.h>
 #include <stdlib.h>
-
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#endif
-
+#include <_stdint.h>
 #include "gstbayerorc.h"
 
 #define GST_CAT_DEFAULT gst_bayer2rgb_debug
@@ -286,35 +282,32 @@ static GstCaps *
 gst_bayer2rgb_transform_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter)
 {
-  GstBayer2RGB *bayer2rgb;
-  GstCaps *res_caps, *tmp_caps;
   GstStructure *structure;
-  guint i, caps_size;
+  GstCaps *newcaps;
+  GstStructure *newstruct;
 
-  bayer2rgb = GST_BAYER2RGB (base);
+  GST_DEBUG_OBJECT (caps, "transforming caps (from)");
 
-  res_caps = gst_caps_copy (caps);
-  caps_size = gst_caps_get_size (res_caps);
-  for (i = 0; i < caps_size; i++) {
-    structure = gst_caps_get_structure (res_caps, i);
-    if (direction == GST_PAD_SINK) {
-      gst_structure_set_name (structure, "video/x-raw");
-      gst_structure_remove_field (structure, "format");
-    } else {
-      gst_structure_set_name (structure, "video/x-bayer");
-      gst_structure_remove_fields (structure, "format", "colorimetry",
-          "chroma-site", NULL);
-    }
+  structure = gst_caps_get_structure (caps, 0);
+
+  if (direction == GST_PAD_SRC) {
+    newcaps = gst_caps_from_string ("video/x-bayer,"
+        "format=(string){bggr,grbg,gbrg,rggb}");
+  } else {
+    newcaps = gst_caps_new_empty_simple ("video/x-raw");
   }
-  if (filter) {
-    tmp_caps = res_caps;
-    res_caps =
-        gst_caps_intersect_full (filter, tmp_caps, GST_CAPS_INTERSECT_FIRST);
-    gst_caps_unref (tmp_caps);
-  }
-  GST_DEBUG_OBJECT (bayer2rgb, "transformed %" GST_PTR_FORMAT " into %"
-      GST_PTR_FORMAT, caps, res_caps);
-  return res_caps;
+  newstruct = gst_caps_get_structure (newcaps, 0);
+
+  gst_structure_set_value (newstruct, "width",
+      gst_structure_get_value (structure, "width"));
+  gst_structure_set_value (newstruct, "height",
+      gst_structure_get_value (structure, "height"));
+  gst_structure_set_value (newstruct, "framerate",
+      gst_structure_get_value (structure, "framerate"));
+
+  GST_DEBUG_OBJECT (newcaps, "transforming caps (into)");
+
+  return newcaps;
 }
 
 static gboolean
@@ -459,25 +452,14 @@ gst_bayer2rgb_transform (GstBaseTransform * base, GstBuffer * inbuf,
   GstVideoFrame frame;
 
   GST_DEBUG ("transforming buffer");
-
-  if (!gst_buffer_map (inbuf, &map, GST_MAP_READ))
-    goto map_failed;
-
-  if (!gst_video_frame_map (&frame, &filter->info, outbuf, GST_MAP_WRITE)) {
-    gst_buffer_unmap (inbuf, &map);
-    goto map_failed;
-  }
+  gst_buffer_map (inbuf, &map, GST_MAP_READ);
+  gst_video_frame_map (&frame, &filter->info, outbuf, GST_MAP_WRITE);
 
   output = GST_VIDEO_FRAME_PLANE_DATA (&frame, 0);
-  gst_bayer2rgb_process (filter, output, frame.info.stride[0],
-      map.data, GST_ROUND_UP_4 (filter->width));
-
+  gst_bayer2rgb_process (filter, output, filter->width * 4,
+      map.data, filter->width);
   gst_video_frame_unmap (&frame);
   gst_buffer_unmap (inbuf, &map);
 
-  return GST_FLOW_OK;
-
-map_failed:
-  GST_WARNING_OBJECT (base, "Could not map buffer, skipping");
   return GST_FLOW_OK;
 }

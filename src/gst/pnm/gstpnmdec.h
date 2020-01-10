@@ -41,11 +41,8 @@ struct _GstPnmdec
   GstElement element;
   GstVideoDecoder decoder;
   GstPnmInfoMngr mngr;
-  GstVideoCodecState *input_state;
-  guint size, last_val, current_size ;
-  gboolean have_last_val;
+  guint size, last_byte, current_size ;
   GstBuffer *buf;
-  GstVideoFormat out_format;
 };
 
 struct _GstPnmdecClass

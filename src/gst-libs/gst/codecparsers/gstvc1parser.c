@@ -242,7 +242,7 @@ typedef struct
   gint par_n, par_d;
 } PAR;
 
-static const PAR aspect_ratios[] = {
+static PAR aspect_ratios[] = {
   {0, 0},
   {1, 1},
   {12, 11},
@@ -2197,7 +2197,7 @@ gst_vc1_bitplanes_free_1 (GstVC1BitPlanes * bitplanes)
  * in simple or main mode, or after #gst_vc1_parse_entry_point_header
  * if in advanced mode.
  *
- * Returns: %TRUE if everything went fine, %FALSE otherwise
+ * Returns: %TRUE if everything went fine, %FALSE otherwize
  */
 gboolean
 gst_vc1_bitplanes_ensure_size (GstVC1BitPlanes * bitplanes,

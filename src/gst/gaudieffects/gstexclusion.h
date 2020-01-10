@@ -53,6 +53,7 @@
 
 G_BEGIN_DECLS
 
+/* #defines don't like whitespacey bits */
 #define GST_TYPE_EXCLUSION \
   (gst_exclusion_get_type())
 #define GST_EXCLUSION(obj) \
@@ -72,7 +73,9 @@ struct _GstExclusion
   GstVideoFilter videofilter;
 
   /* < private > */
+
   gint factor;
+  gboolean silent;
 };
 
 struct _GstExclusionClass

@@ -1,6 +1,6 @@
 /*
  * GStreamer
- * Copyright (C) <2010-2015> Luis de Bethencourt <luis@debethencourt.com>
+ * Copyright (C) <2010-2012> Luis de Bethencourt <luis@debethencourt.com>
  *
  * Solarize - curve adjustment video effect.
  * Based on Pete Warden's FreeFrame plugin with the same name.
@@ -52,7 +52,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! solarize ! videoconvert ! autovideosink
+ * gst-launch -v videotestsrc ! solarize ! videoconvert ! autovideosink
  * ]| This pipeline shows the effect of solarize on a test stream
  * </refsect2>
  */
@@ -88,6 +88,7 @@ enum
   PROP_THRESHOLD,
   PROP_START,
   PROP_END,
+  PROP_SILENT
 };
 
 /* Initializations */
@@ -143,10 +144,10 @@ gst_solarize_class_init (GstSolarizeClass * klass)
       "Solarize tunable inverse in the video signal.",
       "Luis de Bethencourt <luis@debethencourt.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_solarize_sink_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_solarize_src_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_solarize_sink_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_solarize_src_template));
 
   gobject_class->set_property = gst_solarize_set_property;
   gobject_class->get_property = gst_solarize_get_property;
@@ -167,6 +168,10 @@ gst_solarize_class_init (GstSolarizeClass * klass)
           "End parameter", 0, 256, DEFAULT_END,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE));
 
+  g_object_class_install_property (gobject_class, PROP_SILENT,
+      g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
+          FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
   vfilter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_solarize_transform_frame);
 }
@@ -182,6 +187,7 @@ gst_solarize_init (GstSolarize * filter)
   filter->threshold = DEFAULT_THRESHOLD;
   filter->start = DEFAULT_START;
   filter->end = DEFAULT_END;
+  filter->silent = FALSE;
 }
 
 static void
@@ -191,6 +197,9 @@ gst_solarize_set_property (GObject * object, guint prop_id,
   GstSolarize *filter = GST_SOLARIZE (object);
 
   switch (prop_id) {
+    case PROP_SILENT:
+      filter->silent = g_value_get_boolean (value);
+      break;
     case PROP_THRESHOLD:
       filter->threshold = g_value_get_uint (value);
       break;
@@ -214,6 +223,9 @@ gst_solarize_get_property (GObject * object, guint prop_id,
 
   GST_OBJECT_LOCK (filter);
   switch (prop_id) {
+    case PROP_SILENT:
+      g_value_set_boolean (value, filter->silent);
+      break;
     case PROP_THRESHOLD:
       g_value_set_uint (value, filter->threshold);
       break;
@@ -244,13 +256,16 @@ gst_solarize_transform_frame (GstVideoFilter * vfilter,
     GstVideoFrame * in_frame, GstVideoFrame * out_frame)
 {
   GstSolarize *filter = GST_SOLARIZE (vfilter);
-  gint video_size, threshold, start, end;
+  gint video_size, threshold, start, end, width, height;
   guint32 *src, *dest;
   GstClockTime timestamp;
   gint64 stream_time;
 
   src = GST_VIDEO_FRAME_PLANE_DATA (in_frame, 0);
   dest = GST_VIDEO_FRAME_PLANE_DATA (out_frame, 0);
+
+  width = GST_VIDEO_FRAME_WIDTH (in_frame);
+  height = GST_VIDEO_FRAME_HEIGHT (in_frame);
 
   /* GstController: update the properties */
   timestamp = GST_BUFFER_TIMESTAMP (in_frame->buffer);
@@ -270,9 +285,7 @@ gst_solarize_transform_frame (GstVideoFilter * vfilter,
   end = filter->end;
   GST_OBJECT_UNLOCK (filter);
 
-  video_size = GST_VIDEO_FRAME_WIDTH (in_frame) *
-      GST_VIDEO_FRAME_HEIGHT (in_frame);
-
+  video_size = width * height;
   transform (src, dest, video_size, threshold, start, end);
 
   return GST_FLOW_OK;
@@ -300,19 +313,28 @@ transform (guint32 * src, guint32 * dest, gint video_area,
 {
   guint32 in;
   guint32 color[3];
-  gint period = 1, up_length = 1, down_length = 1;
   gint x, c;
-  gint param;
-  static const guint ceiling = 255;
+  gint floor = 0;
+  gint ceiling = 255;
 
-  if (end != start)
-    period = end - start;
+  gint period, up_length, down_length, height_scale, param;
 
-  if (threshold != start)
-    up_length = threshold - start;
+  period = end - start;
+  if (period == 0) {
+    period = 1;
+  }
 
-  if (threshold != end)
-    down_length = end - threshold;
+  up_length = threshold - start;
+  if (up_length == 0) {
+    up_length = 1;
+  }
+
+  down_length = end - threshold;
+  if (down_length == 0) {
+    down_length = 1;
+  }
+
+  height_scale = ceiling - floor;
 
   /* Loop through pixels. */
   for (x = 0; x < video_area; x++) {
@@ -322,6 +344,7 @@ transform (guint32 * src, guint32 * dest, gint video_area,
     color[1] = (in >> 8) & 0xff;
     color[2] = (in) & 0xff;
 
+
     /* Loop through colors. */
     for (c = 0; c < 3; c++) {
       param = color[c];
@@ -330,20 +353,20 @@ transform (guint32 * src, guint32 * dest, gint video_area,
       param %= period;
 
       if (param < up_length) {
-        color[c] = param * ceiling;
+        color[c] = param * height_scale;
         color[c] /= up_length;
+        color[c] += floor;
       } else {
         color[c] = down_length - (param - up_length);
-        color[c] *= ceiling;
+        color[c] *= height_scale;
         color[c] /= down_length;
+        color[c] += floor;
       }
     }
 
-    /* Clamp colors */
-    for (c = 0; c < 3; c++) {
-      if (G_UNLIKELY (color[c] > 255))
-        color[c] = 255;
-    }
+    color[0] = CLAMP (color[0], 0, 255);
+    color[1] = CLAMP (color[1], 0, 255);
+    color[2] = CLAMP (color[2], 0, 255);
 
     *dest++ = (color[0] << 16) | (color[1] << 8) | color[2];
   }

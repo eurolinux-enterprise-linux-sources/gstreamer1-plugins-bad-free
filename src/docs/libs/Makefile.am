@@ -36,13 +36,7 @@ HFILE_GLOB=$(top_srcdir)/gst-libs/gst/*/*.h
 CFILE_GLOB=$(top_srcdir)/gst-libs/gst/*/*.c
 
 # Header files to ignore when scanning.
-IGNORE_HFILES = \
-	$(top_srcdir)/gst-libs/gst/mpegts/gstmpegts-private.h \
-	$(top_srcdir)/gst-libs/gst/player/gstplayer-signal-dispatcher-private.h \
-	$(top_srcdir)/gst-libs/gst/player/gstplayer-video-renderer-private.h \
-	$(top_srcdir)/gst-libs/gst/player/gstplayer-media-info-private.h \
-	$(top_srcdir)/gst-libs/gst/gl/gstglcontext_private.h \
-	$(top_srcdir)/gst-libs/gst/gl/gstglsl_private.h
+IGNORE_HFILES = $(top_srcdir)/gst-libs/gst/mpegts/gstmpegts-private.h
 
 # Images to copy into HTML directory.
 HTML_IMAGES =
@@ -58,11 +52,16 @@ extra_files =
 GTKDOC_CFLAGS = -DGST_USE_UNSTABLE_API $(GST_PLUGINS_BAD_CFLAGS) $(GST_PLUGINS_BASE_CFLAGS) $(GST_BASE_CFLAGS)
 GTKDOC_LIBS = \
 	$(top_builddir)/gst-libs/gst/codecparsers/libgstcodecparsers-@GST_API_VERSION@.la \
-	$(top_builddir)/gst-libs/gst/gl/libgstgl-@GST_API_VERSION@.la \
+	$(top_builddir)/gst-libs/gst/basecamerabinsrc/libgstbasecamerabinsrc-@GST_API_VERSION@.la \
+	$(top_builddir)/gst-libs/gst/interfaces/libgstphotography-@GST_API_VERSION@.la \
 	$(top_builddir)/gst-libs/gst/insertbin/libgstinsertbin-@GST_API_VERSION@.la \
+	$(top_builddir)/gst-libs/gst/uridownloader/libgsturidownloader-@GST_API_VERSION@.la \
 	$(top_builddir)/gst-libs/gst/mpegts/libgstmpegts-@GST_API_VERSION@.la \
-	$(top_builddir)/gst-libs/gst/player/libgstplayer-@GST_API_VERSION@.la \
+	$(top_builddir)/gst-libs/gst/gl/libgstgl-@GST_API_VERSION@.la \
   $(GST_BASE_LIBS)
+
+GTKDOC_CC=$(LIBTOOL) --tag=CC --mode=compile $(CC)
+GTKDOC_LD=$(LIBTOOL) --tag=CC --mode=link $(CC)
 
 # If you need to override some of the declarations, place them in this file
 # and uncomment this line.

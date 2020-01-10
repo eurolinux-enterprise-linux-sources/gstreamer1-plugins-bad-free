@@ -178,10 +178,6 @@ GST_GL_EXT_FUNCTION (void, Viewport,
 GST_GL_EXT_FUNCTION (GLboolean, IsEnabled, (GLenum cap))
 GST_GL_EXT_FUNCTION (void, LineWidth, (GLfloat width))
 GST_GL_EXT_FUNCTION (void, PolygonOffset, (GLfloat factor, GLfloat units))
-GST_GL_EXT_FUNCTION (void, TexParameterf,
-                     (GLenum target,
-                      GLenum pname,
-                      GLfloat param))
 GST_GL_EXT_END ()
 
 GST_GL_EXT_BEGIN (texture_3d,
@@ -255,7 +251,7 @@ GST_GL_EXT_BEGIN (vbos,
                   "ARB\0",
                   "vertex_buffer_object\0")
 GST_GL_EXT_FUNCTION (void, GenBuffers,
-                     (GLsizei		 n,
+                     (GLuint		 n,
                       GLuint		*buffers))
 GST_GL_EXT_FUNCTION (void, BindBuffer,
                      (GLenum		 target,
@@ -302,14 +298,6 @@ GST_GL_EXT_BEGIN (map_vbos,
 GST_GL_EXT_FUNCTION (void *, MapBuffer,
                    (GLenum		 target,
                     GLenum		 access))
-GST_GL_EXT_END ()
-
-GST_GL_EXT_BEGIN (unmap_buffer,
-                  GST_GL_API_OPENGL | GST_GL_API_OPENGL3 | GST_GL_API_GLES2,
-                  1, 5,
-                  3, 0,
-                  "ARB\0OES\0",
-                  "vertex_buffer_object\0mapbuffer\0")
 GST_GL_EXT_FUNCTION (GLboolean, UnmapBuffer,
                    (GLenum		 target))
 GST_GL_EXT_END ()
@@ -317,12 +305,10 @@ GST_GL_EXT_END ()
 GST_GL_EXT_BEGIN (gl3,
                   GST_GL_API_OPENGL | GST_GL_API_OPENGL3 |
                   GST_GL_API_GLES2,
-                  3, 0,
+                  3, 1,
                   3, 0,
                   "\0",
                   "\0")
 GST_GL_EXT_FUNCTION (const GLubyte*, GetStringi,
                      (GLenum name, GLint index))
-GST_GL_EXT_FUNCTION (void *, MapBufferRange,
-                     (GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access))
 GST_GL_EXT_END ()

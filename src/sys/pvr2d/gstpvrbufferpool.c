@@ -37,15 +37,6 @@
 GST_DEBUG_CATEGORY_EXTERN (gst_debug_pvrvideosink);
 #define GST_CAT_DEFAULT gst_debug_pvrvideosink
 
-static gboolean
-gst_pvr_meta_init (GstPVRMeta * meta, gpointer params, GstBuffer * buffer)
-{
-  meta->src_mem = NULL;
-  meta->sink = NULL;
-
-  return TRUE;
-}
-
 static void
 gst_pvr_meta_free (GstPVRMeta * meta, GstBuffer * buffer)
 {
@@ -83,9 +74,9 @@ gst_pvr_meta_get_info (void)
   if (g_once_init_enter (&pvr_meta_info)) {
     const GstMetaInfo *meta = gst_meta_register ("GstPVRMeta", "GstPVRMeta",
         sizeof (GstPVRMeta),
-        (GstMetaInitFunction) gst_pvr_meta_init,
+        (GstMetaInitFunction) NULL,
         (GstMetaFreeFunction) gst_pvr_meta_free,
-        (GstMetaTransformFunction) NULL);
+        (GstMetaCopyFunction) NULL, (GstMetaTransformFunction) NULL);
     g_once_init_leave (&pvr_meta_info, meta);
   }
   return pvr_meta_info;

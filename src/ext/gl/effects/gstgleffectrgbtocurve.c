@@ -26,53 +26,85 @@
 
 static void
 gst_gl_effects_rgb_to_curve (GstGLEffects * effects,
-    const GstGLEffectsCurve * curve, gint curve_index, GstGLMemory * in_tex,
-    GstGLMemory * out_tex)
+    const GstGLEffectsCurve * curve,
+    gint curve_index, gint width, gint height, GLuint texture)
 {
-  GstGLContext *context = GST_GL_BASE_FILTER (effects)->context;
-  GstGLFilter *filter = GST_GL_FILTER (effects);
-  const GstGLFuncs *gl = context->gl_vtable;
   GstGLShader *shader;
+  GstGLFilter *filter = GST_GL_FILTER (effects);
+  GstGLContext *context = filter->context;
+  GstGLFuncs *gl = context->gl_vtable;
 
-  shader = gst_gl_effects_get_fragment_shader (effects, "rgb_to_curve",
-      rgb_to_curve_fragment_source_gles2);
+  shader = g_hash_table_lookup (effects->shaderstable, "rgbmap0");
 
-  if (!shader)
-    return;
-
-#if GST_GL_HAVE_OPENGL
-  if (USING_OPENGL (context)) {
-    gl->MatrixMode (GL_PROJECTION);
-    gl->LoadIdentity ();
+  if (!shader) {
+    shader = gst_gl_shader_new (context);
+    g_hash_table_insert (effects->shaderstable, (gchar *) "rgbmap0", shader);
   }
-#endif
+
+  if (!gst_gl_shader_compile_and_check (shader,
+          rgb_to_curve_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
+    gst_gl_context_set_error (context,
+        "Failed to initialize rgb to curve shader");
+    GST_ELEMENT_ERROR (effects, RESOURCE, NOT_FOUND,
+        ("%s", gst_gl_context_get_error ()), (NULL));
+    return;
+  }
+
+  gl->MatrixMode (GL_PROJECTION);
+  gl->LoadIdentity ();
+
+  gst_gl_shader_use (shader);
 
   if (effects->curve[curve_index] == 0) {
     /* this parameters are needed to have a right, predictable, mapping */
     gl->GenTextures (1, &effects->curve[curve_index]);
+    gl->Enable (GL_TEXTURE_1D);
+    gl->BindTexture (GL_TEXTURE_1D, effects->curve[curve_index]);
+    gl->TexParameteri (GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl->TexParameteri (GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    gl->TexParameteri (GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    gl->TexParameteri (GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-    gl->BindTexture (GL_TEXTURE_2D, effects->curve[curve_index]);
-    gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->TexImage1D (GL_TEXTURE_1D, 0, curve->bytes_per_pixel,
+        curve->width, 0, GL_RGB, GL_UNSIGNED_BYTE, curve->pixel_data);
 
-    gl->TexImage2D (GL_TEXTURE_2D, 0, GL_RGB,
-        curve->width, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, curve->pixel_data);
+    gl->Disable (GL_TEXTURE_1D);
   }
 
-  gst_gl_shader_use (shader);
-  gl->ActiveTexture (GL_TEXTURE2);
-  gl->BindTexture (GL_TEXTURE_2D, effects->curve[curve_index]);
+  gl->ActiveTexture (GL_TEXTURE0);
+  gl->Enable (GL_TEXTURE_2D);
+  gl->BindTexture (GL_TEXTURE_2D, texture);
 
-  gst_gl_shader_set_uniform_1i (shader, "curve", 2);
+  gst_gl_shader_set_uniform_1i (shader, "tex", 0);
 
-  gst_gl_filter_render_to_target_with_shader (filter, in_tex, out_tex, shader);
+  gl->Disable (GL_TEXTURE_2D);
+
+  gl->ActiveTexture (GL_TEXTURE1);
+  gl->Enable (GL_TEXTURE_1D);
+  gl->BindTexture (GL_TEXTURE_1D, effects->curve[curve_index]);
+
+  gst_gl_shader_set_uniform_1i (shader, "curve", 1);
+
+  gl->Disable (GL_TEXTURE_1D);
+
+  gst_gl_filter_draw_texture (filter, texture, width, height);
+}
+
+static void
+gst_gl_effects_xpro_callback (gint width, gint height, guint texture,
+    gpointer data)
+{
+  GstGLEffects *effects = GST_GL_EFFECTS (data);
+
+  gst_gl_effects_rgb_to_curve (effects, &xpro_curve, GST_GL_EFFECTS_CURVE_XPRO,
+      width, height, texture);
 }
 
 void
 gst_gl_effects_xpro (GstGLEffects * effects)
 {
-  gst_gl_effects_rgb_to_curve (effects, &xpro_curve, GST_GL_EFFECTS_CURVE_XPRO,
-      effects->intexture, effects->outtexture);
+  GstGLFilter *filter = GST_GL_FILTER (effects);
+
+  gst_gl_filter_render_to_target (filter, TRUE, effects->intexture,
+      effects->outtexture, gst_gl_effects_xpro_callback, effects);
 }

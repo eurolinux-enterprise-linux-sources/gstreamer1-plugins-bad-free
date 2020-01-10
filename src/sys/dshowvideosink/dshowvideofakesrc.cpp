@@ -250,16 +250,12 @@ STDMETHODIMP VideoFakeSrcPin::Block(DWORD dwBlockFlags, HANDLE hEvent)
 GstFlowReturn VideoFakeSrcPin::PushBuffer(GstBuffer *buffer)
 {
   IMediaSample *pSample = NULL;
-  byte *data;
-  GstMapInfo map;
+  byte *data = GST_BUFFER_DATA (buffer);
   int attempts = 0;
   HRESULT hres;
   BYTE *sample_buffer;
   AM_MEDIA_TYPE *mediatype;
 
-  /* FIXME: check return value. */
-  gst_buffer_map (buffer, &map, GST_MAP_READ);
-  data = map.data;
   StartUsingOutputPin();
 
   while (attempts < MAX_ATTEMPTS)
@@ -291,7 +287,6 @@ GstFlowReturn VideoFakeSrcPin::PushBuffer(GstBuffer *buffer)
      */
     CopyToDestinationBuffer (data, sample_buffer);
   }
-  gst_buffer_unmap (buffer, &map);
 
   pSample->SetDiscontinuity(FALSE); /* Decoded frame; unimportant */
   pSample->SetSyncPoint(TRUE); /* Decoded frame; always a valid syncpoint */

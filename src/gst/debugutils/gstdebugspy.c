@@ -29,7 +29,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -m videotestsrc ! debugspy ! fakesink
+ * gst-launch -m videotestsrc ! debugspy ! fakesink
  * ]|
  * </refsect2>
  */
@@ -139,8 +139,10 @@ gst_debug_spy_class_init (GstDebugSpyClass * klass)
       "DebugSpy provides information on buffers with bus messages",
       "Guillaume Emont <gemont@igalia.com>");
 
-  gst_element_class_add_static_pad_template (element_class, &src_factory);
-  gst_element_class_add_static_pad_template (element_class, &sink_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_factory));
 
   GST_DEBUG_CATEGORY_INIT (gst_debug_spy_debug, "debugspy", 0, "debugspy");
 }

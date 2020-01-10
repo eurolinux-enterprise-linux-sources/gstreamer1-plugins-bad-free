@@ -52,7 +52,8 @@ reset_state (CamSwClient * client)
   if (client->sock)
     close (client->sock);
 
-  g_free (client->sock_path);
+  if (client->sock_path)
+    g_free (client->sock_path);
 }
 
 void

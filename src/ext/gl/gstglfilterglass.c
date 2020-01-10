@@ -27,11 +27,11 @@
  * <refsect2>
  * <title>Examples</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! glfilterglass ! glimagesink
+ * gst-launch -v videotestsrc ! glupload ! glfilterglass ! glimagesink
  * ]| A pipeline inspired from http://www.mdk.org.pl/2007/11/17/gl-colorspace-conversions
  * FBO is required.
  * |[
- * gst-launch-1.0 -v videotestsrc ! glfilterglass ! video/x-raw, width=640, height=480 ! glimagesink
+ * gst-launch -v videotestsrc ! glupload ! glfilterglass ! "video/x-raw-gl, width=640, height=480" ! glimagesink
  * ]| The scene is greater than the input size.
  * </refsect2>
  */
@@ -53,7 +53,7 @@ enum
 
 #define DEBUG_INIT \
   GST_DEBUG_CATEGORY_INIT (gst_gl_filter_glass_debug, "glfilterglass", 0, "glfilterglass element");
-#define gst_gl_filter_glass_parent_class parent_class
+
 G_DEFINE_TYPE_WITH_CODE (GstGLFilterGlass, gst_gl_filter_glass,
     GST_TYPE_GL_FILTER, DEBUG_INIT);
 
@@ -62,18 +62,17 @@ static void gst_gl_filter_glass_set_property (GObject * object, guint prop_id,
 static void gst_gl_filter_glass_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static gboolean gst_gl_filter_glass_reset (GstBaseTransform * trans);
-
+static void gst_gl_filter_glass_reset (GstGLFilter * filter);
 static gboolean gst_gl_filter_glass_init_shader (GstGLFilter * filter);
 static gboolean gst_gl_filter_glass_filter_texture (GstGLFilter * filter,
-    GstGLMemory * in_tex, GstGLMemory * out_tex);
+    guint in_tex, guint out_tex);
 
 static void gst_gl_filter_glass_draw_background_gradient ();
 static void gst_gl_filter_glass_draw_video_plane (GstGLFilter * filter,
     gint width, gint height, guint texture, gfloat center_x, gfloat center_y,
     gfloat start_alpha, gfloat stop_alpha, gboolean reversed, gfloat rotation);
 
-static gboolean gst_gl_filter_glass_callback (gpointer stuff);
+static void gst_gl_filter_glass_callback (gpointer stuff);
 
 /* *INDENT-OFF* */
 static const gchar *glass_fragment_source =
@@ -161,10 +160,8 @@ gst_gl_filter_glass_class_init (GstGLFilterGlassClass * klass)
 
   GST_GL_FILTER_CLASS (klass)->filter_texture =
       gst_gl_filter_glass_filter_texture;
-  GST_GL_FILTER_CLASS (klass)->init_fbo = gst_gl_filter_glass_init_shader;
-  GST_BASE_TRANSFORM_CLASS (klass)->stop = gst_gl_filter_glass_reset;
-
-  GST_GL_BASE_FILTER_CLASS (klass)->supported_gl_api = GST_GL_API_OPENGL;
+  GST_GL_FILTER_CLASS (klass)->onInitFBO = gst_gl_filter_glass_init_shader;
+  GST_GL_FILTER_CLASS (klass)->onReset = gst_gl_filter_glass_reset;
 }
 
 static void
@@ -174,22 +171,19 @@ gst_gl_filter_glass_init (GstGLFilterGlass * filter)
   filter->timestamp = 0;
 }
 
-static gboolean
-gst_gl_filter_glass_reset (GstBaseTransform * trans)
+static void
+gst_gl_filter_glass_reset (GstGLFilter * filter)
 {
-  GstGLFilterGlass *glass_filter = GST_GL_FILTER_GLASS (trans);
+  GstGLFilterGlass *glass_filter = GST_GL_FILTER_GLASS (filter);
 
   //blocking call, wait the opengl thread has destroyed the shader
   if (glass_filter->shader)
-    gst_gl_context_del_shader (GST_GL_BASE_FILTER (trans)->context,
-        glass_filter->shader);
+    gst_gl_context_del_shader (filter->context, glass_filter->shader);
   glass_filter->shader = NULL;
   if (glass_filter->passthrough_shader)
-    gst_gl_context_del_shader (GST_GL_BASE_FILTER (trans)->context,
+    gst_gl_context_del_shader (filter->context,
         glass_filter->passthrough_shader);
   glass_filter->passthrough_shader = NULL;
-
-  return GST_BASE_TRANSFORM_CLASS (parent_class)->stop (trans);
 }
 
 static void
@@ -226,27 +220,29 @@ gst_gl_filter_glass_init_shader (GstGLFilter * filter)
 
   //blocking call, wait the opengl thread has compiled the shader
   ret =
-      gst_gl_context_gen_shader (GST_GL_BASE_FILTER (filter)->context,
-      glass_vertex_source, glass_fragment_source, &glass_filter->shader);
+      gst_gl_context_gen_shader (filter->context, glass_vertex_source,
+      glass_fragment_source, &glass_filter->shader);
   if (ret)
     ret =
-        gst_gl_context_gen_shader (GST_GL_BASE_FILTER (filter)->context,
-        passthrough_vertex, passthrough_fragment,
-        &glass_filter->passthrough_shader);
+        gst_gl_context_gen_shader (filter->context, passthrough_vertex,
+        passthrough_fragment, &glass_filter->passthrough_shader);
 
   return ret;
 }
 
 static gboolean
-gst_gl_filter_glass_filter_texture (GstGLFilter * filter, GstGLMemory * in_tex,
-    GstGLMemory * out_tex)
+gst_gl_filter_glass_filter_texture (GstGLFilter * filter, guint in_tex,
+    guint out_tex)
 {
   GstGLFilterGlass *glass_filter = GST_GL_FILTER_GLASS (filter);
-
   glass_filter->in_tex = in_tex;
 
-  gst_gl_framebuffer_draw_to_texture (filter->fbo, out_tex,
-      gst_gl_filter_glass_callback, glass_filter);
+  //blocking call, use a FBO
+  gst_gl_context_use_fbo_v2 (filter->context,
+      GST_VIDEO_INFO_WIDTH (&filter->out_info),
+      GST_VIDEO_INFO_HEIGHT (&filter->out_info),
+      filter->fbo, filter->depthbuffer, out_tex,
+      gst_gl_filter_glass_callback, (gpointer) glass_filter);
 
   return TRUE;
 }
@@ -264,7 +260,7 @@ static void
 gst_gl_filter_glass_draw_background_gradient (GstGLFilterGlass * glass)
 {
   GstGLFilter *filter = GST_GL_FILTER (glass);
-  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
+  GstGLFuncs *gl = filter->context->gl_vtable;
 
 /* *INDENT-OFF* */
   gfloat mesh[] = {
@@ -305,7 +301,7 @@ gst_gl_filter_glass_draw_video_plane (GstGLFilter * filter,
     gfloat start_alpha, gfloat stop_alpha, gboolean reversed, gfloat rotation)
 {
   GstGLFilterGlass *glass_filter = GST_GL_FILTER_GLASS (filter);
-  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
+  GstGLFuncs *gl = filter->context->gl_vtable;
 
   gfloat topy = reversed ? center_y - 1.0f : center_y + 1.0f;
   gfloat bottomy = reversed ? center_y + 1.0f : center_y - 1.0f;
@@ -326,7 +322,9 @@ gst_gl_filter_glass_draw_video_plane (GstGLFilter * filter,
   };
 
   gl->ActiveTexture (GL_TEXTURE0);
+  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, texture);
+  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1i (glass_filter->shader, "tex", 0);
   gst_gl_shader_set_uniform_1f (glass_filter->shader, "yrot", rotation);
@@ -349,7 +347,8 @@ gst_gl_filter_glass_draw_video_plane (GstGLFilter * filter,
   gl->DisableClientState (GL_COLOR_ARRAY);
 }
 
-static gboolean
+//opengl scene, params: input texture (not the output filter->texture)
+static void
 gst_gl_filter_glass_callback (gpointer stuff)
 {
   static gint64 start_time = 0;
@@ -357,11 +356,11 @@ gst_gl_filter_glass_callback (gpointer stuff)
 
   GstGLFilter *filter = GST_GL_FILTER (stuff);
   GstGLFilterGlass *glass_filter = GST_GL_FILTER_GLASS (stuff);
-  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
+  GstGLFuncs *gl = filter->context->gl_vtable;
 
   gint width = GST_VIDEO_INFO_WIDTH (&filter->out_info);
   gint height = GST_VIDEO_INFO_HEIGHT (&filter->out_info);
-  guint texture = glass_filter->in_tex->tex_id;
+  guint texture = glass_filter->in_tex;
 
   if (start_time == 0)
     start_time = get_time ();
@@ -371,7 +370,7 @@ gst_gl_filter_glass_callback (gpointer stuff)
     time_left -= 1000000 / 25;
     if (time_left > 2000) {
       GST_LOG ("escape");
-      return FALSE;
+      return;
     }
   }
 
@@ -400,9 +399,8 @@ gst_gl_filter_glass_callback (gpointer stuff)
   gst_gl_filter_glass_draw_video_plane (filter, width, height, texture,
       0.0f, 0.0f, 1.0f, 1.0f, FALSE, rotation);
 
-  gst_gl_context_clear_shader (GST_GL_BASE_FILTER (filter)->context);
+  gst_gl_context_clear_shader (filter->context);
 
+  gl->Disable (GL_TEXTURE_2D);
   gl->Disable (GL_BLEND);
-
-  return TRUE;
 }

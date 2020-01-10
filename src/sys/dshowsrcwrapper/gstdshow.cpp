@@ -19,8 +19,6 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include <gst/video/video-format.h>
-
 #include "gstdshow.h"
 #include "gstdshowfakesink.h"
 
@@ -125,8 +123,10 @@ gst_dshow_new_pin_mediatype_from_streamcaps (IPin * pin, gint id, IAMStreamConfi
 void
 gst_dshow_free_pins_mediatypes (GList * pins_mediatypes)
 {
-  g_list_free_full (pins_mediatypes,
-      (GDestroyNotify) gst_dshow_free_pin_mediatype);
+  while (pins_mediatypes != NULL) {
+    gst_dshow_free_pin_mediatype (pins_mediatypes->data);
+    pins_mediatypes = g_list_remove_link (pins_mediatypes, pins_mediatypes);
+  }
 }
 
 gboolean
@@ -271,12 +271,14 @@ gst_dshow_find_filter (CLSID input_majortype, CLSID input_subtype,
       filter_temp->Release ();
     }
 
-    g_free (friendly_name);
+    if (friendly_name)
+      g_free (friendly_name);
     moniker->Release ();
   }
 
 clean:
-  g_free (prefered_filter_upper);
+  if (prefered_filter_upper)
+    g_free (prefered_filter_upper);
   if (enum_moniker)
     enum_moniker->Release ();
   if (mapper)
@@ -406,35 +408,7 @@ gst_dshow_guid_to_gst_video_format (AM_MEDIA_TYPE *mediatype)
   if (gst_dshow_check_mediatype (mediatype, MEDIASUBTYPE_UYVY, FORMAT_VideoInfo))
     return GST_VIDEO_FORMAT_UYVY;
 
-  if (gst_dshow_check_mediatype (mediatype, MEDIASUBTYPE_RGB32, FORMAT_VideoInfo))
-    return GST_VIDEO_FORMAT_BGRx;
-
-  if (gst_dshow_check_mediatype (mediatype, MEDIASUBTYPE_RGB565, FORMAT_VideoInfo))
-    return GST_VIDEO_FORMAT_BGR16;
-
-  if (gst_dshow_check_mediatype (mediatype, MEDIASUBTYPE_RGB555, FORMAT_VideoInfo))
-    return GST_VIDEO_FORMAT_BGR15;
-
-  if (gst_dshow_check_mediatype (mediatype, MEDIASUBTYPE_RGB8, FORMAT_VideoInfo))
-    return GST_VIDEO_FORMAT_GRAY8;
-
   return GST_VIDEO_FORMAT_UNKNOWN;
-}
-
-gboolean
-gst_dshow_is_pin_connected (IPin * pin)
-{
-  IPin *tmp_pin = NULL;
-  gboolean res;
-  HRESULT hres;
-
-  g_assert (pin);
-  hres = pin->ConnectedTo (&tmp_pin);
-  res = (hres != VFW_E_NOT_CONNECTED);
-  if (tmp_pin)
-    tmp_pin->Release ();
-
-  return res;
 }
 
 GstCaps *
@@ -450,28 +424,16 @@ gst_dshow_new_video_caps (GstVideoFormat video_format, const gchar * name,
   /* raw video format */
   switch (video_format) {
     case GST_VIDEO_FORMAT_BGR:
-      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_MAKE ("BGR"));
+      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_BGR);
       break;
     case GST_VIDEO_FORMAT_I420:
-      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_MAKE ("I420"));
+      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_YUV ("I420"));
 	  break;
     case GST_VIDEO_FORMAT_YUY2:
-      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_MAKE ("YUY2"));
+      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_YUV ("YUY2"));
       break;
     case GST_VIDEO_FORMAT_UYVY:
-      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_MAKE ("UYVY"));
-      break;
-    case GST_VIDEO_FORMAT_BGRx:
-      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_MAKE ("BGRx"));
-      break;
-    case GST_VIDEO_FORMAT_BGR16:
-      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_MAKE ("BGR16"));
-      break;
-    case GST_VIDEO_FORMAT_BGR15:
-      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_MAKE ("BGR15"));
-      break;
-    case GST_VIDEO_FORMAT_GRAY8:
-      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_MAKE ("GRAY8"));
+      video_caps = gst_caps_from_string (GST_VIDEO_CAPS_YUV ("UYVY"));
       break;
     default:
       break;
@@ -482,16 +444,12 @@ gst_dshow_new_video_caps (GstVideoFormat video_format, const gchar * name,
     if (g_ascii_strncasecmp (name, "video/x-dv, systemstream=FALSE", 31) == 0) {
       video_caps = gst_caps_new_simple ("video/x-dv",
           "systemstream", G_TYPE_BOOLEAN, FALSE,
-          "format", G_TYPE_STRING, "dvsd",
+          "format", GST_TYPE_FOURCC, GST_MAKE_FOURCC ('d', 'v', 's', 'd'),
           NULL);
     } else if (g_ascii_strncasecmp (name, "video/x-dv, systemstream=TRUE", 31) == 0) {
       video_caps = gst_caps_new_simple ("video/x-dv",
           "systemstream", G_TYPE_BOOLEAN, TRUE, NULL);
       return video_caps;
-    } else if (g_ascii_strncasecmp (name, "image/jpeg", 10) == 0) {
-      video_caps = gst_caps_new_simple ("image/jpeg", NULL);
-    } else if (g_ascii_strncasecmp (name, "video/x-h264", 12) == 0) {
-      video_caps = gst_caps_new_simple ("video/x-h264", NULL);
     }
   }
 

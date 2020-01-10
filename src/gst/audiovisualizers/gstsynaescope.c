@@ -3,20 +3,19 @@
  *
  * gstsynaescope.c: frequency spectrum scope
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Library General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 /**
  * SECTION:element-synaescope
@@ -28,7 +27,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 audiotestsrc ! audioconvert ! synaescope ! ximagesink
+ * gst-launch audiotestsrc ! audioconvert ! synaescope ! ximagesink
  * ]|
  * </refsect2>
  */
@@ -38,17 +37,15 @@
 
 #include "gstsynaescope.h"
 
-#if G_BYTE_ORDER == G_BIG_ENDIAN
-#define RGB_ORDER "xRGB"
-#else
-#define RGB_ORDER "BGRx"
-#endif
-
 static GstStaticPadTemplate gst_synae_scope_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE (RGB_ORDER))
+#if G_BYTE_ORDER == G_BIG_ENDIAN
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("xRGB"))
+#else
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("BGRx"))
+#endif
     );
 
 static GstStaticPadTemplate gst_synae_scope_sink_template =
@@ -89,10 +86,10 @@ gst_synae_scope_class_init (GstSynaeScopeClass * g_class)
       "Creates video visualizations of audio input, using stereo and pitch information",
       "Stefan Kost <ensonic@users.sf.net>");
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_synae_scope_src_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_synae_scope_sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_synae_scope_src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_synae_scope_sink_template));
 
   scope_class->setup = GST_DEBUG_FUNCPTR (gst_synae_scope_setup);
   scope_class->render = GST_DEBUG_FUNCPTR (gst_synae_scope_render);

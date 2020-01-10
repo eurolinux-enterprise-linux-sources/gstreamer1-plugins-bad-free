@@ -32,99 +32,16 @@
 
 #include <gst/video/videooverlay.h>
 
-#ifdef HAVE_X11
-#include <X11/Xlib.h>
-#endif
 
-
-static GstBusSyncReply
-create_window (GstBus * bus, GstMessage * message, GtkWidget * widget)
-{
-  if (gst_gtk_handle_need_context (bus, message, NULL))
-    return GST_BUS_DROP;
-
-  /* ignore anything but 'prepare-window-handle' element messages */
-  if (GST_MESSAGE_TYPE (message) != GST_MESSAGE_ELEMENT)
-    return GST_BUS_PASS;
-
-  if (!gst_is_video_overlay_prepare_window_handle_message (message))
-    return GST_BUS_PASS;
-
-  g_print ("setting window handle\n");
-
-  /* do not call gdk_window_ensure_native for the first time here because
-   * we are in a different thread than the main thread
-   * (and the main thread the one) */
-  gst_video_overlay_set_gtk_window (GST_VIDEO_OVERLAY (GST_MESSAGE_SRC
-          (message)), widget);
-
-  gst_message_unref (message);
-
-  return GST_BUS_DROP;
-}
-
-
-static void
-end_stream_cb (GstBus * bus, GstMessage * message, GstElement * pipeline)
-{
-  switch (GST_MESSAGE_TYPE (message)) {
-    case GST_MESSAGE_EOS:
-      g_print ("End of stream\n");
-
-      gst_element_set_state (pipeline, GST_STATE_NULL);
-      gst_object_unref (pipeline);
-      gtk_main_quit ();
-      break;
-    case GST_MESSAGE_ERROR:
-    {
-      gchar *debug = NULL;
-      GError *err = NULL;
-
-      gst_message_parse_error (message, &err, &debug);
-
-      g_print ("Error: %s\n", err->message);
-      g_clear_error (&err);
-
-      if (debug) {
-        g_print ("Debug details: %s\n", debug);
-        g_free (debug);
-      }
-
-      gst_element_set_state (pipeline, GST_STATE_NULL);
-      gst_object_unref (pipeline);
-      gtk_main_quit ();
-      break;
-    }
-    default:
-      break;
-  }
-}
-
+/* TODO: use video overlay in the proper way (like suggested in docs, see gtkvideooverlay example) */
 static gboolean
-resize_cb (GtkWidget * widget, GdkEvent * event, gpointer data)
-{
-  GtkAllocation allocation;
-  GstVideoOverlay *overlay =
-      GST_VIDEO_OVERLAY (gst_bin_get_by_interface (GST_BIN (data),
-          GST_TYPE_VIDEO_OVERLAY));
-
-  gtk_widget_get_allocation (widget, &allocation);
-  gst_video_overlay_set_render_rectangle (overlay, allocation.x, allocation.y,
-      allocation.width, allocation.height);
-  gst_object_unref (overlay);
-
-  return G_SOURCE_CONTINUE;
-}
-
-static gboolean
-expose_cb (GtkWidget * widget, gpointer unused, gpointer data)
+expose_cb (GtkWidget * widget, gpointer data)
 {
   GstVideoOverlay *overlay =
       GST_VIDEO_OVERLAY (gst_bin_get_by_interface (GST_BIN (data),
           GST_TYPE_VIDEO_OVERLAY));
 
-  gst_video_overlay_expose (overlay);
-  gst_object_unref (overlay);
+  gst_video_overlay_set_gtk_window (overlay, widget);
 
   return FALSE;
 }
@@ -197,9 +114,8 @@ main (gint argc, gchar * argv[])
 {
   GstStateChangeReturn ret;
   GstElement *pipeline;
-  GstElement *upload, *filter, *sink;
+  GstElement *filter, *sink;
   GstElement *sourcebin;
-  GstBus *bus;
   GError *error = NULL;
 
   GtkWidget *window;
@@ -219,18 +135,12 @@ main (gint argc, gchar * argv[])
     {NULL}
   };
 
-#ifdef HAVE_X11
-  XInitThreads ();
-#endif
-
   context = g_option_context_new (NULL);
   g_option_context_add_main_entries (context, options, NULL);
   g_option_context_add_group (context, gst_init_get_option_group ());
   g_option_context_add_group (context, gtk_get_option_group (TRUE));
   if (!g_option_context_parse (context, &argc, &argv, &error)) {
     g_print ("Inizialization error: %s\n", GST_STR_NULL (error->message));
-    g_option_context_free (context);
-    g_clear_error (&error);
     return -1;
   }
   g_option_context_free (context);
@@ -261,13 +171,12 @@ main (gint argc, gchar * argv[])
 
   pipeline = gst_pipeline_new ("pipeline");
 
-  upload = gst_element_factory_make ("glupload", NULL);
   filter = gst_element_factory_make ("gleffects", "flt");
   sink = gst_element_factory_make ("glimagesink", "glsink");
 
-  gst_bin_add_many (GST_BIN (pipeline), sourcebin, upload, filter, sink, NULL);
+  gst_bin_add_many (GST_BIN (pipeline), sourcebin, filter, sink, NULL);
 
-  if (!gst_element_link_many (sourcebin, upload, filter, sink, NULL)) {
+  if (!gst_element_link_many (sourcebin, filter, sink, NULL)) {
     g_print ("Failed to link one or more elements!\n");
     return -1;
   }
@@ -278,17 +187,6 @@ main (gint argc, gchar * argv[])
       G_CALLBACK (destroy_cb), pipeline);
 
   screen = gtk_drawing_area_new ();
-  bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
-  gst_bus_add_signal_watch (bus);
-  g_signal_connect (bus, "message::error", G_CALLBACK (end_stream_cb),
-      pipeline);
-  g_signal_connect (bus, "message::warning", G_CALLBACK (end_stream_cb),
-      pipeline);
-  g_signal_connect (bus, "message::eos", G_CALLBACK (end_stream_cb), pipeline);
-
-  gst_bus_set_sync_handler (bus, (GstBusSyncHandler) create_window, screen,
-      NULL);
-  gst_object_unref (bus);
 
   gtk_widget_set_size_request (screen, 640, 480);       // 500 x 376
 
@@ -348,10 +246,7 @@ main (gint argc, gchar * argv[])
 
   gtk_container_add (GTK_CONTAINER (window), vbox);
 
-  g_signal_connect (screen, "draw", G_CALLBACK (expose_cb), pipeline);
-  g_signal_connect (screen, "configure-event", G_CALLBACK (resize_cb),
-      pipeline);
-  gtk_widget_realize (screen);
+  g_signal_connect (screen, "realize", G_CALLBACK (expose_cb), pipeline);
 
   ret = gst_element_set_state (pipeline, GST_STATE_PLAYING);
   if (ret == GST_STATE_CHANGE_FAILURE) {

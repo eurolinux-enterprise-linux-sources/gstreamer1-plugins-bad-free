@@ -214,10 +214,10 @@ gst_schro_enc_class_init (GstSchroEncClass * klass)
     }
   }
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_schro_enc_src_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_schro_enc_sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_schro_enc_src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_schro_enc_sink_template));
 
   gst_element_class_set_static_metadata (element_class, "Dirac Encoder",
       "Codec/Encoder/Video",
@@ -239,8 +239,6 @@ static void
 gst_schro_enc_init (GstSchroEnc * schro_enc)
 {
   GST_DEBUG ("gst_schro_enc_init");
-
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_VIDEO_ENCODER_SINK_PAD (schro_enc));
 
   /* Normally, we'd create the encoder in ->start(), but we use the
    * encoder to store object properties.  So it needs to be created

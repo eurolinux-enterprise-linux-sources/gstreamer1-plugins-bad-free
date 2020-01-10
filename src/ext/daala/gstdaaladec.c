@@ -33,7 +33,7 @@
  * <refsect2>
  * <title>Example pipeline</title>
  * |[
- * gst-launch-1.0 -v filesrc location=videotestsrc.ogg ! oggdemux ! daaladec ! xvimagesink
+ * gst-launch -v filesrc location=videotestsrc.ogg ! oggdemux ! daaladec ! xvimagesink
  * ]| This example pipeline will decode an ogg stream and decodes the daala video. Refer to
  * the daalaenc example to create the ogg file.
  * </refsect2>
@@ -50,8 +50,8 @@
 #include <gst/video/gstvideopool.h>
 
 #define GST_CAT_DEFAULT daaladec_debug
-GST_DEBUG_CATEGORY_STATIC (daaladec_debug);
-GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
+GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
+GST_DEBUG_CATEGORY_EXTERN (GST_CAT_PERFORMANCE);
 
 /* This was removed from the base class, this is used as a
    temporary return to signal the need to call _drop_frame,
@@ -103,12 +103,13 @@ gst_daala_dec_class_init (GstDaalaDecClass * klass)
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   GstVideoDecoderClass *video_decoder_class = GST_VIDEO_DECODER_CLASS (klass);
 
-  gst_element_class_add_static_pad_template (element_class,
-      &daala_dec_src_factory);
-  gst_element_class_add_static_pad_template (element_class,
-      &daala_dec_sink_factory);
-  gst_element_class_set_static_metadata (element_class, "Daala video decoder",
-      "Codec/Decoder/Video", "Decode raw Daala streams to raw YUV video",
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&daala_dec_src_factory));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&daala_dec_sink_factory));
+  gst_element_class_set_static_metadata (element_class,
+      "Daala video decoder", "Codec/Decoder/Video",
+      "Decode raw Daala streams to raw YUV video",
       "Sebastian Dröge <slomo@circular-chaos.org>");
 
   video_decoder_class->start = GST_DEBUG_FUNCPTR (daala_dec_start);
@@ -121,7 +122,6 @@ gst_daala_dec_class_init (GstDaalaDecClass * klass)
       GST_DEBUG_FUNCPTR (daala_dec_decide_allocation);
 
   GST_DEBUG_CATEGORY_INIT (daaladec_debug, "daaladec", 0, "Daala decoder");
-  GST_DEBUG_CATEGORY_GET (CAT_PERFORMANCE, "GST_PERFORMANCE");
 }
 
 static void
@@ -131,9 +131,6 @@ gst_daala_dec_init (GstDaalaDec * dec)
    * but is not marked that way so data gets parsed and keyframes marked */
   gst_video_decoder_set_packetized (GST_VIDEO_DECODER (dec), FALSE);
   gst_video_decoder_set_needs_format (GST_VIDEO_DECODER (dec), TRUE);
-  gst_video_decoder_set_use_default_pad_acceptcaps (GST_VIDEO_DECODER_CAST
-      (dec), TRUE);
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_VIDEO_DECODER_SINK_PAD (dec));
 }
 
 static void
@@ -449,7 +446,7 @@ daala_handle_image (GstDaalaDec * dec, od_img * img, GstVideoCodecFrame * frame)
   }
 
   /* if only libdaala would allow us to give it a destination frame */
-  GST_CAT_TRACE_OBJECT (CAT_PERFORMANCE, dec,
+  GST_CAT_TRACE_OBJECT (GST_CAT_PERFORMANCE, dec,
       "doing unavoidable video frame copy");
 
   if (G_UNLIKELY (!gst_video_frame_map (&vframe, &dec->output_state->info,

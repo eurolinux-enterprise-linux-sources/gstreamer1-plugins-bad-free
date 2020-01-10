@@ -39,8 +39,8 @@
  * <title>Example launch line</title>
  * |[
  * gst-launch ssim name=ssim ssim.src0 ! videoconvert ! glimagesink filesrc
- * location=orig.avi ! decodebin ! ssim.original filesrc location=compr.avi !
- * decodebin ! ssim.modified0
+ * location=orig.avi ! decodebin2 ! ssim.original filesrc location=compr.avi !
+ * decodebin2 ! ssim.modified0
  * ]| This pipeline produces a video stream that consists of SSIM frames.
  * </refsect2>
  */
@@ -664,17 +664,15 @@ gst_ssim_query_latency (GstSSim * ssim, GstQuery * query)
         if (res) {
           gst_query_parse_latency (peerquery, &live_cur, &min_cur, &max_cur);
 
-          if (live_cur) {
-            if (min_cur > min)
-              min = min_cur;
+          if (min_cur > min)
+            min = min_cur;
 
-            if (max == GST_CLOCK_TIME_NONE)
-              max = max_cur;
-            else if (max_cur < max)
-              max = max_cur;
+          if (max_cur != GST_CLOCK_TIME_NONE &&
+              ((max != GST_CLOCK_TIME_NONE && max_cur > max) ||
+                  (max == GST_CLOCK_TIME_NONE)))
+            max = max_cur;
 
-            live = TRUE;
-          }
+          live = live || live_cur;
         }
 
         gst_query_unref (peerquery);
@@ -1095,14 +1093,15 @@ gst_ssim_class_init (GstSSimClass * klass)
           "(only when using Gaussian window).",
           G_MINFLOAT, 10, 1.5, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_ssim_src_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_ssim_sink_original_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_ssim_sink_modified_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_ssim_src_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_ssim_sink_original_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_ssim_sink_modified_template));
   gst_element_class_set_static_metadata (gstelement_class, "SSim",
-      "Filter/Analyzer/Video", "Calculate Y-SSIM for n+2 YUV video streams",
+      "Filter/Analyzer/Video",
+      "Calculate Y-SSIM for n+2 YUV video streams",
       "Руслан Ижбулатов <lrn1986 _at_ gmail _dot_ com>");
 
   parent_class = g_type_class_peek_parent (klass);
@@ -1175,7 +1174,11 @@ gst_ssim_request_new_pad (GstElement * element, GstPadTemplate * templ,
     goto could_not_add_sink;
   else
     /* increment pad counter */
+#if GLIB_CHECK_VERSION(2,29,5)
     padcount = g_atomic_int_add (&ssim->padcount, 1);
+#else
+    padcount = g_atomic_int_exchange_and_add (&ssim->padcount, 1);
+#endif
 
   if (num != -1) {
     GstSSimOutputContext *c;
@@ -1470,7 +1473,7 @@ gst_ssim_collected (GstCollectPads * pads, gpointer user_data)
       collect_data = (GstCollectData *) collected->data;
 
       if (collect_data->pad == ssim->orig) {
-        orgbuf = gst_collect_pads_pop (pads, collect_data);
+        orgbuf = gst_collect_pads_pop (pads, collect_data);;
 
         GST_DEBUG_OBJECT (ssim, "Original stream - flags(0x%x), timestamp(%"
             GST_TIME_FORMAT "), duration(%" GST_TIME_FORMAT ")",

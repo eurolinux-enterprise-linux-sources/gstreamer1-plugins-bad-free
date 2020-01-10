@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>pinch: GStreamer Bad Plugins 1.0 Plugins Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<title>GStreamer Bad Plugins 1.0 Plugins Reference Manual: pinch</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 1.0 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-pcapparse.html" title="pcapparse">
-<link rel="next" href="gst-plugins-bad-plugins-rawaudioparse.html" title="rawaudioparse">
-<meta name="generator" content="GTK-Doc V1.25 (XML mode)">
+<link rel="next" href="gst-plugins-bad-plugins-pyramidsegment.html" title="pyramidsegment">
+<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -22,27 +22,27 @@
 <td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
 <td><a accesskey="u" href="ch01.html"><img src="up.png" width="16" height="16" border="0" alt="Up"></a></td>
 <td><a accesskey="p" href="gst-plugins-bad-plugins-pcapparse.html"><img src="left.png" width="16" height="16" border="0" alt="Prev"></a></td>
-<td><a accesskey="n" href="gst-plugins-bad-plugins-rawaudioparse.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
+<td><a accesskey="n" href="gst-plugins-bad-plugins-pyramidsegment.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
 </tr></table>
 <div class="refentry">
 <a name="gst-plugins-bad-plugins-pinch"></a><div class="titlepage"></div>
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="gst-plugins-bad-plugins-pinch.top_of_page"></a>pinch</span></h2>
-<p>pinch</p>
+<p>pinch — Applies 'pinch' geometric transform to the image</p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-pinch.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table class="informaltable" border="0">
+<div class="informaltable"><table border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
 <col width="200px" class="properties_flags">
 </colgroup>
 <tbody><tr>
-<td class="property_type"><a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></td>
+<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></td>
 <td class="property_name"><a class="link" href="gst-plugins-bad-plugins-pinch.html#GstPinch--intensity" title="The “intensity” property">intensity</a></td>
 <td class="property_flags">Read / Write</td>
 </tr></tbody>
@@ -50,7 +50,7 @@
 </div>
 <a name="GstPinch"></a><div class="refsect1">
 <a name="gst-plugins-bad-plugins-pinch.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -63,12 +63,12 @@
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-pinch.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
-    <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
-        <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstObject.html#GstObject-struct">GstObject</a>
-            <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstElement.html#GstElement-struct">GstElement</a>
-                <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-libs-1.0GstBaseTransform.html#GstBaseTransform-struct">GstBaseTransform</a>
-                    <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gst-plugins-base-libs-1.0gst-plugins-base-libs-gstvideofilter.html#GstVideoFilter-struct">GstVideoFilter</a>
+<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+    <span class="lineart">╰──</span> <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
+        <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
+            <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
+                <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseTransform.html">GstBaseTransform</a>
+                    <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-libs/html/gst-plugins-base-libs-gstvideofilter.html#GstVideoFilter">GstVideoFilter</a>
                         <span class="lineart">╰──</span> GstGeometricTransform
                             <span class="lineart">╰──</span> GstCircleGeometricTransform
                                 <span class="lineart">╰──</span> GstPinch
@@ -76,25 +76,10 @@
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-pinch.description"></a><h2>Description</h2>
-<p>Pinch applies a 'pinch' geometric transform to the image.</p>
-<div class="refsect2">
-<a name="id-1.2.105.7.3"></a><h3>Example launch line</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch<span class="gtkdoc opt">-</span><span class="number">1.0</span> <span class="gtkdoc opt">-</span>v videotestsrc <span class="gtkdoc opt">!</span> pinch <span class="gtkdoc opt">!</span> videoconvert <span class="gtkdoc opt">!</span> autovideosink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-</div>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="id-1.2.105.7.4.1"></a><h3>Element Information</h3>
+<a name="id-1.2.53.7.2.1"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -120,7 +105,7 @@
 </div>
 <hr>
 <div class="refsect2">
-<a name="id-1.2.105.7.4.2"></a><h3>Element Pads</h3>
+<a name="id-1.2.53.7.2.2"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -171,35 +156,35 @@
 </table></div>
 </div>
 </div>
+<p>
+</p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-pinch.functions_details"></a><h2>Functions</h2>
-<p></p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-pinch.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
 <a name="GstPinch-struct"></a><h3>struct GstPinch</h3>
 <pre class="programlisting">struct GstPinch;</pre>
+<p>
+</p>
 </div>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-pinch.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="GstPinch--intensity"></a><h3>The <code class="literal">“intensity”</code> property</h3>
-<pre class="programlisting">  “intensity”                <a href="/usr/share/gtk-doc/html/glibglib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></pre>
+<pre class="programlisting">  “intensity”                <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></pre>
 <p>intensity of the pinch effect.</p>
 <p>Flags: Read / Write</p>
 <p>Allowed values: [-1,1]</p>
 <p>Default value: 0.5</p>
 </div>
 </div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-pinch.see-also"></a><h2>See Also</h2>
-<p>geometrictransform</p>
-</div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25</div>
+<hr>
+          Generated by GTK-Doc V1.21</div>
 </body>
 </html>

@@ -34,7 +34,7 @@
  * <refsect2>
  * <title>Example launch lines</title>
  * |[
- * gst-launch-1.0 -v rtmpsrc location=rtmp://somehost/someurl ! fakesink
+ * gst-launch -v rtmpsrc location=rtmp://somehost/someurl ! fakesink
  * ]| Open an RTMP location and pass its content to fakesink.
  * </refsect2>
  */
@@ -68,8 +68,7 @@ static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
 enum
 {
   PROP_0,
-  PROP_LOCATION,
-  PROP_TIMEOUT
+  PROP_LOCATION
 #if 0
       PROP_SWF_URL,
   PROP_PAGE_URL
@@ -77,7 +76,6 @@ enum
 };
 
 #define DEFAULT_LOCATION NULL
-#define DEFAULT_TIMEOUT 120
 
 static void gst_rtmp_src_uri_handler_init (gpointer g_iface,
     gpointer iface_data);
@@ -127,13 +125,8 @@ gst_rtmp_src_class_init (GstRTMPSrcClass * klass)
           "Location of the RTMP url to read",
           DEFAULT_LOCATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_TIMEOUT,
-      g_param_spec_int ("timeout", "RTMP Timeout",
-          "Time without receiving any data from the server to wait before to timeout the session",
-          0, G_MAXINT,
-          DEFAULT_TIMEOUT, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&srctemplate));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "RTMP Source",
@@ -168,7 +161,6 @@ gst_rtmp_src_init (GstRTMPSrc * rtmpsrc)
 
   rtmpsrc->cur_offset = 0;
   rtmpsrc->last_timestamp = 0;
-  rtmpsrc->timeout = DEFAULT_TIMEOUT;
 
   gst_base_src_set_format (GST_BASE_SRC (rtmpsrc), GST_FORMAT_TIME);
 }
@@ -242,11 +234,8 @@ gst_rtmp_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
       GST_ERROR_OBJECT (src, "Failed to parse URI %s", uri);
       g_set_error (error, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
           "Could not parse RTMP URI");
-      /* FIXME: we should not be freeing RTMP internals to avoid leaking */
-      free (playpath.av_val);
       return FALSE;
     }
-    free (playpath.av_val);
     src->uri = g_strdup (uri);
   }
 
@@ -280,10 +269,6 @@ gst_rtmp_src_set_property (GObject * object, guint prop_id,
           g_value_get_string (value), NULL);
       break;
     }
-    case PROP_TIMEOUT:{
-      src->timeout = g_value_get_int (value);
-      break;
-    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -301,9 +286,6 @@ gst_rtmp_src_get_property (GObject * object, guint prop_id, GValue * value,
   switch (prop_id) {
     case PROP_LOCATION:
       g_value_set_string (value, src->uri);
-      break;
-    case PROP_TIMEOUT:
-      g_value_set_int (value, src->timeout);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -324,6 +306,7 @@ gst_rtmp_src_create (GstPushSrc * pushsrc, GstBuffer ** buffer)
   guint8 *data;
   guint todo;
   gsize bsize;
+  int read;
   int size;
 
   src = GST_RTMP_SRC (pushsrc);
@@ -341,19 +324,20 @@ gst_rtmp_src_create (GstPushSrc * pushsrc, GstBuffer ** buffer)
     return GST_FLOW_ERROR;
   }
 
-  todo = size;
+  bsize = todo = size;
   gst_buffer_map (buf, &map, GST_MAP_WRITE);
   data = map.data;
-  bsize = 0;
+  read = bsize = 0;
 
   while (todo > 0) {
-    int read = RTMP_Read (src->rtmp, (char *) data, todo);
+    read = RTMP_Read (src->rtmp, (char *) data, todo);
 
-    if (G_UNLIKELY (read == 0 && todo == size))
+    if (G_UNLIKELY (read == 0 && todo == size)) {
       goto eos;
-
-    if (G_UNLIKELY (read == 0))
+    } else if (G_UNLIKELY (read == 0)) {
+      todo = 0;
       break;
+    }
 
     if (G_UNLIKELY (read < 0))
       goto read_failed;
@@ -453,8 +437,8 @@ gst_rtmp_src_query (GstBaseSrc * basesrc, GstQuery * query)
     }
     case GST_QUERY_SCHEDULING:{
       gst_query_set_scheduling (query,
-          GST_SCHEDULING_FLAG_SEQUENTIAL |
-          GST_SCHEDULING_FLAG_BANDWIDTH_LIMITED, 1, -1, 0);
+          GST_SCHEDULING_FLAG_SEQUENTIAL | GST_SCHEDULING_FLAG_BANDWIDTH_LIMITED,
+          1, -1, 0);
       gst_query_add_scheduling_mode (query, GST_PAD_MODE_PUSH);
 
       ret = TRUE;
@@ -575,6 +559,7 @@ static gboolean
 gst_rtmp_src_start (GstBaseSrc * basesrc)
 {
   GstRTMPSrc *src;
+  gchar *uri_copy;
 
   src = GST_RTMP_SRC (basesrc);
 
@@ -587,18 +572,16 @@ gst_rtmp_src_start (GstBaseSrc * basesrc)
   src->last_timestamp = 0;
   src->discont = TRUE;
 
+  uri_copy = g_strdup (src->uri);
   src->rtmp = RTMP_Alloc ();
-  if (!src->rtmp) {
-    GST_ERROR_OBJECT (src, "Could not allocate librtmp's RTMP context");
-    goto error;
-  }
-
   RTMP_Init (src->rtmp);
-  src->rtmp->Link.timeout = src->timeout;
-  if (!RTMP_SetupURL (src->rtmp, src->uri)) {
+  if (!RTMP_SetupURL (src->rtmp, uri_copy)) {
     GST_ELEMENT_ERROR (src, RESOURCE, OPEN_READ, (NULL),
         ("Failed to setup URL '%s'", src->uri));
-    goto error;
+    g_free (uri_copy);
+    RTMP_Free (src->rtmp);
+    src->rtmp = NULL;
+    return FALSE;
   }
   src->seekable = !(src->rtmp->Link.lFlags & RTMP_LF_LIVE);
   GST_INFO_OBJECT (src, "seekable %d", src->seekable);
@@ -608,18 +591,13 @@ gst_rtmp_src_start (GstBaseSrc * basesrc)
     if (!RTMP_Connect (src->rtmp, NULL)) {
       GST_ELEMENT_ERROR (src, RESOURCE, OPEN_READ, (NULL),
           ("Could not connect to RTMP stream \"%s\" for reading", src->uri));
-      goto error;
+      RTMP_Free (src->rtmp);
+      src->rtmp = NULL;
+      return FALSE;
     }
   }
 
   return TRUE;
-
-error:
-  if (src->rtmp) {
-    RTMP_Free (src->rtmp);
-    src->rtmp = NULL;
-  }
-  return FALSE;
 }
 
 #undef STR2AVAL

@@ -143,11 +143,11 @@ tsmux_new (void)
   mux->next_stream_pid = TSMUX_START_ES_PID;
 
   mux->pat_changed = TRUE;
-  mux->last_pat_ts = G_MININT64;
+  mux->last_pat_ts = -1;
   mux->pat_interval = TSMUX_DEFAULT_PAT_INTERVAL;
 
   mux->si_changed = TRUE;
-  mux->last_si_ts = G_MININT64;
+  mux->last_si_ts = -1;
   mux->si_interval = TSMUX_DEFAULT_SI_INTERVAL;
 
   mux->si_sections = g_hash_table_new_full (g_direct_hash, g_direct_equal,
@@ -363,7 +363,7 @@ tsmux_program_new (TsMux * mux, gint prog_id)
   program = g_slice_new0 (TsMuxProgram);
 
   program->pmt_changed = TRUE;
-  program->last_pmt_ts = G_MININT64;
+  program->last_pmt_ts = -1;
   program->pmt_interval = TSMUX_DEFAULT_PMT_INTERVAL;
 
   if (prog_id == 0) {
@@ -692,7 +692,7 @@ tsmux_write_adaptation_field (guint8 * buf,
       buf[pos++] = (pcr_base >> 17) & 0xff;
       buf[pos++] = (pcr_base >> 9) & 0xff;
       buf[pos++] = (pcr_base >> 1) & 0xff;
-      buf[pos++] = ((pcr_base << 7) & 0x80) | 0x7e | ((pcr_ext >> 8) & 0x01);   /* set 6 reserve bits to 1 */
+      buf[pos++] = ((pcr_base << 7) & 0x80) | ((pcr_ext >> 8) & 0x01);
       buf[pos++] = (pcr_ext) & 0xff;
     }
     if (pi->flags & TSMUX_PACKET_FLAG_WRITE_OPCR) {
@@ -708,7 +708,7 @@ tsmux_write_adaptation_field (guint8 * buf,
       buf[pos++] = (opcr_base >> 17) & 0xff;
       buf[pos++] = (opcr_base >> 9) & 0xff;
       buf[pos++] = (opcr_base >> 1) & 0xff;
-      buf[pos++] = ((opcr_base << 7) & 0x80) | 0x7e | ((opcr_ext >> 8) & 0x01); /* set 6 reserve bits to 1 */
+      buf[pos++] = ((opcr_base << 7) & 0x80) | ((opcr_ext >> 8) & 0x01);
       buf[pos++] = (opcr_ext) & 0xff;
     }
     if (pi->flags & TSMUX_PACKET_FLAG_WRITE_SPLICE) {
@@ -730,7 +730,7 @@ tsmux_write_adaptation_field (guint8 * buf,
       TS_DEBUG ("FIXME: write Adaptation extension");
       /* Write an empty extension for now */
       buf[pos++] = 1;
-      buf[pos++] = 0x1f;        /* lower 5 bits are reserved, and should be all 1 */
+      buf[pos++] = 0;
     }
   }
   /* Write the flags at the start */
@@ -853,7 +853,6 @@ tsmux_section_write_packet (GstMpegtsSectionType * type,
   gsize data_size = 0;
   gsize payload_written;
   guint len = 0, offset = 0, payload_len = 0;
-  guint extra_alloc_bytes = 0;
 
   g_return_val_if_fail (section != NULL, FALSE);
   g_return_val_if_fail (mux != NULL, FALSE);
@@ -908,44 +907,22 @@ tsmux_section_write_packet (GstMpegtsSectionType * type,
     TS_DEBUG ("Creating packet buffer at offset "
         "%" G_GSIZE_FORMAT " with length %u", payload_written, payload_len);
 
-    /* If in M2TS mode, we will need to resize to 4 bytes after the end
-       of the buffer. For performance reasons, we will now try to include
-       4 extra bytes from the source buffer, then resize down, to avoid
-       having an extra 4 byte GstMemory appended. If the source buffer
-       does not have enough data for this, a new GstMemory will be used */
-    if (gst_buffer_get_size (section_buffer) - (payload_written +
-            payload_len) >= 4) {
-      /* enough space */
-      extra_alloc_bytes = 4;
-    }
     packet_buffer = gst_buffer_copy_region (section_buffer, GST_BUFFER_COPY_ALL,
-        payload_written, payload_len + extra_alloc_bytes);
+        payload_written, payload_len);
 
     /* Prepend the header to the section data */
     gst_buffer_prepend_memory (packet_buffer, mem);
-
-    /* add an extra 4 bytes if it could not be reserved already */
-    if (extra_alloc_bytes == 4) {
-      /* we allocated those already, resize */
-      gst_buffer_set_size (packet_buffer,
-          gst_buffer_get_size (packet_buffer) - extra_alloc_bytes);
-    } else {
-      void *ptr = g_malloc (4);
-      GstMemory *extra =
-          gst_memory_new_wrapped (GST_MEMORY_FLAG_READONLY, ptr, 4, 0, 0, ptr,
-          g_free);
-      gst_buffer_append_memory (packet_buffer, extra);
-    }
 
     TS_DEBUG ("Writing %d bytes to section. %d bytes remaining",
         len, section->pi.stream_avail - len);
 
     /* Push the packet without PCR */
-    if (G_UNLIKELY (!tsmux_packet_out (mux, packet_buffer, -1))) {
+    if G_UNLIKELY
+      (!tsmux_packet_out (mux, packet_buffer, -1)) {
       /* Buffer given away */
       packet_buffer = NULL;
       goto fail;
-    }
+      }
 
     packet_buffer = NULL;
     section->pi.stream_avail -= len;
@@ -958,7 +935,8 @@ tsmux_section_write_packet (GstMpegtsSectionType * type,
   return TRUE;
 
 fail:
-  g_free (packet);
+  if (packet)
+    g_free (packet);
   if (section_buffer)
     gst_buffer_unref (section_buffer);
   return FALSE;
@@ -1005,13 +983,13 @@ tsmux_write_stream_packet (TsMux * mux, TsMuxStream * stream)
     GList *cur;
 
     cur_pcr = 0;
-    if (cur_pts != G_MININT64) {
+    if (cur_pts != -1) {
       TS_DEBUG ("TS for PCR stream is %" G_GINT64_FORMAT, cur_pts);
     }
 
     /* FIXME: The current PCR needs more careful calculation than just
      * writing a fixed offset */
-    if (cur_pts != G_MININT64) {
+    if (cur_pts != -1) {
       /* CLOCK_BASE >= TSMUX_PCR_OFFSET */
       cur_pts += CLOCK_BASE;
       cur_pcr = (cur_pts - TSMUX_PCR_OFFSET) *
@@ -1032,7 +1010,7 @@ tsmux_write_stream_packet (TsMux * mux, TsMuxStream * stream)
     }
 
     /* check if we need to rewrite pat */
-    if (mux->last_pat_ts == G_MININT64 || mux->pat_changed)
+    if (mux->last_pat_ts == -1 || mux->pat_changed)
       write_pat = TRUE;
     else if (cur_pts >= mux->last_pat_ts + mux->pat_interval)
       write_pat = TRUE;
@@ -1046,7 +1024,7 @@ tsmux_write_stream_packet (TsMux * mux, TsMuxStream * stream)
     }
 
     /* check if we need to rewrite sit */
-    if (mux->last_si_ts == G_MININT64 || mux->si_changed)
+    if (mux->last_si_ts == -1 || mux->si_changed)
       write_si = TRUE;
     else if (cur_pts >= mux->last_si_ts + mux->si_interval)
       write_si = TRUE;
@@ -1064,7 +1042,7 @@ tsmux_write_stream_packet (TsMux * mux, TsMuxStream * stream)
       TsMuxProgram *program = (TsMuxProgram *) cur->data;
       gboolean write_pmt;
 
-      if (program->last_pmt_ts == G_MININT64 || program->pmt_changed)
+      if (program->last_pmt_ts == -1 || program->pmt_changed)
         write_pmt = TRUE;
       else if (cur_pts >= program->last_pmt_ts + program->pmt_interval)
         write_pmt = TRUE;
@@ -1082,9 +1060,9 @@ tsmux_write_stream_packet (TsMux * mux, TsMuxStream * stream)
   pi->packet_start_unit_indicator = tsmux_stream_at_pes_start (stream);
   if (pi->packet_start_unit_indicator) {
     tsmux_stream_initialize_pes_packet (stream);
-    if (stream->dts != G_MININT64)
+    if (stream->dts != -1)
       stream->dts += CLOCK_BASE;
-    if (stream->pts != G_MININT64)
+    if (stream->pts != -1)
       stream->pts += CLOCK_BASE;
   }
   pi->stream_avail = tsmux_stream_bytes_avail (stream);

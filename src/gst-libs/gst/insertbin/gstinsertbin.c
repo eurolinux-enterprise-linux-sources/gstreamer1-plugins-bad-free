@@ -132,12 +132,13 @@ gst_insert_bin_class_init (GstInsertBinClass * klass)
 
   g_type_class_add_private (klass, sizeof (GstInsertBinPrivate));
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_insert_bin_src_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_insert_bin_sink_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_insert_bin_src_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_insert_bin_sink_template));
   gst_element_class_set_static_metadata (gstelement_class, "Insert Bin",
-      "Generic/Bin/Filter", "Auto-links filter style elements insertally",
+      "Generic/Bin/Filter",
+      "Auto-links filter style elements insertally",
       "Olivier Crete <olivier.crete@collabora.com>");
 
   gobject_class->dispose = gst_insert_bin_dispose;
@@ -148,7 +149,6 @@ gst_insert_bin_class_init (GstInsertBinClass * klass)
    * @callback: the callback to call when the element has been added or not, or
    *  %NULL
    * @user_data: The data to pass to the callback
-   * @user_data2: The user data of the signal (ignored)
    *
    * This action signal adds the filter like element before any other element
    * in the bin.
@@ -168,7 +168,6 @@ gst_insert_bin_class_init (GstInsertBinClass * klass)
    * @callback: the callback to call when the element has been added or not, or
    *  %NULL
    * @user_data: The data to pass to the callback
-   * @user_data2: The user data of the signal (ignored)
    *
    * This action signal adds the filter like element after any other element
    * in the bin.
@@ -189,7 +188,6 @@ gst_insert_bin_class_init (GstInsertBinClass * klass)
    * @callback: the callback to call when the element has been added or not, or
    *  %NULL
    * @user_data: The data to pass to the callback
-   * @user_data2: The user data of the signal (ignored)
    *
    * This action signal adds the filter like element before the @sibling
    * element in the bin.
@@ -211,7 +209,6 @@ gst_insert_bin_class_init (GstInsertBinClass * klass)
    * @callback: the callback to call when the element has been added or not, or
    *  %NULL
    * @user_data: The data to pass to the callback
-   * @user_data2: The user data of the signal (ignored)
    *
    * This action signal adds the filter like element after the @sibling
    * element in the bin.
@@ -234,7 +231,6 @@ gst_insert_bin_class_init (GstInsertBinClass * klass)
    * @callback: the callback to call when the element has been removed or not,
    * or %NULL
    * @user_data: The data to pass to the callback
-   * @user_data2: The user data of the signal (ignored)
    *
    * This action signal removed the filter like element from the bin.
    *
@@ -309,7 +305,7 @@ gst_insert_bin_dispose (GObject * object)
 static gboolean
 validate_element (GstInsertBin * self, GstElement * element)
 {
-  gboolean valid = TRUE;
+  gboolean valid = TRUE;;
 
   GST_OBJECT_LOCK (element);
   if (element->numsrcpads != 1 || element->numsinkpads != 1) {

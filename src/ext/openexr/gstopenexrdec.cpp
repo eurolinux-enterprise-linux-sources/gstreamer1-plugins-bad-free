@@ -122,8 +122,10 @@ gst_openexr_dec_class_init (GstOpenEXRDecClass * klass)
   element_class = (GstElementClass *) klass;
   video_decoder_class = (GstVideoDecoderClass *) klass;
 
-  gst_element_class_add_static_pad_template (element_class, &gst_openexr_dec_src_template);
-  gst_element_class_add_static_pad_template (element_class, &gst_openexr_dec_sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_openexr_dec_src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_openexr_dec_sink_template));
 
   gst_element_class_set_static_metadata (element_class,
       "OpenEXR decoder",
@@ -149,9 +151,6 @@ gst_openexr_dec_init (GstOpenEXRDec * self)
   GstVideoDecoder *decoder = (GstVideoDecoder *) self;
 
   gst_video_decoder_set_packetized (decoder, FALSE);
-  gst_video_decoder_set_use_default_pad_acceptcaps (GST_VIDEO_DECODER_CAST
-      (self), TRUE);
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_VIDEO_DECODER_SINK_PAD (self));
 }
 
 static gboolean

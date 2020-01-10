@@ -247,8 +247,8 @@ gst_curl_tls_sink_set_options_unlocked (GstCurlBaseSink * bcsink)
   }
 
   /* crypto engine */
-  if ((sink->crypto_engine == NULL) ||
-      (strcmp (sink->crypto_engine, "auto") == 0)) {
+  if ((g_strcmp0 (sink->crypto_engine, "auto") == 0) ||
+      (sink->crypto_engine == NULL)) {
     res = curl_easy_setopt (bcsink->curl, CURLOPT_SSLENGINE_DEFAULT, 1L);
     if (res != CURLE_OK) {
       bcsink->error =

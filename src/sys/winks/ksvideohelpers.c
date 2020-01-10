@@ -125,13 +125,10 @@ ks_video_device_list_sort_cameras_first (GList * devices)
 }
 
 static GstStructure *
-ks_video_format_to_structure (GUID subtype_guid, GUID format_guid,
-    gboolean * p_is_rgb)
+ks_video_format_to_structure (GUID subtype_guid, GUID format_guid)
 {
   GstStructure *structure = NULL;
   const gchar *media_type = NULL, *format = NULL;
-  /* RGB formats can be bottom-up (upside down) DIB */
-  gboolean is_rgb = FALSE;
 
   if (IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_MJPG) || IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_TVMJ) ||     /* FIXME: NOT tested */
       IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_WAKE) ||        /* FIXME: NOT tested */
@@ -141,23 +138,18 @@ ks_video_format_to_structure (GUID subtype_guid, GUID format_guid,
   } else if (IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_RGB555)) {
     media_type = "video/x-raw";
     format = "RGB15";
-    is_rgb = TRUE;
   } else if (IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_RGB565)) {
     media_type = "video/x-raw";
     format = "RGB16";
-    is_rgb = TRUE;
   } else if (IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_RGB24)) {
     media_type = "video/x-raw";
-    format = "BGR";
-    is_rgb = TRUE;
+    format = "RGBx";
   } else if (IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_RGB32)) {
     media_type = "video/x-raw";
-    format = "BGRx";
-    is_rgb = TRUE;
+    format = "RGB";
   } else if (IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_ARGB32)) {
     media_type = "video/x-raw";
-    format = "BGRA";
-    is_rgb = TRUE;
+    format = "ARGB";
   } else if (IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_ARGB1555)) {
     GST_WARNING ("Unsupported video format ARGB15555");
   } else if (IsEqualGUID (&subtype_guid, &MEDIASUBTYPE_ARGB4444)) {
@@ -185,18 +177,14 @@ ks_video_format_to_structure (GUID subtype_guid, GUID format_guid,
     if (format) {
       gst_structure_set (structure, "format", G_TYPE_STRING, format, NULL);
     }
-    if (p_is_rgb) {
-      *p_is_rgb = is_rgb;
-    }
   }
 
   if (!structure) {
-    GST_DEBUG ("Unknown DirectShow Video GUID "
-        "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-        (guint) subtype_guid.Data1, subtype_guid.Data2, subtype_guid.Data3,
-        subtype_guid.Data4[0], subtype_guid.Data4[1], subtype_guid.Data4[2],
-        subtype_guid.Data4[3], subtype_guid.Data4[4], subtype_guid.Data4[5],
-        subtype_guid.Data4[6], subtype_guid.Data4[7]);
+    GST_DEBUG ("Unknown DirectShow Video GUID %08x-%04x-%04x-%04x-%08x%04x",
+        (guint) subtype_guid.Data1, (guint) subtype_guid.Data2,
+        (guint) subtype_guid.Data3,
+        (guint) subtype_guid.Data4, (guint) & subtype_guid.Data4[2],
+        (guint) & subtype_guid.Data4[6]);
   }
 
   return structure;
@@ -457,8 +445,7 @@ ks_video_probe_filter_for_caps (HANDLE filter_handle)
         guint i;
 
         for (i = 0; i < items->Count; i++) {
-          if (IsEqualGUID (&range->MajorFormat, &MEDIATYPE_Video)
-              || IsEqualGUID (&range->MajorFormat, &MEDIATYPE_Interleaved)) {
+          if (IsEqualGUID (&range->MajorFormat, &KSDATAFORMAT_TYPE_VIDEO)) {
             KsVideoMediaType *entry;
             gpointer src_vscc, src_format;
             GstStructure *media_structure;
@@ -497,22 +484,16 @@ ks_video_probe_filter_for_caps (HANDLE filter_handle)
               entry->sample_size =
                   vr->VideoInfoHeader.hdr.bmiHeader.biSizeImage;
             } else if (IsEqualGUID (&range->Specifier, &FORMAT_MPEG2Video)) {
+              /* Untested and probably wrong... */
               KS_DATARANGE_MPEG2_VIDEO *vr =
                   (KS_DATARANGE_MPEG2_VIDEO *) entry->range;
+
               src_vscc = &vr->ConfigCaps;
               src_format = &vr->VideoInfoHeader;
 
               entry->format_size = sizeof (vr->VideoInfoHeader);
               entry->sample_size =
                   vr->VideoInfoHeader.hdr.bmiHeader.biSizeImage;
-            } else if (IsEqualGUID (&range->Specifier, &FORMAT_DvInfo)) {
-              KS_DATARANGE_DVVIDEO *vr = (KS_DATARANGE_DVVIDEO *) entry->range;
-
-              src_vscc = NULL;
-              src_format = &vr->DVVideoInfo;
-
-              entry->format_size = sizeof (vr->DVVideoInfo);
-              entry->sample_size = vr->DataRange.SampleSize;
             } else {
               gchar *guid_str;
 
@@ -528,26 +509,19 @@ ks_video_probe_filter_for_caps (HANDLE filter_handle)
             if (entry != NULL) {
               g_assert (entry->sample_size != 0);
 
-              if (src_vscc != NULL) {
-                memcpy ((gpointer) & entry->vscc, src_vscc,
-                    sizeof (entry->vscc));
-              }
+              memcpy ((gpointer) & entry->vscc, src_vscc, sizeof (entry->vscc));
 
               entry->format = g_malloc (entry->format_size);
               memcpy (entry->format, src_format, entry->format_size);
 
               media_structure =
                   ks_video_format_to_structure (range->SubFormat,
-                  range->Specifier, &entry->is_rgb);
+                  range->MajorFormat);
 
               if (media_structure == NULL) {
                 g_warning ("ks_video_format_to_structure returned NULL");
                 ks_video_media_type_free (entry);
                 entry = NULL;
-              } else if (src_vscc == NULL) {
-                entry->translated_caps = gst_caps_new_empty ();
-                gst_caps_append_structure (entry->translated_caps,
-                    media_structure);
               } else if (ks_video_append_video_stream_cfg_fields
                   (media_structure, &entry->vscc)) {
                 entry->translated_caps = gst_caps_new_empty ();
@@ -689,22 +663,22 @@ ks_video_get_all_caps (void)
     /* RGB formats */
     structure =
         ks_video_append_var_video_fields (ks_video_format_to_structure
-        (MEDIASUBTYPE_RGB555, FORMAT_VideoInfo, NULL));
+        (MEDIASUBTYPE_RGB555, FORMAT_VideoInfo));
     gst_caps_append_structure (caps, structure);
 
     structure =
         ks_video_append_var_video_fields (ks_video_format_to_structure
-        (MEDIASUBTYPE_RGB565, FORMAT_VideoInfo, NULL));
+        (MEDIASUBTYPE_RGB565, FORMAT_VideoInfo));
     gst_caps_append_structure (caps, structure);
 
     structure =
         ks_video_append_var_video_fields (ks_video_format_to_structure
-        (MEDIASUBTYPE_RGB24, FORMAT_VideoInfo, NULL));
+        (MEDIASUBTYPE_RGB24, FORMAT_VideoInfo));
     gst_caps_append_structure (caps, structure);
 
     structure =
         ks_video_append_var_video_fields (ks_video_format_to_structure
-        (MEDIASUBTYPE_RGB32, FORMAT_VideoInfo, NULL));
+        (MEDIASUBTYPE_RGB32, FORMAT_VideoInfo));
     gst_caps_append_structure (caps, structure);
 
     /* YUV formats */
@@ -716,16 +690,16 @@ ks_video_get_all_caps (void)
     /* Other formats */
     structure =
         ks_video_append_var_video_fields (ks_video_format_to_structure
-        (MEDIASUBTYPE_MJPG, FORMAT_VideoInfo, NULL));
+        (MEDIASUBTYPE_MJPG, FORMAT_VideoInfo));
     gst_caps_append_structure (caps, structure);
 
     structure =
         ks_video_append_var_video_fields (ks_video_format_to_structure
-        (MEDIASUBTYPE_dvsd, FORMAT_VideoInfo, NULL));
+        (MEDIASUBTYPE_dvsd, FORMAT_VideoInfo));
     gst_caps_append_structure (caps, structure);
 
     structure =                 /* no variable video fields (width, height, framerate) */
-        ks_video_format_to_structure (MEDIASUBTYPE_dvsd, FORMAT_DvInfo, NULL);
+        ks_video_format_to_structure (MEDIASUBTYPE_dvsd, FORMAT_DvInfo);
     gst_caps_append_structure (caps, structure);
   }
 

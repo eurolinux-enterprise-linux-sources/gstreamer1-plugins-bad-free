@@ -456,9 +456,6 @@ static void
 adpcmdec_init (ADPCMDec * dec)
 {
   gst_audio_decoder_set_needs_format (GST_AUDIO_DECODER (dec), TRUE);
-  gst_audio_decoder_set_use_default_pad_acceptcaps (GST_AUDIO_DECODER_CAST
-      (dec), TRUE);
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_DECODER_SINK_PAD (dec));
 }
 
 static void
@@ -467,12 +464,13 @@ adpcmdec_class_init (ADPCMDecClass * klass)
   GstElementClass *element_class = (GstElementClass *) klass;
   GstAudioDecoderClass *base_class = (GstAudioDecoderClass *) klass;
 
-  gst_element_class_add_static_pad_template (element_class,
-      &adpcmdec_sink_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &adpcmdec_src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&adpcmdec_sink_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&adpcmdec_src_template));
   gst_element_class_set_static_metadata (element_class, "ADPCM decoder",
-      "Codec/Decoder/Audio", "Decode MS and IMA ADPCM audio",
+      "Codec/Decoder/Audio",
+      "Decode MS and IMA ADPCM audio",
       "Pioneers of the Inevitable <songbird@songbirdnest.com>");
 
   base_class->start = GST_DEBUG_FUNCPTR (adpcmdec_start);

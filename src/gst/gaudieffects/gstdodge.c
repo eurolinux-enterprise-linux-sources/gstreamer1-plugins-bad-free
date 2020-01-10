@@ -1,6 +1,6 @@
 /*
  * GStreamer
- * Copyright (C) <2010-2015> Luis de Bethencourt <luis@debethencourt.com>
+ * Copyright (C) <2010-2012> Luis de Bethencourt <luis@debethencourt.com>
  *
  * Dodge - saturation video effect.
  * Based on Pete Warden's FreeFrame plugin with the same name.
@@ -52,7 +52,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! dodge ! videoconvert ! autovideosink
+ * gst-launch -v videotestsrc ! dodge ! videoconvert ! autovideosink
  * ]| This pipeline shows the effect of dodge on a test stream
  * </refsect2>
  */
@@ -88,6 +88,7 @@ enum
 enum
 {
   PROP_0,
+  PROP_SILENT
 };
 
 /* Initializations */
@@ -135,14 +136,18 @@ gst_dodge_class_init (GstDodgeClass * klass)
       "Dodge saturates the colors in the video signal.",
       "Luis de Bethencourt <luis@debethencourt.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_dodge_sink_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_dodge_src_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_dodge_sink_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_dodge_src_template));
 
   gobject_class->set_property = gst_dodge_set_property;
   gobject_class->get_property = gst_dodge_get_property;
   gobject_class->finalize = gst_dodge_finalize;
+
+  g_object_class_install_property (gobject_class, PROP_SILENT,
+      g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
+          FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   vfilter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_dodge_transform_frame);
@@ -156,13 +161,19 @@ gst_dodge_class_init (GstDodgeClass * klass)
 static void
 gst_dodge_init (GstDodge * filter)
 {
+  filter->silent = FALSE;
 }
 
 static void
 gst_dodge_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
+  GstDodge *filter = GST_DODGE (object);
+
   switch (prop_id) {
+    case PROP_SILENT:
+      filter->silent = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -173,11 +184,18 @@ static void
 gst_dodge_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
+  GstDodge *filter = GST_DODGE (object);
+
+  GST_OBJECT_LOCK (filter);
   switch (prop_id) {
+    case PROP_SILENT:
+      g_value_set_boolean (value, filter->silent);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (filter);
 }
 
 static void
@@ -195,7 +213,7 @@ gst_dodge_transform_frame (GstVideoFilter * vfilter,
 {
   GstDodge *filter = GST_DODGE (vfilter);
   guint32 *src, *dest;
-  gint video_size;
+  gint video_size, width, height;
 
   GstClockTime timestamp;
   gint64 stream_time;
@@ -203,7 +221,9 @@ gst_dodge_transform_frame (GstVideoFilter * vfilter,
   src = GST_VIDEO_FRAME_PLANE_DATA (in_frame, 0);
   dest = GST_VIDEO_FRAME_PLANE_DATA (out_frame, 0);
 
-  /* GstController: update the properties */
+  width = GST_VIDEO_FRAME_WIDTH (in_frame);
+  height = GST_VIDEO_FRAME_HEIGHT (in_frame);
+
   timestamp = GST_BUFFER_TIMESTAMP (in_frame->buffer);
   stream_time =
       gst_segment_to_stream_time (&GST_BASE_TRANSFORM (filter)->segment,
@@ -215,8 +235,7 @@ gst_dodge_transform_frame (GstVideoFilter * vfilter,
   if (GST_CLOCK_TIME_IS_VALID (stream_time))
     gst_object_sync_values (GST_OBJECT (filter), stream_time);
 
-  video_size = GST_VIDEO_FRAME_WIDTH (in_frame) *
-      GST_VIDEO_FRAME_HEIGHT (in_frame);
+  video_size = width * height;
 
   transform (src, dest, video_size);
 

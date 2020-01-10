@@ -1,15 +1,15 @@
 /*
  * GStreamer
  * Copyright (C) 2013 Miguel Casas-Sanchez <miguelecasassanchez@gmail.com>
- * Except: Parts of code inside the preprocessor define CODE_FROM_OREILLY_BOOK,
- *  which are downloaded from O'Reilly website
+ * Except: Parts of code inside the preprocessor define CODE_FROM_OREILLY_BOOK, 
+ *  which are downloaded from O'Reilly website 
  *  [http://examples.oreilly.com/9780596516130/]
  *  and adapted. Its license reads:
  *  "Oct. 3, 2008
- *   Right to use this code in any way you want without warrenty, support or
+ *   Right to use this code in any way you want without warrenty, support or 
  *   any guarentee of it working. "
  *
- *
+ * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -55,27 +55,27 @@
  *
  * This element creates and updates a fg/bg model using one of several approaches.
  * The one called "codebook" refers to the codebook approach following the opencv
- * O'Reilly book [1] implementation of the algorithm described in K. Kim,
- * T. H. Chalidabhongse, D. Harwood and L. Davis [2]. BackgroundSubtractorMOG [3],
- * or MOG for shorts, refers to a Gaussian Mixture-based Background/Foreground
+ * O'Reilly book [1] implementation of the algorithm described in K. Kim, 
+ * T. H. Chalidabhongse, D. Harwood and L. Davis [2]. BackgroundSubtractorMOG [3], 
+ * or MOG for shorts, refers to a Gaussian Mixture-based Background/Foreground 
  * Segmentation Algorithm. OpenCV MOG implements the algorithm described in [4].
- * BackgroundSubtractorMOG2 [5], refers to another Gaussian Mixture-based
- * Background/Foreground segmentation algorithm. OpenCV MOG2 implements the
+ * BackgroundSubtractorMOG2 [5], refers to another Gaussian Mixture-based 
+ * Background/Foreground segmentation algorithm. OpenCV MOG2 implements the 
  * algorithm described in [6] and [7].
  *
- * [1] Learning OpenCV: Computer Vision with the OpenCV Library by Gary Bradski
+ * [1] Learning OpenCV: Computer Vision with the OpenCV Library by Gary Bradski 
  * and Adrian Kaehler, Published by O'Reilly Media, October 3, 2008
- * [2] "Real-time Foreground-Background Segmentation using Codebook Model",
+ * [2] "Real-time Foreground-Background Segmentation using Codebook Model", 
  * Real-time Imaging, Volume 11, Issue 3, Pages 167-256, June 2005.
  * [3] http://opencv.itseez.com/modules/video/doc/motion_analysis_and_object_tracking.html#backgroundsubtractormog
- * [4] P. KadewTraKuPong and R. Bowden, "An improved adaptive background
- * mixture model for real-time tracking with shadow detection", Proc. 2nd
+ * [4] P. KadewTraKuPong and R. Bowden, "An improved adaptive background 
+ * mixture model for real-time tracking with shadow detection", Proc. 2nd 
  * European Workshop on Advanced Video-Based Surveillance Systems, 2001
  * [5] http://opencv.itseez.com/modules/video/doc/motion_analysis_and_object_tracking.html#backgroundsubtractormog2
- * [6] Z.Zivkovic, "Improved adaptive Gausian mixture model for background
+ * [6] Z.Zivkovic, "Improved adaptive Gausian mixture model for background 
  * subtraction", International Conference Pattern Recognition, UK, August, 2004.
- * [7] Z.Zivkovic, F. van der Heijden, "Efficient Adaptive Density Estimation
- * per Image Pixel for the Task of Background Subtraction", Pattern Recognition
+ * [7] Z.Zivkovic, F. van der Heijden, "Efficient Adaptive Density Estimation 
+ * per Image Pixel for the Task of Background Subtraction", Pattern Recognition 
  * Letters, vol. 27, no. 7, pages 773-780, 2006.
  *
  * <refsect2>
@@ -90,16 +90,14 @@
 #include <config.h>
 #endif
 
+#include <gst/gst.h>
+
 #include "gstsegmentation.h"
-#include <opencv2/imgproc/imgproc_c.h>
+#include <opencv2/video/background_segm.hpp>
 
 GST_DEBUG_CATEGORY_STATIC (gst_segmentation_debug);
 #define GST_CAT_DEFAULT gst_segmentation_debug
 
-using namespace cv;
-#if (CV_MAJOR_VERSION >= 3)
-  using namespace cv::bgsegm;
-#endif
 /* Filter signals and args */
 enum
 {
@@ -226,8 +224,10 @@ gst_segmentation_class_init (GstSegmentationClass * klass)
       "Create a Foregound/Background mask applying a particular algorithm",
       "Miguel Casas-Sanchez <miguelecasassanchez@gmail.com>");
 
-  gst_element_class_add_static_pad_template (element_class, &src_factory);
-  gst_element_class_add_static_pad_template (element_class, &sink_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_factory));
 
 }
 
@@ -381,12 +381,12 @@ gst_segmentation_transform_ip (GstVideoFilter * btrans, GstVideoFrame * frame)
   cvCvtColor (filter->cvRGBA, filter->cvRGB, CV_RGBA2RGB);
   cvCvtColor (filter->cvRGB, filter->cvYUV, CV_RGB2YCrCb);
 
-  /* Create and update a fg/bg model using a codebook approach following the
+  /* Create and update a fg/bg model using a codebook approach following the 
    * opencv O'Reilly book [1] implementation of the algo described in [2].
    *
-   * [1] Learning OpenCV: Computer Vision with the OpenCV Library by Gary
+   * [1] Learning OpenCV: Computer Vision with the OpenCV Library by Gary 
    * Bradski and Adrian Kaehler, Published by O'Reilly Media, October 3, 2008
-   * [2] "Real-time Foreground-Background Segmentation using Codebook Model",
+   * [2] "Real-time Foreground-Background Segmentation using Codebook Model", 
    * Real-time Imaging, Volume 11, Issue 3, Pages 167-256, June 2005. */
   if (METHOD_BOOK == filter->method) {
     unsigned cbBounds[3] = { 10, 5, 5 };
@@ -428,27 +428,27 @@ gst_segmentation_transform_ip (GstVideoFilter * btrans, GstVideoFrame * frame)
         filter->mem_storage, filter->contours);
 
   }
-  /* Create the foreground and background masks using BackgroundSubtractorMOG [1],
-   *  Gaussian Mixture-based Background/Foreground segmentation algorithm. OpenCV
+  /* Create the foreground and background masks using BackgroundSubtractorMOG [1], 
+   *  Gaussian Mixture-based Background/Foreground segmentation algorithm. OpenCV 
    * MOG implements the algorithm described in [2].
-   *
+   * 
    * [1] http://opencv.itseez.com/modules/video/doc/motion_analysis_and_object_tracking.html#backgroundsubtractormog
-   * [2] P. KadewTraKuPong and R. Bowden, "An improved adaptive background
-   * mixture model for real-time tracking with shadow detection", Proc. 2nd
+   * [2] P. KadewTraKuPong and R. Bowden, "An improved adaptive background 
+   * mixture model for real-time tracking with shadow detection", Proc. 2nd 
    * European Workshop on Advanced Video-Based Surveillance Systems, 2001
    */
   else if (METHOD_MOG == filter->method) {
     run_mog_iteration (filter);
   }
   /* Create the foreground and background masks using BackgroundSubtractorMOG2
-   * [1], Gaussian Mixture-based Background/Foreground segmentation algorithm.
+   * [1], Gaussian Mixture-based Background/Foreground segmentation algorithm. 
    * OpenCV MOG2 implements the algorithm described in [2] and [3].
-   *
+   * 
    * [1] http://opencv.itseez.com/modules/video/doc/motion_analysis_and_object_tracking.html#backgroundsubtractormog2
-   * [2] Z.Zivkovic, "Improved adaptive Gausian mixture model for background
+   * [2] Z.Zivkovic, "Improved adaptive Gausian mixture model for background 
    * subtraction", International Conference Pattern Recognition, UK, Aug 2004.
-   * [3] Z.Zivkovic, F. van der Heijden, "Efficient Adaptive Density Estimation
-   * per Image Pixel for the Task of Background Subtraction", Pattern
+   * [3] Z.Zivkovic, F. van der Heijden, "Efficient Adaptive Density Estimation 
+   * per Image Pixel for the Task of Background Subtraction", Pattern 
    * Recognition Letters, vol. 27, no. 7, pages 773-780, 2006.   */
   else if (METHOD_MOG2 == filter->method) {
     run_mog2_iteration (filter);
@@ -486,20 +486,20 @@ gst_segmentation_plugin_init (GstPlugin * plugin)
 
 
 #ifdef CODE_FROM_OREILLY_BOOK   /* See license at the beginning of the page */
-/*
-  int update_codebook(uchar *p, codeBook &c, unsigned cbBounds)
-  Updates the codebook entry with a new data point
-
-  p Pointer to a YUV or HSI pixel
-  c Codebook for this pixel
-  cbBounds Learning bounds for codebook (Rule of thumb: 10)
-  numChannels Number of color channels we¡¯re learning
-
-  NOTES:
-  cvBounds must be of length equal to numChannels
-
-  RETURN
-  codebook index
+/* 
+  int update_codebook(uchar *p, codeBook &c, unsigned cbBounds) 
+  Updates the codebook entry with a new data point 
+  
+  p Pointer to a YUV or HSI pixel 
+  c Codebook for this pixel 
+  cbBounds Learning bounds for codebook (Rule of thumb: 10) 
+  numChannels Number of color channels we¡¯re learning 
+  
+  NOTES: 
+  cvBounds must be of length equal to numChannels 
+  
+  RETURN 
+  codebook index 
 */
 int
 update_codebook (unsigned char *p, codeBook * c, unsigned *cbBounds,
@@ -588,14 +588,14 @@ update_codebook (unsigned char *p, codeBook * c, unsigned *cbBounds,
 
 
 /*
- int clear_stale_entries(codeBook &c)
-  During learning, after you've learned for some period of time,
-  periodically call this to clear out stale codebook entries
-
-  c Codebook to clean up
-
-  Return
-  number of entries cleared
+ int clear_stale_entries(codeBook &c) 
+  During learning, after you've learned for some period of time, 
+  periodically call this to clear out stale codebook entries 
+  
+  c Codebook to clean up 
+  
+  Return 
+  number of entries cleared 
 */
 int
 clear_stale_entries (codeBook * c)
@@ -639,27 +639,27 @@ clear_stale_entries (codeBook * c)
 
 
 /*
-  uchar background_diff( uchar *p, codeBook &c,
-  int minMod, int maxMod)
-  Given a pixel and a codebook, determine if the pixel is
-  covered by the codebook
+  uchar background_diff( uchar *p, codeBook &c, 
+  int minMod, int maxMod) 
+  Given a pixel and a codebook, determine if the pixel is 
+  covered by the codebook 
+  
+  p Pixel pointer (YUV interleaved) 
+  c Codebook reference 
+  numChannels Number of channels we are testing 
+  maxMod Add this (possibly negative) number onto 
 
-  p Pixel pointer (YUV interleaved)
-  c Codebook reference
-  numChannels Number of channels we are testing
-  maxMod Add this (possibly negative) number onto
-
-  max level when determining if new pixel is foreground
-  minMod Subract this (possibly negative) number from
-  min level when determining if new pixel is foreground
-
-  NOTES:
-  minMod and maxMod must have length numChannels,
-  e.g. 3 channels => minMod[3], maxMod[3]. There is one min and
-  one max threshold per channel.
-
-  Return
-  0 => background, 255 => foreground
+  max level when determining if new pixel is foreground 
+  minMod Subract this (possibly negative) number from 
+  min level when determining if new pixel is foreground 
+  
+  NOTES: 
+  minMod and maxMod must have length numChannels, 
+  e.g. 3 channels => minMod[3], maxMod[3]. There is one min and 
+  one max threshold per channel. 
+  
+  Return 
+  0 => background, 255 => foreground 
 */
 unsigned char
 background_diff (unsigned char *p, codeBook * c, int numChannels,
@@ -780,16 +780,11 @@ find_connected_components (IplImage * mask, int poly1_hull0, float perimScale,
 int
 initialise_mog (GstSegmentation * filter)
 {
-  filter->img_input_as_cvMat = (void *) new Mat (cvarrToMat (filter->cvYUV, false));
-  filter->img_fg_as_cvMat = (void *) new Mat (cvarrToMat(filter->cvFG, false));
+  filter->img_input_as_cvMat = (void *) new cv::Mat (filter->cvYUV, false);
+  filter->img_fg_as_cvMat = (void *) new cv::Mat (filter->cvFG, false);
 
-#if (CV_MAJOR_VERSION >= 3)
-  filter->mog = bgsegm::createBackgroundSubtractorMOG ();
-  filter->mog2 = createBackgroundSubtractorMOG2 ();
-#else
-  filter->mog = (void *) new BackgroundSubtractorMOG ();
-  filter->mog2 = (void *) new BackgroundSubtractorMOG2 ();
-#endif
+  filter->mog = (void *) new cv::BackgroundSubtractorMOG ();
+  filter->mog2 = (void *) new cv::BackgroundSubtractorMOG2 ();
 
   return (0);
 }
@@ -803,24 +798,18 @@ run_mog_iteration (GstSegmentation * filter)
       (uchar *) filter->cvFG->imageData;
 
   /*
-     BackgroundSubtractorMOG [1], Gaussian Mixture-based Background/Foreground
+     BackgroundSubtractorMOG [1], Gaussian Mixture-based Background/Foreground 
      Segmentation Algorithm. OpenCV MOG implements the algorithm described in [2].
 
      [1] http://opencv.itseez.com/modules/video/doc/motion_analysis_and_object_tracking.html#backgroundsubtractormog
-     [2] P. KadewTraKuPong and R. Bowden, "An improved adaptive background
-     mixture model for real-time tracking with shadow detection", Proc. 2nd
+     [2] P. KadewTraKuPong and R. Bowden, "An improved adaptive background 
+     mixture model for real-time tracking with shadow detection", Proc. 2nd 
      European Workshop on Advanced Video-Based Surveillance Systems, 2001
    */
 
-#if (CV_MAJOR_VERSION >= 3)
-  filter->mog->apply (*((Mat *) filter->
-          img_input_as_cvMat), *((Mat *) filter->img_fg_as_cvMat),
+  (*((cv::BackgroundSubtractorMOG *) filter->mog)) (*((cv::Mat *) filter->
+          img_input_as_cvMat), *((cv::Mat *) filter->img_fg_as_cvMat),
       filter->learning_rate);
-#else
-  (*((BackgroundSubtractorMOG *) filter->mog)) (*((Mat *) filter->
-          img_input_as_cvMat), *((Mat *) filter->img_fg_as_cvMat),
-      filter->learning_rate);
-#endif
 
   return (0);
 }
@@ -828,33 +817,27 @@ run_mog_iteration (GstSegmentation * filter)
 int
 run_mog2_iteration (GstSegmentation * filter)
 {
-  ((Mat *) filter->img_input_as_cvMat)->data =
-       (uchar *) filter->cvYUV->imageData;
-  ((Mat *) filter->img_fg_as_cvMat)->data =
-       (uchar *) filter->cvFG->imageData;
+  ((cv::Mat *) filter->img_input_as_cvMat)->data =
+      (uchar *) filter->cvYUV->imageData;
+  ((cv::Mat *) filter->img_fg_as_cvMat)->data =
+      (uchar *) filter->cvFG->imageData;
 
   /*
-     BackgroundSubtractorMOG2 [1], Gaussian Mixture-based Background/Foreground
-     segmentation algorithm. OpenCV MOG2 implements the algorithm described in
+     BackgroundSubtractorMOG2 [1], Gaussian Mixture-based Background/Foreground 
+     segmentation algorithm. OpenCV MOG2 implements the algorithm described in 
      [2] and [3].
 
      [1] http://opencv.itseez.com/modules/video/doc/motion_analysis_and_object_tracking.html#backgroundsubtractormog2
-     [2] Z.Zivkovic, "Improved adaptive Gausian mixture model for background
+     [2] Z.Zivkovic, "Improved adaptive Gausian mixture model for background 
      subtraction", International Conference Pattern Recognition, UK, August, 2004.
-     [3] Z.Zivkovic, F. van der Heijden, "Efficient Adaptive Density Estimation per
-     Image Pixel for the Task of Background Subtraction", Pattern Recognition
+     [3] Z.Zivkovic, F. van der Heijden, "Efficient Adaptive Density Estimation per 
+     Image Pixel for the Task of Background Subtraction", Pattern Recognition 
      Letters, vol. 27, no. 7, pages 773-780, 2006.
    */
 
-#if (CV_MAJOR_VERSION >= 3)
-  filter->mog2->apply (*((Mat *) filter->
-          img_input_as_cvMat), *((Mat *) filter->img_fg_as_cvMat),
+  (*((cv::BackgroundSubtractorMOG *) filter->mog2)) (*((cv::Mat *) filter->
+          img_input_as_cvMat), *((cv::Mat *) filter->img_fg_as_cvMat),
       filter->learning_rate);
-#else
-  (*((BackgroundSubtractorMOG *) filter->mog2)) (*((Mat *) filter->
-          img_input_as_cvMat), *((Mat *) filter->img_fg_as_cvMat),
-      filter->learning_rate);
-#endif
 
   return (0);
 }
@@ -862,14 +845,9 @@ run_mog2_iteration (GstSegmentation * filter)
 int
 finalise_mog (GstSegmentation * filter)
 {
-  delete (Mat *) filter->img_input_as_cvMat;
-  delete (Mat *) filter->img_fg_as_cvMat;
-#if (CV_MAJOR_VERSION >= 3)
-  filter->mog.release ();
-  filter->mog2.release ();
-#else
-  delete (BackgroundSubtractorMOG *) filter->mog;
-  delete (BackgroundSubtractorMOG2 *) filter->mog2;
-#endif
+  delete (cv::Mat *) filter->img_input_as_cvMat;
+  delete (cv::Mat *) filter->img_fg_as_cvMat;
+  delete (cv::BackgroundSubtractorMOG *) filter->mog;
+  delete (cv::BackgroundSubtractorMOG2 *) filter->mog2;
   return (0);
 }

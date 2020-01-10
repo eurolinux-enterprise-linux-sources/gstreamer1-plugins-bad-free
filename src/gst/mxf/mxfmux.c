@@ -25,7 +25,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v filesrc location=/path/to/audio ! decodebin ! queue ! mxfmux name=m ! filesink location=file.mxf   filesrc location=/path/to/video ! decodebin ! queue ! m.
+ * gst-launch -v filesrc location=/path/to/audio ! decodebin2 ! queue ! mxfmux name=m ! filesink location=file.mxf   filesrc location=/path/to/video ! decodebin2 ! queue ! m.
  * ]| This pipeline muxes an audio and video file into a single MXF file.
  * </refsect2>
  */
@@ -46,66 +46,6 @@
 GST_DEBUG_CATEGORY_STATIC (mxfmux_debug);
 #define GST_CAT_DEFAULT mxfmux_debug
 
-#define GST_TYPE_MXF_MUX_PAD            (gst_mxf_mux_pad_get_type())
-#define GST_MXF_MUX_PAD(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_MXF_MUX_PAD, GstMXFMuxPad))
-#define GST_MXF_MUX_PAD_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_MXF_MUX_PAD, GstMXFMuxPadClass))
-#define GST_MXF_MUX_PAD_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),GST_TYPE_MXF_MUX_PAD, GstMXFMuxPadClass))
-#define GST_IS_MXF_MUX_PAD(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_MXF_MUX_PAD))
-#define GST_IS_MXF_MUX_PAD_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_MXF_MUX_PAD))
-
-typedef struct
-{
-  GstAggregatorPad parent;
-
-  guint64 pos;
-  GstClockTime last_timestamp;
-
-  MXFMetadataFileDescriptor *descriptor;
-
-  GstAdapter *adapter;
-  gboolean have_complete_edit_unit;
-
-  gpointer mapping_data;
-  const MXFEssenceElementWriter *writer;
-  MXFEssenceElementWriteFunc write_func;
-
-  MXFMetadataSourcePackage *source_package;
-  MXFMetadataTimelineTrack *source_track;
-} GstMXFMuxPad;
-
-typedef struct
-{
-  GstAggregatorPadClass parent_class;
-} GstMXFMuxPadClass;
-
-GType gst_mxf_mux_pad_get_type (void);
-
-G_DEFINE_TYPE (GstMXFMuxPad, gst_mxf_mux_pad, GST_TYPE_AGGREGATOR_PAD);
-
-static void
-gst_mxf_mux_pad_finalize (GObject * object)
-{
-  GstMXFMuxPad *pad = GST_MXF_MUX_PAD (object);
-
-  g_object_unref (pad->adapter);
-  g_free (pad->mapping_data);
-
-  G_OBJECT_CLASS (gst_mxf_mux_pad_parent_class)->finalize (object);
-}
-
-static void
-gst_mxf_mux_pad_class_init (GstMXFMuxPadClass * klass)
-{
-  GObjectClass *object_class = (GObjectClass *) klass;
-
-  object_class->finalize = gst_mxf_mux_pad_finalize;
-}
-
-static void
-gst_mxf_mux_pad_init (GstMXFMuxPad * pad)
-{
-}
-
 static GstStaticPadTemplate src_templ = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
@@ -118,20 +58,27 @@ enum
 };
 
 #define gst_mxf_mux_parent_class parent_class
-G_DEFINE_TYPE (GstMXFMux, gst_mxf_mux, GST_TYPE_AGGREGATOR);
+G_DEFINE_TYPE (GstMXFMux, gst_mxf_mux, GST_TYPE_ELEMENT);
 
 static void gst_mxf_mux_finalize (GObject * object);
+static void gst_mxf_mux_set_property (GObject * object,
+    guint prop_id, const GValue * value, GParamSpec * pspec);
+static void gst_mxf_mux_get_property (GObject * object,
+    guint prop_id, GValue * value, GParamSpec * pspec);
 
-static GstFlowReturn gst_mxf_mux_aggregate (GstAggregator * aggregator,
-    gboolean timeout);
-static gboolean gst_mxf_mux_stop (GstAggregator * aggregator);
+static GstFlowReturn gst_mxf_mux_collected (GstCollectPads * pads,
+    gpointer user_data);
 
-static gboolean gst_mxf_mux_src_event (GstAggregator * aggregator,
+static gboolean gst_mxf_mux_handle_src_event (GstPad * pad, GstObject * parent,
     GstEvent * event);
-static gboolean gst_mxf_mux_sink_event (GstAggregator * aggregator,
-    GstAggregatorPad * aggpad, GstEvent * event);
-static GstAggregatorPad *gst_mxf_mux_create_new_pad (GstAggregator * aggregator,
+static gboolean gst_mxf_mux_handle_sink_event (GstCollectPads * pads,
+    GstCollectData * data, GstEvent * event, gpointer user_data);
+static GstPad *gst_mxf_mux_request_new_pad (GstElement * element,
     GstPadTemplate * templ, const gchar * name, const GstCaps * caps);
+static void gst_mxf_mux_release_pad (GstElement * element, GstPad * pad);
+
+static GstStateChangeReturn
+gst_mxf_mux_change_state (GstElement * element, GstStateChange transition);
 
 static void gst_mxf_mux_reset (GstMXFMux * mux);
 
@@ -141,7 +88,7 @@ gst_mxf_mux_push (GstMXFMux * mux, GstBuffer * buf)
   guint size = gst_buffer_get_size (buf);
   GstFlowReturn ret;
 
-  ret = gst_aggregator_finish_buffer (GST_AGGREGATOR (mux), buf);
+  ret = gst_pad_push (mux->srcpad, buf);
   mux->offset += size;
 
   return ret;
@@ -152,26 +99,24 @@ gst_mxf_mux_class_init (GstMXFMuxClass * klass)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
-  GstAggregatorClass *gstaggregator_class;
   const GstPadTemplate **p;
 
   GST_DEBUG_CATEGORY_INIT (mxfmux_debug, "mxfmux", 0, "MXF muxer");
 
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
-  gstaggregator_class = (GstAggregatorClass *) klass;
 
   gobject_class->finalize = gst_mxf_mux_finalize;
+  gobject_class->set_property = gst_mxf_mux_set_property;
+  gobject_class->get_property = gst_mxf_mux_get_property;
 
-  gstaggregator_class->create_new_pad =
-      GST_DEBUG_FUNCPTR (gst_mxf_mux_create_new_pad);
-  gstaggregator_class->src_event = GST_DEBUG_FUNCPTR (gst_mxf_mux_src_event);
-  gstaggregator_class->sink_event = GST_DEBUG_FUNCPTR (gst_mxf_mux_sink_event);
-  gstaggregator_class->stop = GST_DEBUG_FUNCPTR (gst_mxf_mux_stop);
-  gstaggregator_class->aggregate = GST_DEBUG_FUNCPTR (gst_mxf_mux_aggregate);
-  gstaggregator_class->sinkpads_type = GST_TYPE_MXF_MUX_PAD;
+  gstelement_class->change_state = GST_DEBUG_FUNCPTR (gst_mxf_mux_change_state);
+  gstelement_class->request_new_pad =
+      GST_DEBUG_FUNCPTR (gst_mxf_mux_request_new_pad);
+  gstelement_class->release_pad = GST_DEBUG_FUNCPTR (gst_mxf_mux_release_pad);
 
-  gst_element_class_add_static_pad_template (gstelement_class, &src_templ);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&src_templ));
 
   p = mxf_essence_element_writer_get_pad_templates ();
   while (p && *p) {
@@ -189,7 +134,21 @@ gst_mxf_mux_class_init (GstMXFMuxClass * klass)
 static void
 gst_mxf_mux_init (GstMXFMux * mux)
 {
-  mux->index_table = g_array_new (FALSE, FALSE, sizeof (MXFIndexTableSegment));
+  GstCaps *caps;
+
+  mux->srcpad = gst_pad_new_from_static_template (&src_templ, "src");
+  gst_pad_set_event_function (mux->srcpad, gst_mxf_mux_handle_src_event);
+  caps = gst_caps_new_empty_simple ("application/mxf");
+  gst_pad_set_caps (mux->srcpad, caps);
+  gst_caps_unref (caps);
+  gst_element_add_pad (GST_ELEMENT (mux), mux->srcpad);
+
+  mux->collect = gst_collect_pads_new ();
+  gst_collect_pads_set_event_function (mux->collect,
+      GST_DEBUG_FUNCPTR (gst_mxf_mux_handle_sink_event), mux);
+  gst_collect_pads_set_function (mux->collect,
+      GST_DEBUG_FUNCPTR (gst_mxf_mux_collected), mux);
+
   gst_mxf_mux_reset (mux);
 }
 
@@ -207,38 +166,53 @@ gst_mxf_mux_finalize (GObject * object)
     mux->metadata_list = NULL;
   }
 
-  if (mux->index_table) {
-    g_array_free (mux->index_table, TRUE);
-    mux->index_table = NULL;
-  }
+  gst_object_unref (mux->collect);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
 static void
+gst_mxf_mux_set_property (GObject * object,
+    guint prop_id, const GValue * value, GParamSpec * pspec)
+{
+  //GstMXFMux *mux = GST_MXF_MUX (object);
+
+  switch (prop_id) {
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static void
+gst_mxf_mux_get_property (GObject * object,
+    guint prop_id, GValue * value, GParamSpec * pspec)
+{
+  //GstMXFMux *mux = GST_MXF_MUX (object);
+
+  switch (prop_id) {
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static void
 gst_mxf_mux_reset (GstMXFMux * mux)
 {
-  GList *l;
+  GSList *sl;
 
-  GST_OBJECT_LOCK (mux);
-  for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
-    GstMXFMuxPad *pad = l->data;
+  while ((sl = mux->collect->data) != NULL) {
+    GstMXFMuxPad *cpad = (GstMXFMuxPad *) sl->data;
 
-    gst_adapter_clear (pad->adapter);
-    g_free (pad->mapping_data);
-    pad->mapping_data = NULL;
+    g_object_unref (cpad->adapter);
+    g_free (cpad->mapping_data);
 
-    pad->pos = 0;
-    pad->last_timestamp = 0;
-    pad->descriptor = NULL;
-    pad->have_complete_edit_unit = FALSE;
-
-    pad->source_package = NULL;
-    pad->source_track = NULL;
+    gst_collect_pads_remove_pad (mux->collect, cpad->collect.pad);
   }
-  GST_OBJECT_UNLOCK (mux);
 
   mux->state = GST_MXF_MUX_STATE_HEADER;
+  mux->n_pads = 0;
 
   if (mux->metadata) {
     g_hash_table_destroy (mux->metadata);
@@ -254,32 +228,35 @@ gst_mxf_mux_reset (GstMXFMux * mux)
   mux->last_gc_timestamp = 0;
   mux->last_gc_position = 0;
   mux->offset = 0;
-
-  g_array_set_size (mux->index_table, 0);
 }
 
 static gboolean
-gst_mxf_mux_src_event (GstAggregator * aggregator, GstEvent * event)
+gst_mxf_mux_handle_src_event (GstPad * pad, GstObject * parent,
+    GstEvent * event)
 {
-  switch (GST_EVENT_TYPE (event)) {
+  GstEventType type;
+
+  type = event ? GST_EVENT_TYPE (event) : GST_EVENT_UNKNOWN;
+
+  switch (type) {
     case GST_EVENT_SEEK:
       /* disable seeking for now */
-      gst_event_unref (event);
       return FALSE;
     default:
-      return GST_AGGREGATOR_CLASS (parent_class)->src_event (aggregator, event);
       break;
   }
 
-  g_assert_not_reached ();
+  return gst_pad_event_default (pad, parent, event);
 }
 
 static gboolean
-gst_mxf_mux_set_caps (GstMXFMux * mux, GstMXFMuxPad * pad, GstCaps * caps)
+gst_mxf_mux_event_caps (GstPad * pad, GstCaps * caps)
 {
+  GstMXFMux *mux = GST_MXF_MUX (gst_pad_get_parent (pad));
+  GstMXFMuxPad *cpad = (GstMXFMuxPad *) gst_pad_get_element_private (pad);
   gboolean ret = TRUE;
   MXFUUID d_instance_uid = { {0,} };
-  MXFMetadataFileDescriptor *old_descriptor = pad->descriptor;
+  MXFMetadataFileDescriptor *old_descriptor = cpad->descriptor;
   GList *l;
 
   GST_DEBUG_OBJECT (pad, "Setting caps %" GST_PTR_FORMAT, caps);
@@ -287,26 +264,27 @@ gst_mxf_mux_set_caps (GstMXFMux * mux, GstMXFMuxPad * pad, GstCaps * caps)
   if (old_descriptor) {
     memcpy (&d_instance_uid, &MXF_METADATA_BASE (old_descriptor)->instance_uid,
         16);
-    pad->descriptor = NULL;
-    g_free (pad->mapping_data);
-    pad->mapping_data = NULL;
+    cpad->descriptor = NULL;
+    g_free (cpad->mapping_data);
+    cpad->mapping_data = NULL;
   }
 
-  pad->descriptor =
-      pad->writer->get_descriptor (GST_PAD_PAD_TEMPLATE (pad), caps,
-      &pad->write_func, &pad->mapping_data);
+  cpad->descriptor =
+      cpad->writer->get_descriptor (GST_PAD_PAD_TEMPLATE (pad), caps,
+      &cpad->write_func, &cpad->mapping_data);
 
-  if (!pad->descriptor) {
+  if (!cpad->descriptor) {
     GST_ERROR_OBJECT (mux,
         "Couldn't get descriptor for pad '%s' with caps %" GST_PTR_FORMAT,
         GST_PAD_NAME (pad), caps);
+    gst_object_unref (mux);
     return FALSE;
   }
 
   if (mxf_uuid_is_zero (&d_instance_uid))
     mxf_uuid_init (&d_instance_uid, mux->metadata);
 
-  memcpy (&MXF_METADATA_BASE (pad->descriptor)->instance_uid, &d_instance_uid,
+  memcpy (&MXF_METADATA_BASE (cpad->descriptor)->instance_uid, &d_instance_uid,
       16);
 
   if (old_descriptor) {
@@ -314,16 +292,16 @@ gst_mxf_mux_set_caps (GstMXFMux * mux, GstMXFMuxPad * pad, GstCaps * caps)
       MXFMetadataBase *tmp = l->data;
 
       if (mxf_uuid_is_equal (&d_instance_uid, &tmp->instance_uid)) {
-        l->data = pad->descriptor;
+        l->data = cpad->descriptor;
         break;
       }
     }
   } else {
-    mux->metadata_list = g_list_prepend (mux->metadata_list, pad->descriptor);
+    mux->metadata_list = g_list_prepend (mux->metadata_list, cpad->descriptor);
   }
 
   g_hash_table_replace (mux->metadata,
-      &MXF_METADATA_BASE (pad->descriptor)->instance_uid, pad->descriptor);
+      &MXF_METADATA_BASE (cpad->descriptor)->instance_uid, cpad->descriptor);
 
   if (old_descriptor) {
     if (mux->preface && mux->preface->content_storage &&
@@ -352,52 +330,55 @@ gst_mxf_mux_set_caps (GstMXFMux * mux, GstMXFMuxPad * pad, GstCaps * caps)
             if (tmp->sub_descriptors[j] ==
                 MXF_METADATA_GENERIC_DESCRIPTOR (old_descriptor)) {
               tmp->sub_descriptors[j] =
-                  MXF_METADATA_GENERIC_DESCRIPTOR (pad->descriptor);
+                  MXF_METADATA_GENERIC_DESCRIPTOR (cpad->descriptor);
               memcpy (&tmp->sub_descriptors_uids[j], &d_instance_uid, 16);
             }
           }
         } else if (package->descriptor ==
             MXF_METADATA_GENERIC_DESCRIPTOR (old_descriptor)) {
           package->descriptor =
-              MXF_METADATA_GENERIC_DESCRIPTOR (pad->descriptor);
+              MXF_METADATA_GENERIC_DESCRIPTOR (cpad->descriptor);
           memcpy (&package->descriptor_uid, &d_instance_uid, 16);
         }
       }
     }
   }
 
+  gst_object_unref (mux);
+
   return ret;
 }
 
 static gboolean
-gst_mxf_mux_sink_event (GstAggregator * aggregator,
-    GstAggregatorPad * aggpad, GstEvent * event)
+gst_mxf_mux_handle_sink_event (GstCollectPads * pads, GstCollectData * data,
+    GstEvent * event, gpointer user_data)
 {
-  GstMXFMux *mux = GST_MXF_MUX (aggregator);
+  GstCaps *caps;
   gboolean ret = TRUE;
 
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_TAG:
       /* TODO: do something with the tags */
       break;
-    case GST_EVENT_CAPS:{
-      GstCaps *caps;
-
+    case GST_EVENT_SEGMENT:
+      /* We don't support SEGMENT events */
+      ret = FALSE;
+      gst_event_unref (event);
+      break;
+    case GST_EVENT_CAPS:
       gst_event_parse_caps (event, &caps);
 
-      ret = gst_mxf_mux_set_caps (mux, GST_MXF_MUX_PAD (aggpad), caps);
+      gst_mxf_mux_event_caps (data->pad, caps);
 
+      gst_caps_unref (caps);
       break;
-    }
     default:
       break;
   }
 
-  /* now GstAggregator can take care of the rest, e.g. EOS */
+  /* now GstCollectPads can take care of the rest, e.g. EOS */
   if (ret)
-    ret =
-        GST_AGGREGATOR_CLASS (parent_class)->sink_event (aggregator, aggpad,
-        event);
+    ret = gst_collect_pads_event_default (pads, data, event, FALSE);
 
   return ret;
 }
@@ -414,12 +395,13 @@ gst_mxf_mux_create_pad_name (GstPadTemplate * templ, guint id)
   return g_string_free (string, FALSE);
 }
 
-static GstAggregatorPad *
-gst_mxf_mux_create_new_pad (GstAggregator * aggregator,
+static GstPad *
+gst_mxf_mux_request_new_pad (GstElement * element,
     GstPadTemplate * templ, const gchar * pad_name, const GstCaps * caps)
 {
-  GstMXFMux *mux = GST_MXF_MUX (aggregator);
-  GstMXFMuxPad *pad;
+  GstMXFMux *mux = GST_MXF_MUX (element);
+  GstMXFMuxPad *cpad;
+  GstPad *pad = NULL;
   guint pad_number;
   gchar *name = NULL;
   const MXFEssenceElementWriter *writer;
@@ -438,52 +420,58 @@ gst_mxf_mux_create_new_pad (GstAggregator * aggregator,
   name = gst_mxf_mux_create_pad_name (templ, pad_number);
 
   GST_DEBUG_OBJECT (mux, "Creating pad '%s'", name);
-  pad =
-      g_object_new (GST_TYPE_MXF_MUX_PAD, "name", name, "direction",
-      GST_PAD_SINK, "template", templ, NULL);
+  pad = gst_pad_new_from_template (templ, name);
   g_free (name);
-  pad->last_timestamp = 0;
-  pad->adapter = gst_adapter_new ();
-  pad->writer = writer;
+  cpad = (GstMXFMuxPad *)
+      gst_collect_pads_add_pad (mux->collect, pad, sizeof (GstMXFMuxPad), NULL,
+      TRUE);
+  cpad->last_timestamp = 0;
+  cpad->adapter = gst_adapter_new ();
+  cpad->writer = writer;
 
-  gst_pad_use_fixed_caps (GST_PAD_CAST (pad));
+  gst_pad_use_fixed_caps (pad);
+  gst_pad_set_active (pad, TRUE);
+  gst_element_add_pad (element, pad);
 
-  return GST_AGGREGATOR_PAD (pad);
+  return pad;
+}
+
+static void
+gst_mxf_mux_release_pad (GstElement * element, GstPad * pad)
+{
+  /*GstMXFMux *mux = GST_MXF_MUX (GST_PAD_PARENT (pad));
+     GstMXFMuxPad *cpad = (GstMXFMuxPad *) gst_pad_get_element_private (pad);
+
+     g_object_unref (cpad->adapter);
+     g_free (cpad->mapping_data);
+
+     gst_collect_pads_remove_pad (mux->collect, pad);
+     gst_element_remove_pad (element, pad); */
 }
 
 static GstFlowReturn
 gst_mxf_mux_create_metadata (GstMXFMux * mux)
 {
   GstFlowReturn ret = GST_FLOW_OK;
-  GList *l;
+  GSList *l;
   GArray *tmp;
 
   GST_DEBUG_OBJECT (mux, "Creating MXF metadata");
 
-  GST_OBJECT_LOCK (mux);
-
-  for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
-    GstMXFMuxPad *pad = l->data;
+  for (l = mux->collect->data; l; l = l->next) {
+    GstMXFMuxPad *cpad = l->data;
     GstCaps *caps;
-    GstBuffer *buffer;
 
-    if (!pad || !pad->descriptor) {
-      GST_OBJECT_UNLOCK (mux);
+    if (!cpad || !cpad->descriptor)
       return GST_FLOW_ERROR;
-    }
 
-    caps = gst_pad_get_current_caps (GST_PAD_CAST (pad));
-    if (!caps) {
-      GST_OBJECT_UNLOCK (mux);
+    caps = gst_pad_get_current_caps (cpad->collect.pad);
+    if (!caps)
       return GST_FLOW_ERROR;
-    }
 
-    buffer = gst_aggregator_pad_get_buffer (GST_AGGREGATOR_PAD (pad));
-    if (pad->writer->update_descriptor)
-      pad->writer->update_descriptor (pad->descriptor,
-          caps, pad->mapping_data, buffer);
-    if (buffer)
-      gst_buffer_unref (buffer);
+    if (cpad->writer->update_descriptor)
+      cpad->writer->update_descriptor (cpad->descriptor,
+          caps, cpad->mapping_data, cpad->collect.buffer);
     gst_caps_unref (caps);
   }
 
@@ -504,19 +492,17 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
       TRUE, FALSE);
 
   tmp = g_array_new (FALSE, FALSE, sizeof (MXFUL));
-  for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
-    GstMXFMuxPad *pad = l->data;
+  for (l = mux->collect->data; l; l = l->next) {
+    GstMXFMuxPad *cpad = l->data;
     guint i;
     gboolean found = FALSE;
 
-    if (!pad || !pad->descriptor ||
-        mxf_ul_is_zero (&pad->descriptor->essence_container)) {
-      GST_OBJECT_UNLOCK (mux);
+    if (!cpad || !cpad->descriptor ||
+        mxf_ul_is_zero (&cpad->descriptor->essence_container))
       return GST_FLOW_ERROR;
-    }
 
     for (i = 0; i < tmp->len; i++) {
-      if (mxf_ul_is_equal (&pad->descriptor->essence_container,
+      if (mxf_ul_is_equal (&cpad->descriptor->essence_container,
               &g_array_index (tmp, MXFUL, i))) {
         found = TRUE;
         break;
@@ -526,7 +512,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
     if (found)
       continue;
 
-    g_array_append_val (tmp, pad->descriptor->essence_container);
+    g_array_append_val (tmp, cpad->descriptor->essence_container);
   }
   mux->preface->n_essence_containers = tmp->len;
   mux->preface->essence_containers = (MXFUL *) g_array_free (tmp, FALSE);
@@ -637,18 +623,18 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
       memcpy (&p->parent.package_modified_date,
           &mux->preface->last_modified_date, sizeof (MXFTimestamp));
 
-      p->parent.n_tracks = GST_ELEMENT_CAST (mux)->numsinkpads + 1;
+      p->parent.n_tracks = g_slist_length (mux->collect->data);
       p->parent.tracks = g_new0 (MXFMetadataTrack *, p->parent.n_tracks);
 
-      if (p->parent.n_tracks > 2) {
+      if (p->parent.n_tracks > 1) {
         MXFMetadataMultipleDescriptor *d;
 
         p->descriptor = (MXFMetadataGenericDescriptor *)
             g_object_new (MXF_TYPE_METADATA_MULTIPLE_DESCRIPTOR, NULL);
         d = (MXFMetadataMultipleDescriptor *) p->descriptor;
-        d->n_sub_descriptors = p->parent.n_tracks - 1;
+        d->n_sub_descriptors = p->parent.n_tracks;
         d->sub_descriptors =
-            g_new0 (MXFMetadataGenericDescriptor *, p->parent.n_tracks - 1);
+            g_new0 (MXFMetadataGenericDescriptor *, p->parent.n_tracks);
 
         mxf_uuid_init (&MXF_METADATA_BASE (d)->instance_uid, mux->metadata);
         g_hash_table_insert (mux->metadata,
@@ -658,18 +644,15 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
 
       /* Tracks */
       {
-        guint n;
-
-        n = 1;
+        guint n = 0;
 
         /* Essence tracks */
-        for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
-          GstMXFMuxPad *pad = l->data;
+        for (l = mux->collect->data; l; l = l->next) {
+          GstMXFMuxPad *cpad = l->data;
           MXFMetadataTimelineTrack *track;
           MXFMetadataSequence *sequence;
           MXFMetadataSourceClip *clip;
           GstCaps *caps;
-          GstBuffer *buffer;
 
           p->parent.tracks[n] = (MXFMetadataTrack *)
               g_object_new (MXF_TYPE_METADATA_TIMELINE_TRACK, NULL);
@@ -680,21 +663,15 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
               &MXF_METADATA_BASE (track)->instance_uid, track);
           mux->metadata_list = g_list_prepend (mux->metadata_list, track);
 
-          caps = gst_pad_get_current_caps (GST_PAD_CAST (pad));
-          buffer = gst_aggregator_pad_get_buffer (GST_AGGREGATOR_PAD (pad));
+          caps = gst_pad_get_current_caps (cpad->collect.pad);
           track->parent.track_id = n + 1;
           track->parent.track_number =
-              pad->writer->get_track_number_template (pad->descriptor,
-              caps, pad->mapping_data);
+              cpad->writer->get_track_number_template (cpad->descriptor,
+              caps, cpad->mapping_data);
 
-          /* FIXME: All tracks in a source package must have the same edit
-           * rate! This means that if we have different edit rates, we need to
-           * make them different source packages and essence containers with
-           * a different BodySID */
-          pad->writer->get_edit_rate (pad->descriptor,
-              caps, pad->mapping_data, buffer, p, track, &track->edit_rate);
-          if (buffer)
-            gst_buffer_unref (buffer);
+          cpad->writer->get_edit_rate (cpad->descriptor,
+              caps, cpad->mapping_data,
+              cpad->collect.buffer, p, track, &track->edit_rate);
           gst_caps_unref (caps);
 
           sequence = track->parent.sequence = (MXFMetadataSequence *)
@@ -705,7 +682,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
               &MXF_METADATA_BASE (sequence)->instance_uid, sequence);
           mux->metadata_list = g_list_prepend (mux->metadata_list, sequence);
 
-          memcpy (&sequence->data_definition, &pad->writer->data_definition,
+          memcpy (&sequence->data_definition, &cpad->writer->data_definition,
               16);
 
           sequence->n_structural_components = 1;
@@ -726,15 +703,15 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
               16);
           clip->start_position = 0;
 
-          pad->source_package = p;
-          pad->source_track = track;
-          pad->descriptor->linked_track_id = n + 1;
-          if (p->parent.n_tracks == 2) {
-            p->descriptor = (MXFMetadataGenericDescriptor *) pad->descriptor;
+          cpad->source_package = p;
+          cpad->source_track = track;
+          cpad->descriptor->linked_track_id = n + 1;
+          if (p->parent.n_tracks == 1) {
+            p->descriptor = (MXFMetadataGenericDescriptor *) cpad->descriptor;
           } else {
             MXF_METADATA_MULTIPLE_DESCRIPTOR (p->
-                descriptor)->sub_descriptors[n - 1] =
-                (MXFMetadataGenericDescriptor *) pad->descriptor;
+                descriptor)->sub_descriptors[n] =
+                (MXFMetadataGenericDescriptor *) cpad->descriptor;
           }
 
           n++;
@@ -766,7 +743,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
       memcpy (&p->package_modified_date, &mux->preface->last_modified_date,
           sizeof (MXFTimestamp));
 
-      p->n_tracks = GST_ELEMENT_CAST (mux)->numsinkpads + 1;
+      p->n_tracks = g_slist_length (mux->collect->data) + 1;
       p->tracks = g_new0 (MXFMetadataTrack *, p->n_tracks);
 
       /* Tracks */
@@ -775,10 +752,9 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
 
         n = 1;
         /* Essence tracks */
-        for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
-          GstMXFMuxPad *pad = l->data;
+        for (l = mux->collect->data; l; l = l->next) {
+          GstMXFMuxPad *cpad = l->data;
           GstCaps *caps;
-          GstBuffer *buffer;
           MXFMetadataSourcePackage *source_package;
           MXFMetadataTimelineTrack *track, *source_track;
           MXFMetadataSequence *sequence;
@@ -786,7 +762,8 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
 
           source_package = MXF_METADATA_SOURCE_PACKAGE (cstorage->packages[1]);
           source_track =
-              MXF_METADATA_TIMELINE_TRACK (source_package->parent.tracks[n]);
+              MXF_METADATA_TIMELINE_TRACK (source_package->parent.tracks[n -
+                  1]);
 
           p->tracks[n] = (MXFMetadataTrack *)
               g_object_new (MXF_TYPE_METADATA_TIMELINE_TRACK, NULL);
@@ -800,13 +777,11 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
           track->parent.track_id = n + 1;
           track->parent.track_number = 0;
 
-          caps = gst_pad_get_current_caps (GST_PAD_CAST (pad));
-          buffer = gst_aggregator_pad_get_buffer (GST_AGGREGATOR_PAD (pad));
-          pad->writer->get_edit_rate (pad->descriptor,
-              caps, pad->mapping_data,
-              buffer, source_package, source_track, &track->edit_rate);
-          if (buffer)
-            gst_buffer_unref (buffer);
+          caps = gst_pad_get_current_caps (cpad->collect.pad);
+          cpad->writer->get_edit_rate (cpad->descriptor,
+              caps, cpad->mapping_data,
+              cpad->collect.buffer, source_package, source_track,
+              &track->edit_rate);
           gst_caps_unref (caps);
 
           if (track->edit_rate.n != source_track->edit_rate.n ||
@@ -817,7 +792,6 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
 
           if (track->edit_rate.d <= 0 || track->edit_rate.n <= 0) {
             GST_ERROR_OBJECT (mux, "Invalid edit rate");
-            GST_OBJECT_UNLOCK (mux);
             return GST_FLOW_ERROR;
           }
 
@@ -836,7 +810,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
               &MXF_METADATA_BASE (sequence)->instance_uid, sequence);
           mux->metadata_list = g_list_prepend (mux->metadata_list, sequence);
 
-          memcpy (&sequence->data_definition, &pad->writer->data_definition,
+          memcpy (&sequence->data_definition, &cpad->writer->data_definition,
               16);
           sequence->n_structural_components = 1;
           sequence->structural_components =
@@ -858,7 +832,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
 
           memcpy (&clip->source_package_id, &cstorage->packages[1]->package_uid,
               32);
-          clip->source_track_id = n + 1;
+          clip->source_track_id = n;
 
           n++;
         }
@@ -928,71 +902,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
       }
     }
 
-    /* Timecode track */
-    {
-      MXFMetadataSourcePackage *p;
-      MXFMetadataTimelineTrack *track;
-      MXFMetadataSequence *sequence;
-      MXFMetadataTimecodeComponent *component;
-      guint n = 0;
-
-      p = (MXFMetadataSourcePackage *) cstorage->packages[1];
-
-      p->parent.tracks[n] = (MXFMetadataTrack *)
-          g_object_new (MXF_TYPE_METADATA_TIMELINE_TRACK, NULL);
-      track = (MXFMetadataTimelineTrack *) p->parent.tracks[n];
-      mxf_uuid_init (&MXF_METADATA_BASE (track)->instance_uid, mux->metadata);
-      g_hash_table_insert (mux->metadata,
-          &MXF_METADATA_BASE (track)->instance_uid, track);
-      mux->metadata_list = g_list_prepend (mux->metadata_list, track);
-
-      track->parent.track_id = n + 1;
-      track->parent.track_number = 0;
-      track->parent.track_name = g_strdup ("Timecode track");
-      /* FIXME: Is this correct? */
-      memcpy (&track->edit_rate, &mux->min_edit_rate, sizeof (MXFFraction));
-
-      sequence = track->parent.sequence = (MXFMetadataSequence *)
-          g_object_new (MXF_TYPE_METADATA_SEQUENCE, NULL);
-      mxf_uuid_init (&MXF_METADATA_BASE (sequence)->instance_uid,
-          mux->metadata);
-      g_hash_table_insert (mux->metadata,
-          &MXF_METADATA_BASE (sequence)->instance_uid, sequence);
-      mux->metadata_list = g_list_prepend (mux->metadata_list, sequence);
-
-      memcpy (&sequence->data_definition,
-          mxf_metadata_track_identifier_get
-          (MXF_METADATA_TRACK_TIMECODE_12M_INACTIVE), 16);
-
-      sequence->n_structural_components = 1;
-      sequence->structural_components =
-          g_new0 (MXFMetadataStructuralComponent *, 1);
-
-      component = (MXFMetadataTimecodeComponent *)
-          g_object_new (MXF_TYPE_METADATA_TIMECODE_COMPONENT, NULL);
-      sequence->structural_components[0] =
-          (MXFMetadataStructuralComponent *) component;
-      mxf_uuid_init (&MXF_METADATA_BASE (component)->instance_uid,
-          mux->metadata);
-      g_hash_table_insert (mux->metadata,
-          &MXF_METADATA_BASE (component)->instance_uid, component);
-      mux->metadata_list = g_list_prepend (mux->metadata_list, component);
-
-      memcpy (&component->parent.data_definition,
-          &sequence->data_definition, 16);
-
-      component->start_timecode = 0;
-      if (track->edit_rate.d == 0)
-        component->rounded_timecode_base = 1;
-      else
-        component->rounded_timecode_base =
-            (((gdouble) track->edit_rate.n) /
-            ((gdouble) track->edit_rate.d) + 0.5);
-      /* TODO: drop frame */
-    }
-
-
-    for (i = 1; i < cstorage->packages[1]->n_tracks; i++) {
+    for (i = 0; i < cstorage->packages[1]->n_tracks; i++) {
       MXFMetadataTrack *track = cstorage->packages[1]->tracks[i];
       guint j;
       guint32 templ;
@@ -1004,7 +914,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
       templ = track->track_number;
       n_type = 0;
 
-      for (j = 1; j < cstorage->packages[1]->n_tracks; j++) {
+      for (j = 0; j < cstorage->packages[1]->n_tracks; j++) {
         MXFMetadataTrack *tmp = cstorage->packages[1]->tracks[j];
 
         if (tmp->track_number == templ) {
@@ -1013,7 +923,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
       }
 
       n = 0;
-      for (j = 1; j < cstorage->packages[1]->n_tracks; j++) {
+      for (j = 0; j < cstorage->packages[1]->n_tracks; j++) {
         MXFMetadataTrack *tmp = cstorage->packages[1]->tracks[j];
 
         if (tmp->track_number == templ) {
@@ -1039,7 +949,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
 
     cstorage->essence_container_data[0]->linked_package =
         MXF_METADATA_SOURCE_PACKAGE (cstorage->packages[1]);
-    cstorage->essence_container_data[0]->index_sid = 2;
+    cstorage->essence_container_data[0]->index_sid = 0;
     cstorage->essence_container_data[0]->body_sid = 1;
   }
 
@@ -1078,8 +988,6 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
     }
   }
 
-  GST_OBJECT_UNLOCK (mux);
-
   mux->metadata_list = g_list_reverse (mux->metadata_list);
 
   return ret;
@@ -1088,7 +996,7 @@ gst_mxf_mux_create_metadata (GstMXFMux * mux)
 static GstFlowReturn
 gst_mxf_mux_init_partition_pack (GstMXFMux * mux)
 {
-  GList *l;
+  GSList *l;
   guint i = 0;
 
   mxf_partition_pack_reset (&mux->partition);
@@ -1096,7 +1004,7 @@ gst_mxf_mux_init_partition_pack (GstMXFMux * mux)
   mux->partition.closed = mux->partition.complete = FALSE;
   mux->partition.major_version = 0x0001;
   mux->partition.minor_version = 0x0002;
-  mux->partition.kag_size = 1;
+  mux->partition.kag_size = 0;
   mux->partition.this_partition = 0;
   mux->partition.prev_partition = 0;
   mux->partition.footer_partition = 0;
@@ -1109,18 +1017,17 @@ gst_mxf_mux_init_partition_pack (GstMXFMux * mux)
   memcpy (&mux->partition.operational_pattern,
       &mux->preface->operational_pattern, 16);
 
-  GST_OBJECT_LOCK (mux);
-  mux->partition.n_essence_containers = GST_ELEMENT_CAST (mux)->numsinkpads;
+  mux->partition.n_essence_containers = g_slist_length (mux->collect->data);
   mux->partition.essence_containers =
       g_new0 (MXFUL, mux->partition.n_essence_containers);
 
-  for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
-    GstMXFMuxPad *pad = l->data;
+  for (l = mux->collect->data; l; l = l->next) {
+    GstMXFMuxPad *cpad = l->data;
     guint j;
     gboolean found = FALSE;
 
     for (j = 0; j <= i; j++) {
-      if (mxf_ul_is_equal (&pad->descriptor->essence_container,
+      if (mxf_ul_is_equal (&cpad->descriptor->essence_container,
               &mux->partition.essence_containers[j])) {
         found = TRUE;
         break;
@@ -1131,11 +1038,10 @@ gst_mxf_mux_init_partition_pack (GstMXFMux * mux)
       continue;
 
     memcpy (&mux->partition.essence_containers[i],
-        &pad->descriptor->essence_container, 16);
+        &cpad->descriptor->essence_container, 16);
     i++;
   }
   mux->partition.n_essence_containers = i;
-  GST_OBJECT_UNLOCK (mux);
 
   return GST_FLOW_OK;
 }
@@ -1190,138 +1096,93 @@ gst_mxf_mux_write_header_metadata (GstMXFMux * mux)
 }
 
 static const guint8 _gc_essence_element_ul[] = {
-  0x06, 0x0e, 0x2b, 0x34, 0x01, 0x02, 0x01, 0x01,
+  0x06, 0x0e, 0x2b, 0x34, 0x01, 0x02, 0x01, 0x00,
   0x0d, 0x01, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00
 };
 
 static GstFlowReturn
-gst_mxf_mux_handle_buffer (GstMXFMux * mux, GstMXFMuxPad * pad)
+gst_mxf_mux_handle_buffer (GstMXFMux * mux, GstMXFMuxPad * cpad)
 {
-  GstBuffer *buf = gst_aggregator_pad_get_buffer (GST_AGGREGATOR_PAD (pad));
+  GstBuffer *buf = NULL;
   GstBuffer *outbuf = NULL;
+  GstBuffer *packet;
   GstMapInfo map;
-  gsize buf_size;
+  GstMapInfo readmap;
   GstFlowReturn ret = GST_FLOW_OK;
   guint8 slen, ber[9];
-  gboolean flush = gst_aggregator_pad_is_eos (GST_AGGREGATOR_PAD (pad))
-      && !pad->have_complete_edit_unit && buf == NULL;
-  gboolean is_keyframe = buf ?
-      !GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_DELTA_UNIT) : TRUE;
+  gboolean flush = ((cpad->collect.state & GST_COLLECT_PADS_STATE_EOS)
+      && !cpad->have_complete_edit_unit && cpad->collect.buffer == NULL);
 
-  if (pad->have_complete_edit_unit) {
-    GST_DEBUG_OBJECT (pad,
+  if (cpad->have_complete_edit_unit) {
+    GST_DEBUG_OBJECT (cpad->collect.pad,
         "Handling remaining buffer for track %u at position %" G_GINT64_FORMAT,
-        pad->source_track->parent.track_id, pad->pos);
-    if (buf)
-      gst_buffer_unref (buf);
+        cpad->source_track->parent.track_id, cpad->pos);
     buf = NULL;
   } else if (!flush) {
-    if (buf)
-      gst_buffer_unref (buf);
-    buf = gst_aggregator_pad_steal_buffer (GST_AGGREGATOR_PAD (pad));
+    buf = gst_collect_pads_pop (mux->collect, &cpad->collect);
   }
 
   if (buf) {
-    GST_DEBUG_OBJECT (pad,
+    GST_DEBUG_OBJECT (cpad->collect.pad,
         "Handling buffer of size %" G_GSIZE_FORMAT " for track %u at position %"
         G_GINT64_FORMAT, gst_buffer_get_size (buf),
-        pad->source_track->parent.track_id, pad->pos);
+        cpad->source_track->parent.track_id, cpad->pos);
   } else {
     flush = TRUE;
-    GST_DEBUG_OBJECT (pad,
+    GST_DEBUG_OBJECT (cpad->collect.pad,
         "Flushing for track %u at position %" G_GINT64_FORMAT,
-        pad->source_track->parent.track_id, pad->pos);
+        cpad->source_track->parent.track_id, cpad->pos);
   }
 
-  ret = pad->write_func (buf, pad->mapping_data, pad->adapter, &outbuf, flush);
+  ret = cpad->write_func (buf,
+      cpad->mapping_data, cpad->adapter, &outbuf, flush);
   if (ret != GST_FLOW_OK && ret != GST_FLOW_CUSTOM_SUCCESS) {
-    GST_ERROR_OBJECT (pad,
+    GST_ERROR_OBJECT (cpad->collect.pad,
         "Failed handling buffer for track %u, reason %s",
-        pad->source_track->parent.track_id, gst_flow_get_name (ret));
+        cpad->source_track->parent.track_id, gst_flow_get_name (ret));
     return ret;
   }
 
   if (ret == GST_FLOW_CUSTOM_SUCCESS) {
-    pad->have_complete_edit_unit = TRUE;
+    cpad->have_complete_edit_unit = TRUE;
     ret = GST_FLOW_OK;
   } else {
-    pad->have_complete_edit_unit = FALSE;
+    cpad->have_complete_edit_unit = FALSE;
   }
 
   buf = outbuf;
   if (buf == NULL)
     return ret;
 
-  /* We currently only index the first essence stream */
-  if (pad == (GstMXFMuxPad *) GST_ELEMENT_CAST (mux)->sinkpads->data) {
-    MXFIndexTableSegment *segment;
-    const gint max_segment_size = G_MAXUINT16 / 11;
-
-    if (mux->index_table->len == 0 ||
-        g_array_index (mux->index_table, MXFIndexTableSegment,
-            mux->index_table->len - 1).index_duration >= max_segment_size) {
-      MXFIndexTableSegment s;
-
-      memset (&segment, 0, sizeof (segment));
-
-      mxf_uuid_init (&s.instance_id, mux->metadata);
-      memcpy (&s.index_edit_rate, &pad->source_track->edit_rate,
-          sizeof (s.index_edit_rate));
-      s.index_start_position = pad->pos;
-      s.index_duration = 0;
-      s.edit_unit_byte_count = 0;
-      s.index_sid =
-          mux->preface->content_storage->essence_container_data[0]->index_sid;
-      s.body_sid =
-          mux->preface->content_storage->essence_container_data[0]->body_sid;
-      s.slice_count = 0;
-      s.pos_table_count = 0;
-      s.n_delta_entries = 0;
-      s.delta_entries = NULL;
-      s.n_index_entries = 0;
-      s.index_entries = g_new0 (MXFIndexEntry, max_segment_size);
-      g_array_append_val (mux->index_table, s);
-    }
-    segment =
-        &g_array_index (mux->index_table, MXFIndexTableSegment,
-        mux->index_table->len - 1);
-
-    segment->index_entries[segment->n_index_entries].temporal_offset = 0;
-    segment->index_entries[segment->n_index_entries].key_frame_offset = 0;
-    segment->index_entries[segment->n_index_entries].flags = is_keyframe ? 0x80 : 0x20; /* FIXME: Need to distinguish all the cases */
-    segment->index_entries[segment->n_index_entries].stream_offset =
-        mux->partition.body_offset;
-
-    segment->n_index_entries++;
-    segment->index_duration++;
-  }
-
-  buf_size = gst_buffer_get_size (buf);
-  slen = mxf_ber_encode_size (buf_size, ber);
-  outbuf = gst_buffer_new_and_alloc (16 + slen);
-  gst_buffer_map (outbuf, &map, GST_MAP_WRITE);
+  gst_buffer_map (buf, &readmap, GST_MAP_READ);
+  slen = mxf_ber_encode_size (readmap.size, ber);
+  packet = gst_buffer_new_and_alloc (16 + slen + readmap.size);
+  gst_buffer_map (packet, &map, GST_MAP_WRITE);
   memcpy (map.data, _gc_essence_element_ul, 16);
-  GST_WRITE_UINT32_BE (map.data + 12, pad->source_track->parent.track_number);
+  map.data[7] = cpad->descriptor->essence_container.u[7];
+  GST_WRITE_UINT32_BE (map.data + 12, cpad->source_track->parent.track_number);
   memcpy (map.data + 16, ber, slen);
-  gst_buffer_unmap (outbuf, &map);
-  outbuf = gst_buffer_append (outbuf, buf);
+  memcpy (map.data + 16 + slen, readmap.data, readmap.size);
+  gst_buffer_unmap (buf, &readmap);
 
-  GST_DEBUG_OBJECT (pad,
-      "Pushing buffer of size %" G_GSIZE_FORMAT " for track %u",
-      gst_buffer_get_size (outbuf), pad->source_track->parent.track_id);
+  gst_buffer_unref (buf);
 
-  mux->partition.body_offset += gst_buffer_get_size (outbuf);
-  if ((ret = gst_mxf_mux_push (mux, outbuf)) != GST_FLOW_OK) {
-    GST_ERROR_OBJECT (pad,
+  GST_DEBUG_OBJECT (cpad->collect.pad,
+      "Pushing buffer of size %" G_GSIZE_FORMAT " for track %u", map.size,
+      cpad->source_track->parent.track_id);
+  gst_buffer_unmap (packet, &map);
+
+  if ((ret = gst_mxf_mux_push (mux, packet)) != GST_FLOW_OK) {
+    GST_ERROR_OBJECT (cpad->collect.pad,
         "Failed pushing buffer for track %u, reason %s",
-        pad->source_track->parent.track_id, gst_flow_get_name (ret));
+        cpad->source_track->parent.track_id, gst_flow_get_name (ret));
     return ret;
   }
 
-  pad->pos++;
-  pad->last_timestamp =
-      gst_util_uint64_scale (GST_SECOND * pad->pos,
-      pad->source_track->edit_rate.d, pad->source_track->edit_rate.n);
+  cpad->pos++;
+  cpad->last_timestamp =
+      gst_util_uint64_scale (GST_SECOND * cpad->pos,
+      cpad->source_track->edit_rate.d, cpad->source_track->edit_rate.n);
 
   return ret;
 }
@@ -1332,8 +1193,6 @@ gst_mxf_mux_write_body_partition (GstMXFMux * mux)
   GstBuffer *buf;
 
   mux->partition.type = MXF_PARTITION_PACK_BODY;
-  mux->partition.closed = TRUE;
-  mux->partition.complete = TRUE;
   mux->partition.this_partition = mux->offset;
   mux->partition.prev_partition = 0;
   mux->partition.footer_partition = 0;
@@ -1351,7 +1210,7 @@ gst_mxf_mux_write_body_partition (GstMXFMux * mux)
 static GstFlowReturn
 gst_mxf_mux_handle_eos (GstMXFMux * mux)
 {
-  GList *l;
+  GSList *l;
   gboolean have_data = FALSE;
   GstBuffer *packet;
 
@@ -1360,40 +1219,33 @@ gst_mxf_mux_handle_eos (GstMXFMux * mux)
 
     have_data = FALSE;
 
-    GST_OBJECT_LOCK (mux);
-    for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
-      GstMXFMuxPad *pad = l->data;
-      GstBuffer *buffer =
-          gst_aggregator_pad_get_buffer (GST_AGGREGATOR_PAD (pad));
-
+    for (l = mux->collect->data; l; l = l->next) {
+      GstMXFMuxPad *cpad = l->data;
       GstClockTime next_gc_timestamp =
           gst_util_uint64_scale ((mux->last_gc_position + 1) * GST_SECOND,
           mux->min_edit_rate.d, mux->min_edit_rate.n);
 
-      if (pad->have_complete_edit_unit ||
-          gst_adapter_available (pad->adapter) > 0 || buffer) {
+      best = NULL;
+
+      if (cpad->have_complete_edit_unit ||
+          gst_adapter_available (cpad->adapter) > 0 || cpad->collect.buffer) {
         have_data = TRUE;
-        if (pad->last_timestamp < next_gc_timestamp) {
-          best = gst_object_ref (pad);
-          if (buffer)
-            gst_buffer_unref (buffer);
+        if (cpad->last_timestamp < next_gc_timestamp) {
+          best = cpad;
           break;
         }
       }
-      if (buffer)
-        gst_buffer_unref (buffer);
 
       if (have_data && !l->next) {
         mux->last_gc_position++;
         mux->last_gc_timestamp = next_gc_timestamp;
+        best = NULL;
         break;
       }
     }
-    GST_OBJECT_UNLOCK (mux);
 
     if (best) {
       gst_mxf_mux_handle_buffer (mux, best);
-      gst_object_unref (best);
       have_data = TRUE;
     }
   } while (have_data);
@@ -1404,15 +1256,14 @@ gst_mxf_mux_handle_eos (GstMXFMux * mux)
       mux->min_edit_rate.d, mux->min_edit_rate.n);
 
   /* Update essence track durations */
-  GST_OBJECT_LOCK (mux);
-  for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
-    GstMXFMuxPad *pad = l->data;
+  for (l = mux->collect->data; l; l = l->next) {
+    GstMXFMuxPad *cpad = l->data;
     guint i;
 
     /* Update durations */
-    pad->source_track->parent.sequence->duration = pad->pos;
-    MXF_METADATA_SOURCE_CLIP (pad->source_track->parent.
-        sequence->structural_components[0])->parent.duration = pad->pos;
+    cpad->source_track->parent.sequence->duration = cpad->pos;
+    MXF_METADATA_SOURCE_CLIP (cpad->source_track->parent.
+        sequence->structural_components[0])->parent.duration = cpad->pos;
     for (i = 0; i < mux->preface->content_storage->packages[0]->n_tracks; i++) {
       MXFMetadataTimelineTrack *track;
 
@@ -1428,31 +1279,18 @@ gst_mxf_mux_handle_eos (GstMXFMux * mux)
           content_storage->packages[0]->tracks[i]);
       if (MXF_METADATA_SOURCE_CLIP (track->parent.
               sequence->structural_components[0])->source_track_id ==
-          pad->source_track->parent.track_id) {
-        track->parent.sequence->structural_components[0]->duration = pad->pos;
-        track->parent.sequence->duration = pad->pos;
+          cpad->source_track->parent.track_id) {
+        track->parent.sequence->structural_components[0]->duration = cpad->pos;
+        track->parent.sequence->duration = cpad->pos;
       }
     }
   }
-  GST_OBJECT_UNLOCK (mux);
 
   /* Update timecode track duration */
   {
     MXFMetadataTimelineTrack *track =
         MXF_METADATA_TIMELINE_TRACK (mux->preface->
         content_storage->packages[0]->tracks[0]);
-    MXFMetadataSequence *sequence = track->parent.sequence;
-    MXFMetadataTimecodeComponent *component =
-        MXF_METADATA_TIMECODE_COMPONENT (sequence->structural_components[0]);
-
-    sequence->duration = mux->last_gc_position;
-    component->parent.duration = mux->last_gc_position;
-  }
-
-  {
-    MXFMetadataTimelineTrack *track =
-        MXF_METADATA_TIMELINE_TRACK (mux->preface->
-        content_storage->packages[1]->tracks[0]);
     MXFMetadataSequence *sequence = track->parent.sequence;
     MXFMetadataTimecodeComponent *component =
         MXF_METADATA_TIMECODE_COMPONENT (sequence->structural_components[0]);
@@ -1469,19 +1307,6 @@ gst_mxf_mux_handle_eos (GstMXFMux * mux)
     GstFlowReturn ret;
     GstSegment segment;
     MXFRandomIndexPackEntry entry;
-    GList *index_entries = NULL, *l;
-    guint index_byte_count = 0;
-    guint i;
-    GstBuffer *buf;
-
-    for (i = 0; i < mux->index_table->len; i++) {
-      MXFIndexTableSegment *segment =
-          &g_array_index (mux->index_table, MXFIndexTableSegment, i);
-      GstBuffer *segment_buffer = mxf_index_table_segment_to_buffer (segment);
-
-      index_byte_count += gst_buffer_get_size (segment_buffer);
-      index_entries = g_list_prepend (index_entries, segment_buffer);
-    }
 
     mux->partition.type = MXF_PARTITION_PACK_FOOTER;
     mux->partition.closed = TRUE;
@@ -1490,21 +1315,12 @@ gst_mxf_mux_handle_eos (GstMXFMux * mux)
     mux->partition.prev_partition = body_partition;
     mux->partition.footer_partition = mux->offset;
     mux->partition.header_byte_count = 0;
-    mux->partition.index_byte_count = index_byte_count;
-    mux->partition.index_sid =
-        mux->preface->content_storage->essence_container_data[0]->index_sid;
+    mux->partition.index_byte_count = 0;
+    mux->partition.index_sid = 0;
     mux->partition.body_offset = 0;
     mux->partition.body_sid = 0;
 
     gst_mxf_mux_write_header_metadata (mux);
-
-    index_entries = g_list_reverse (index_entries);
-    for (l = index_entries; l; l = l->next) {
-      if ((ret = gst_mxf_mux_push (mux, l->data)) != GST_FLOW_OK) {
-        GST_ERROR_OBJECT (mux, "Failed pushing index table segment");
-      }
-    }
-    g_list_free (index_entries);
 
     rip = g_array_sized_new (FALSE, FALSE, sizeof (MXFRandomIndexPackEntry), 3);
     entry.offset = 0;
@@ -1525,14 +1341,13 @@ gst_mxf_mux_handle_eos (GstMXFMux * mux)
 
     /* Rewrite header partition with updated values */
     gst_segment_init (&segment, GST_FORMAT_BYTES);
-    if (gst_pad_push_event (GST_AGGREGATOR_SRC_PAD (mux),
-            gst_event_new_segment (&segment))) {
+    if (gst_pad_push_event (mux->srcpad, gst_event_new_segment (&segment))) {
       mux->offset = 0;
       mux->partition.type = MXF_PARTITION_PACK_HEADER;
       mux->partition.closed = TRUE;
       mux->partition.complete = TRUE;
       mux->partition.this_partition = 0;
-      mux->partition.prev_partition = 0;
+      mux->partition.prev_partition = footer_partition;
       mux->partition.footer_partition = footer_partition;
       mux->partition.header_byte_count = 0;
       mux->partition.index_byte_count = 0;
@@ -1543,28 +1358,6 @@ gst_mxf_mux_handle_eos (GstMXFMux * mux)
       ret = gst_mxf_mux_write_header_metadata (mux);
       if (ret != GST_FLOW_OK) {
         GST_ERROR_OBJECT (mux, "Rewriting header partition failed");
-        return ret;
-      }
-
-      g_assert (mux->offset == body_partition);
-
-      mux->partition.type = MXF_PARTITION_PACK_BODY;
-      mux->partition.closed = TRUE;
-      mux->partition.complete = TRUE;
-      mux->partition.this_partition = mux->offset;
-      mux->partition.prev_partition = 0;
-      mux->partition.footer_partition = footer_partition;
-      mux->partition.header_byte_count = 0;
-      mux->partition.index_byte_count = 0;
-      mux->partition.index_sid = 0;
-      mux->partition.body_offset = 0;
-      mux->partition.body_sid =
-          mux->preface->content_storage->essence_container_data[0]->body_sid;
-
-      buf = mxf_partition_pack_to_buffer (&mux->partition);
-      ret = gst_mxf_mux_push (mux, buf);
-      if (ret != GST_FLOW_OK) {
-        GST_ERROR_OBJECT (mux, "Rewriting body partition failed");
         return ret;
       }
     } else {
@@ -1591,32 +1384,15 @@ _sort_mux_pads (gconstpointer a, gconstpointer b)
       pa->source_track->parent.track_number;
 }
 
-
-static gboolean
-gst_mxf_mux_stop (GstAggregator * aggregator)
-{
-  GstMXFMux *mux = GST_MXF_MUX (aggregator);
-
-  gst_mxf_mux_reset (mux);
-
-  return TRUE;
-}
-
 static GstFlowReturn
-gst_mxf_mux_aggregate (GstAggregator * aggregator, gboolean timeout)
+gst_mxf_mux_collected (GstCollectPads * pads, gpointer user_data)
 {
-  GstMXFMux *mux = GST_MXF_MUX (aggregator);
+  GstMXFMux *mux = GST_MXF_MUX (user_data);
   GstMXFMuxPad *best = NULL;
   GstFlowReturn ret;
-  GList *l;
+  GstSegment segment;
+  GSList *sl;
   gboolean eos = TRUE;
-
-  if (timeout) {
-    GST_ELEMENT_ERROR (mux, STREAM, MUX, (NULL),
-        ("Live mixing and got a timeout. This is not supported yet"));
-    ret = GST_FLOW_ERROR;
-    goto error;
-  }
 
   if (mux->state == GST_MXF_MUX_STATE_ERROR) {
     GST_ERROR_OBJECT (mux, "Had an error before -- returning");
@@ -1627,33 +1403,31 @@ gst_mxf_mux_aggregate (GstAggregator * aggregator, gboolean timeout)
   }
 
   if (mux->state == GST_MXF_MUX_STATE_HEADER) {
-    GstCaps *caps;
-
-    if (GST_ELEMENT_CAST (mux)->sinkpads == NULL) {
+    if (mux->collect->data == NULL) {
       GST_ELEMENT_ERROR (mux, STREAM, MUX, (NULL),
           ("No input streams configured"));
       ret = GST_FLOW_ERROR;
       goto error;
     }
 
-    caps = gst_caps_new_empty_simple ("application/mxf");
-    gst_aggregator_set_src_caps (GST_AGGREGATOR (mux), caps);
-    gst_caps_unref (caps);
+    gst_segment_init (&segment, GST_FORMAT_BYTES);
+    if (gst_pad_push_event (mux->srcpad, gst_event_new_segment (&segment))) {
+      if ((ret = gst_mxf_mux_create_metadata (mux)) != GST_FLOW_OK)
+        goto error;
 
-    if ((ret = gst_mxf_mux_create_metadata (mux)) != GST_FLOW_OK)
-      goto error;
+      if ((ret = gst_mxf_mux_init_partition_pack (mux)) != GST_FLOW_OK)
+        goto error;
 
-    if ((ret = gst_mxf_mux_init_partition_pack (mux)) != GST_FLOW_OK)
-      goto error;
+      ret = gst_mxf_mux_write_header_metadata (mux);
+    } else {
+      ret = GST_FLOW_ERROR;
+    }
 
-    if ((ret = gst_mxf_mux_write_header_metadata (mux)) != GST_FLOW_OK)
+    if (ret != GST_FLOW_OK)
       goto error;
 
     /* Sort pads, we will always write in that order */
-    GST_OBJECT_LOCK (mux);
-    GST_ELEMENT_CAST (mux)->sinkpads =
-        g_list_sort (GST_ELEMENT_CAST (mux)->sinkpads, _sort_mux_pads);
-    GST_OBJECT_UNLOCK (mux);
+    mux->collect->data = g_slist_sort (mux->collect->data, _sort_mux_pads);
 
     /* Write body partition */
     ret = gst_mxf_mux_write_body_partition (mux);
@@ -1665,59 +1439,43 @@ gst_mxf_mux_aggregate (GstAggregator * aggregator, gboolean timeout)
   g_return_val_if_fail (g_hash_table_size (mux->metadata) > 0, GST_FLOW_ERROR);
 
   do {
-    GST_OBJECT_LOCK (mux);
-    for (l = GST_ELEMENT_CAST (mux)->sinkpads; l; l = l->next) {
+    for (sl = mux->collect->data; sl; sl = sl->next) {
       gboolean pad_eos;
-      GstMXFMuxPad *pad = l->data;
-      GstBuffer *buffer;
+      GstMXFMuxPad *cpad = sl->data;
       GstClockTime next_gc_timestamp =
           gst_util_uint64_scale ((mux->last_gc_position + 1) * GST_SECOND,
           mux->min_edit_rate.d, mux->min_edit_rate.n);
 
-      pad_eos = gst_aggregator_pad_is_eos (GST_AGGREGATOR_PAD (pad));
+      pad_eos = cpad->collect.state & GST_COLLECT_PADS_STATE_EOS;
       if (!pad_eos)
         eos = FALSE;
 
-      buffer = gst_aggregator_pad_get_buffer (GST_AGGREGATOR_PAD (pad));
-
-      if ((!pad_eos || pad->have_complete_edit_unit ||
-              gst_adapter_available (pad->adapter) > 0 || buffer)
-          && pad->last_timestamp < next_gc_timestamp) {
-        if (buffer)
-          gst_buffer_unref (buffer);
-        best = gst_object_ref (pad);
+      if ((!pad_eos || cpad->have_complete_edit_unit ||
+              gst_adapter_available (cpad->adapter) > 0 || cpad->collect.buffer)
+          && cpad->last_timestamp < next_gc_timestamp) {
+        best = cpad;
         break;
-      } else if (!eos && !l->next) {
+      } else if (!eos && !sl->next) {
         mux->last_gc_position++;
         mux->last_gc_timestamp = next_gc_timestamp;
         eos = FALSE;
-        if (buffer)
-          gst_buffer_unref (buffer);
         best = NULL;
         break;
       }
-      if (buffer)
-        gst_buffer_unref (buffer);
     }
-    GST_OBJECT_UNLOCK (mux);
   } while (!eos && best == NULL);
 
   if (!eos && best) {
     ret = gst_mxf_mux_handle_buffer (mux, best);
-    gst_object_unref (best);
     if (ret != GST_FLOW_OK)
       goto error;
   } else if (eos) {
     GST_DEBUG_OBJECT (mux, "Handling EOS");
 
-    if (best)
-      gst_object_unref (best);
-
     gst_mxf_mux_handle_eos (mux);
+    gst_pad_push_event (mux->srcpad, gst_event_new_eos ());
     mux->state = GST_MXF_MUX_STATE_EOS;
     return GST_FLOW_EOS;
-  } else {
-    g_assert_not_reached ();
   }
 
   return GST_FLOW_OK;
@@ -1725,6 +1483,45 @@ gst_mxf_mux_aggregate (GstAggregator * aggregator, gboolean timeout)
 error:
   {
     mux->state = GST_MXF_MUX_STATE_ERROR;
+    gst_pad_push_event (mux->srcpad, gst_event_new_eos ());
     return ret;
   }
+}
+
+static GstStateChangeReturn
+gst_mxf_mux_change_state (GstElement * element, GstStateChange transition)
+{
+  GstStateChangeReturn ret;
+  GstMXFMux *mux = GST_MXF_MUX (element);
+
+  switch (transition) {
+    case GST_STATE_CHANGE_NULL_TO_READY:
+      break;
+    case GST_STATE_CHANGE_READY_TO_PAUSED:
+      gst_collect_pads_start (mux->collect);
+      break;
+    case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
+      break;
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+      gst_collect_pads_stop (mux->collect);
+      break;
+    default:
+      break;
+  }
+
+  ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+
+  switch (transition) {
+    case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
+      break;
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+      gst_mxf_mux_reset (mux);
+      break;
+    case GST_STATE_CHANGE_READY_TO_NULL:
+      break;
+    default:
+      break;
+  }
+
+  return ret;
 }

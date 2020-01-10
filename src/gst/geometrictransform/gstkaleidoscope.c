@@ -47,20 +47,6 @@
  * his code.
  */
 
-/**
- * SECTION:element-kaleidoscope
- * @see_also: geometrictransform
- *
- * The kaleidscope element applies 'kaleidoscope' geometric transform to the
- * image.
- *
- * <refsect2>
- * <title>Example launch line</title>
- * |[
- * gst-launch-1.0 -v videotestsrc ! kaleidoscope ! videoconvert ! autovideosink
- * ]|
- * </refsect2>
- */
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -172,12 +158,12 @@ kaleidoscope_map (GstGeometricTransform * gt, gint x, gint y, gdouble * in_x,
   distance = sqrt (dx * dx + dy * dy);
   theta = atan2 (dy, dx) - kaleidoscope->angle - kaleidoscope->angle2;
 
-  theta = gst_gm_triangle (theta / G_PI * kaleidoscope->sides * 0.5);
+  theta = geometric_math_triangle (theta / G_PI * kaleidoscope->sides * 0.5);
 
   if (cgt->precalc_radius != 0) {
     gdouble radiusc = cgt->precalc_radius / cos (theta);
 
-    distance = radiusc * gst_gm_triangle (distance / radiusc);
+    distance = radiusc * geometric_math_triangle (distance / radiusc);
   }
   theta += kaleidoscope->angle;
 

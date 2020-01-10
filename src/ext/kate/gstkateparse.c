@@ -41,14 +41,14 @@
  * <title>Example pipelines</title>
  * <para>
  * <programlisting>
- * gst-launch-1.0 -v filesrc location=kate.ogg ! oggdemux ! kateparse ! fakesink
+ * gst-launch -v filesrc location=kate.ogg ! oggdemux ! kateparse ! fakesink
  * </programlisting>
  * This pipeline shows that the streamheader is set in the caps, and that each
  * buffer has the timestamp, duration, offset, and offset_end set.
  * </para>
  * <para>
  * <programlisting>
- * gst-launch-1.0 filesrc location=kate.ogg ! oggdemux ! kateparse \
+ * gst-launch filesrc location=kate.ogg ! oggdemux ! kateparse \
  *            ! oggmux ! filesink location=kate-remuxed.ogg
  * </programlisting>
  * This pipeline shows remuxing. kate-remuxed.ogg might not be exactly the same
@@ -109,10 +109,10 @@ gst_kate_parse_class_init (GstKateParseClass * klass)
 
   gstelement_class->change_state = gst_kate_parse_change_state;
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_kate_parse_src_factory);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_kate_parse_sink_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_kate_parse_src_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_kate_parse_sink_factory));
 
   gst_element_class_set_static_metadata (gstelement_class, "Kate stream parser",
       "Codec/Parser/Subtitle",

@@ -76,7 +76,7 @@ GType
 gst_apexsink_jackstatus_get_type (void)
 {
   static GType jackstatus_type = 0;
-  static const GEnumValue jackstatus[] = {
+  static GEnumValue jackstatus[] = {
     {GST_APEX_JACK_STATUS_UNDEFINED, "GST_APEX_JACK_STATUS_UNDEFINED",
         "Jack status undefined"},
     {GST_APEX_JACK_STATUS_DISCONNECTED, "GST_APEX_JACK_STATUS_DISCONNECTED",
@@ -97,7 +97,7 @@ GType
 gst_apexsink_jacktype_get_type (void)
 {
   static GType jacktype_type = 0;
-  static const GEnumValue jacktype[] = {
+  static GEnumValue jacktype[] = {
     {GST_APEX_JACK_TYPE_UNDEFINED, "GST_APEX_JACK_TYPE_UNDEFINED",
         "Undefined jack type"},
     {GST_APEX_JACK_TYPE_ANALOG, "GST_APEX_JACK_TYPE_ANALOG", "Analog jack"},
@@ -116,7 +116,7 @@ GType
 gst_apexsink_generation_get_type (void)
 {
   static GType generation_type = 0;
-  static const GEnumValue generation[] = {
+  static GEnumValue generation[] = {
     {GST_APEX_GENERATION_ONE, "generation-one",
         "First generation (e.g., original AirPort Express)"},
     {GST_APEX_GENERATION_TWO, "generation-two",
@@ -135,7 +135,7 @@ GType
 gst_apexsink_transport_protocol_get_type (void)
 {
   static GType transport_protocol_type = 0;
-  static const GEnumValue transport_protocol[] = {
+  static GEnumValue transport_protocol[] = {
     {GST_APEX_TCP, "tcp", "TCP"},
     {GST_APEX_UDP, "udp", "UDP"},
     {0, NULL, NULL},
@@ -265,8 +265,8 @@ gst_apexsink_base_init (gpointer g_class)
       "Apple AirPort Express Audio Sink", "Sink/Audio/Wireless",
       "Output stream to an AirPort Express",
       "Jérémie Bernard [GRemi] <gremimail@gmail.com>");
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_apexsink_sink_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_apexsink_sink_factory));
 }
 
 /* sink class init */

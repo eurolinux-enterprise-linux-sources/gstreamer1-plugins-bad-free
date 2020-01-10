@@ -18,7 +18,7 @@
  */
 
 /*
-gst-launch-1.0 filesrc location=movie.mve ! mvedemux name=d !
+gst-launch-0.10 filesrc location=movie.mve ! mvedemux name=d !
     video/x-raw-rgb ! mvemux quick=true name=m !
     filesink location=test.mve d. ! audio/x-raw-int ! m.
 */
@@ -42,11 +42,11 @@ static const char mve_preamble[] = MVE_PREAMBLE;
 
 enum
 {
-  PROP_0,
-  PROP_AUDIO_COMPRESSION,
-  PROP_VIDEO_QUICK_ENCODING,
-  PROP_VIDEO_SCREEN_WIDTH,
-  PROP_VIDEO_SCREEN_HEIGHT
+  ARG_0,
+  ARG_AUDIO_COMPRESSION,
+  ARG_VIDEO_QUICK_ENCODING,
+  ARG_VIDEO_SCREEN_WIDTH,
+  ARG_VIDEO_SCREEN_HEIGHT
 };
 
 #define MVE_MUX_DEFAULT_COMPRESSION    FALSE
@@ -226,16 +226,16 @@ gst_mve_mux_get_property (GObject * object,
   mvemux = GST_MVE_MUX (object);
 
   switch (prop_id) {
-    case PROP_AUDIO_COMPRESSION:
+    case ARG_AUDIO_COMPRESSION:
       g_value_set_boolean (value, mvemux->compression);
       break;
-    case PROP_VIDEO_QUICK_ENCODING:
+    case ARG_VIDEO_QUICK_ENCODING:
       g_value_set_boolean (value, mvemux->quick_encoding);
       break;
-    case PROP_VIDEO_SCREEN_WIDTH:
+    case ARG_VIDEO_SCREEN_WIDTH:
       g_value_set_uint (value, mvemux->screen_width);
       break;
-    case PROP_VIDEO_SCREEN_HEIGHT:
+    case ARG_VIDEO_SCREEN_HEIGHT:
       g_value_set_uint (value, mvemux->screen_height);
       break;
     default:
@@ -254,16 +254,16 @@ gst_mve_mux_set_property (GObject * object,
   mvemux = GST_MVE_MUX (object);
 
   switch (prop_id) {
-    case PROP_AUDIO_COMPRESSION:
+    case ARG_AUDIO_COMPRESSION:
       mvemux->compression = g_value_get_boolean (value);
       break;
-    case PROP_VIDEO_QUICK_ENCODING:
+    case ARG_VIDEO_QUICK_ENCODING:
       mvemux->quick_encoding = g_value_get_boolean (value);
       break;
-    case PROP_VIDEO_SCREEN_WIDTH:
+    case ARG_VIDEO_SCREEN_WIDTH:
       mvemux->screen_width = g_value_get_uint (value);
       break;
-    case PROP_VIDEO_SCREEN_HEIGHT:
+    case ARG_VIDEO_SCREEN_HEIGHT:
       mvemux->screen_height = g_value_get_uint (value);
       break;
     default:
@@ -1350,11 +1350,12 @@ gst_mve_mux_base_init (GstMveMuxClass * klass)
 
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  gst_element_class_add_static_pad_template (element_class, &src_factory);
-  gst_element_class_add_static_pad_template (element_class,
-      &audio_sink_factory);
-  gst_element_class_add_static_pad_template (element_class,
-      &video_sink_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&audio_sink_factory));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&video_sink_factory));
 
   gst_element_class_set_static_metadata (element_class, "MVE Multiplexer",
       "Codec/Muxer",
@@ -1401,23 +1402,23 @@ gst_mve_mux_class_init (GstMveMuxClass * klass)
   gobject_class->get_property = gst_mve_mux_get_property;
   gobject_class->set_property = gst_mve_mux_set_property;
 
-  g_object_class_install_property (gobject_class, PROP_AUDIO_COMPRESSION,
+  g_object_class_install_property (gobject_class, ARG_AUDIO_COMPRESSION,
       g_param_spec_boolean ("compression", "Audio compression",
           "Whether to compress audio data", MVE_MUX_DEFAULT_COMPRESSION,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_VIDEO_QUICK_ENCODING,
+  g_object_class_install_property (gobject_class, ARG_VIDEO_QUICK_ENCODING,
       g_param_spec_boolean ("quick", "Quick encoding",
           "Whether to disable expensive encoding operations", TRUE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_VIDEO_SCREEN_WIDTH,
+  g_object_class_install_property (gobject_class, ARG_VIDEO_SCREEN_WIDTH,
       g_param_spec_uint ("screen-width", "Screen width",
           "Suggested screen width", 320, 1600,
           MVE_MUX_DEFAULT_SCREEN_WIDTH,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_VIDEO_SCREEN_HEIGHT,
+  g_object_class_install_property (gobject_class, ARG_VIDEO_SCREEN_HEIGHT,
       g_param_spec_uint ("screen-height", "Screen height",
           "Suggested screen height", 200, 1200,
           MVE_MUX_DEFAULT_SCREEN_HEIGHT,

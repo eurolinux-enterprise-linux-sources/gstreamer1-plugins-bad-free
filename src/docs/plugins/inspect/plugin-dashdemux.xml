@@ -3,11 +3,11 @@
   <description>DASH demuxer plugin</description>
   <filename>../../ext/dash/.libs/libgstdashdemux.so</filename>
   <basename>libgstdashdemux.so</basename>
-  <version>1.10.4</version>
+  <version>1.4.5</version>
   <license>LGPL</license>
   <source>gst-plugins-bad</source>
   <package>GStreamer Bad Plug-ins</package>
-  <origin>Unknown package origin</origin>
+  <origin>http://www.gstreamer.org/</origin>
   <elements>
     <element>
       <name>dashdemux</name>
@@ -25,19 +25,7 @@
           <details>application/dash+xml</details>
         </caps>
         <caps>
-          <name>audio_%02u</name>
-          <direction>source</direction>
-          <presence>sometimes</presence>
-          <details>ANY</details>
-        </caps>
-        <caps>
-          <name>subtitle_%02u</name>
-          <direction>source</direction>
-          <presence>sometimes</presence>
-          <details>ANY</details>
-        </caps>
-        <caps>
-          <name>video_%02u</name>
+          <name>src_%u</name>
           <direction>source</direction>
           <presence>sometimes</presence>
           <details>ANY</details>

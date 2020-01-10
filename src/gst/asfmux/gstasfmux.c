@@ -35,11 +35,11 @@
  * <title>Example launch lines</title>
  * <para>(write everything in one line, without the backslash characters)</para>
  * |[
- * gst-launch-1.0 videotestsrc num-buffers=250 \
- * ! "video/x-raw,format=(string)I420,framerate=(fraction)25/1" ! avenc_wmv2 \
+ * gst-launch videotestsrc num-buffers=250 \
+ * ! "video/x-raw,format=(string)I420,framerate=(fraction)25/1" ! ffenc_wmv2 \
  * ! asfmux name=mux ! filesink location=test.asf \
  * audiotestsrc num-buffers=440 ! audioconvert \
- * ! "audio/x-raw,rate=44100" ! avenc_wmav2 ! mux.
+ * ! "audio/x-raw,rate=44100" ! ffenc_wmav2 ! mux.
  * ]| This creates an ASF file containing an WMV video stream
  * with a test picture and WMA audio stream of a test sound.
  *
@@ -54,14 +54,14 @@
  * <para>(write everything in one line, without the backslash characters)</para>
  * Server (sender)
  * |[
- * gst-launch-1.0 -ve videotestsrc ! avenc_wmv2 ! asfmux name=mux streamable=true \
+ * gst-launch -ve videotestsrc ! ffenc_wmv2 ! asfmux name=mux streamable=true \
  * ! rtpasfpay ! udpsink host=127.0.0.1 port=3333 \
- * audiotestsrc ! avenc_wmav2 ! mux.
+ * audiotestsrc ! ffenc_wmav2 ! mux.
  * ]|
  * Client (receiver)
  * |[
- * gst-launch-1.0 udpsrc port=3333 ! "caps_from_rtpasfpay_at_sender" \
- * ! rtpasfdepay ! decodebin name=d ! queue \
+ * gst-launch udpsrc port=3333 ! "caps_from_rtpasfpay_at_sender" \
+ * ! rtpasfdepay ! decodebin2 name=d ! queue \
  * ! videoconvert ! autovideosink \
  * d. ! queue ! audioconvert ! autoaudiosink
  * ]|
@@ -270,11 +270,12 @@ gst_asf_mux_class_init (GstAsfMuxClass * klass)
       GST_DEBUG_FUNCPTR (gst_asf_mux_request_new_pad);
   gstelement_class->change_state = GST_DEBUG_FUNCPTR (gst_asf_mux_change_state);
 
-  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &audio_sink_factory);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &video_sink_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&audio_sink_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&video_sink_factory));
 
   gst_element_class_set_static_metadata (gstelement_class, "ASF muxer",
       "Codec/Muxer",
@@ -707,7 +708,11 @@ gst_asf_mux_write_stream_properties (GstAsfMux * asfmux, guint8 ** buf,
   else
     gst_asf_put_guid (*buf + 24, guids[ASF_VIDEO_MEDIA_INDEX]);
   /* error correction */
-  gst_asf_put_guid (*buf + 40, guids[ASF_NO_ERROR_CORRECTION_INDEX]);
+  if (asfpad->is_audio) {
+    gst_asf_put_guid (*buf + 40, guids[ASF_NO_ERROR_CORRECTION_INDEX]);
+  } else {
+    gst_asf_put_guid (*buf + 40, guids[ASF_NO_ERROR_CORRECTION_INDEX]);
+  }
   GST_WRITE_UINT64_LE (*buf + 56, 0);   /* time offset */
 
   GST_WRITE_UINT32_LE (*buf + 64, codec_data_length + media_specific_data_length);      /* type specific data length */
@@ -1264,31 +1269,6 @@ gst_asf_mux_start_file (GstAsfMux * asfmux)
   if (padding < ASF_PADDING_OBJECT_SIZE)
     padding = 0;
 
-  /* if not streaming, check if downstream is seekable */
-  if (!asfmux->prop_streamable) {
-    gboolean seekable;
-    GstQuery *query;
-
-    query = gst_query_new_seeking (GST_FORMAT_BYTES);
-    if (gst_pad_peer_query (asfmux->srcpad, query)) {
-      gst_query_parse_seeking (query, NULL, &seekable, NULL, NULL);
-      GST_INFO_OBJECT (asfmux, "downstream is %sseekable",
-          seekable ? "" : "not ");
-    } else {
-      /* assume seeking is not supported if query not handled downstream */
-      GST_WARNING_OBJECT (asfmux, "downstream did not handle seeking query");
-      seekable = FALSE;
-    }
-    if (!seekable) {
-      asfmux->prop_streamable = TRUE;
-      g_object_notify (G_OBJECT (asfmux), "streamable");
-      GST_WARNING_OBJECT (asfmux, "downstream is not seekable, but "
-          "streamable=false. Will ignore that and create streamable output "
-          "instead");
-    }
-    gst_query_unref (query);
-  }
-
   /* from this point we started writing the headers */
   GST_INFO_OBJECT (asfmux, "Writing headers");
   asfmux->state = GST_ASF_MUX_STATE_HEADERS;
@@ -1301,12 +1281,8 @@ gst_asf_mux_start_file (GstAsfMux * asfmux)
   gst_pad_set_caps (asfmux->srcpad, caps);
   gst_caps_unref (caps);
 
-  /* send a BYTE format segment if we're going to seek to fix up the headers
-   * later, otherwise send a TIME segment */
-  if (asfmux->prop_streamable)
-    gst_segment_init (&segment, GST_FORMAT_TIME);
-  else
-    gst_segment_init (&segment, GST_FORMAT_BYTES);
+  /* let downstream know we think in BYTES and expect to do seeking later */
+  gst_segment_init (&segment, GST_FORMAT_BYTES);
   gst_pad_push_event (asfmux->srcpad, gst_event_new_segment (&segment));
 
   gst_asf_generate_file_id (&asfmux->file_id);

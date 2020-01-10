@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>synaescope: GStreamer Bad Plugins 1.0 Plugins Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<title>GStreamer Bad Plugins 1.0 Plugins Reference Manual: synaescope</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 1.0 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-spectrascope.html" title="spectrascope">
 <link rel="next" href="gst-plugins-bad-plugins-speed.html" title="speed">
-<meta name="generator" content="GTK-Doc V1.25 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -28,13 +28,13 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="gst-plugins-bad-plugins-synaescope.top_of_page"></a>synaescope</span></h2>
-<p>synaescope</p>
+<p>synaescope — Creates video visualizations of audio input, using stereo and pitch information</p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
 <a name="GstSynaeScope"></a><div class="refsect1">
 <a name="gst-plugins-bad-plugins-synaescope.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -47,11 +47,11 @@
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-synaescope.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
-    <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gobjectgobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
-        <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstObject.html#GstObject-struct">GstObject</a>
-            <span class="lineart">╰──</span> <a href="/usr/share/gtk-doc/html/gstreamer-1.0GstElement.html#GstElement-struct">GstElement</a>
-                <span class="lineart">╰──</span> GstAudioVisualizer
+<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+    <span class="lineart">╰──</span> <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
+        <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
+            <span class="lineart">╰──</span> <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
+                <span class="lineart">╰──</span> GstAudioVisualizer-BadGstAudioVisualizers
                     <span class="lineart">╰──</span> GstSynaeScope
 </pre>
 </div>
@@ -60,13 +60,13 @@
 <p>Synaescope is an audio visualisation element. It analyzes frequencies and
 out-of phase properties of audio and draws this as clouds of stars.</p>
 <div class="refsect2">
-<a name="id-1.2.117.6.3"></a><h3>Example launch line</h3>
+<a name="id-1.2.64.6.3"></a><h3>Example launch line</h3>
 <div class="informalexample">
   <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
     <tbody>
       <tr>
         <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch<span class="gtkdoc opt">-</span><span class="number">1.0</span> audiotestsrc <span class="gtkdoc opt">!</span> audioconvert <span class="gtkdoc opt">!</span> synaescope <span class="gtkdoc opt">!</span> ximagesink</pre></td>
+        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch audiotestsrc <span class="gtkdoc opt">!</span> audioconvert <span class="gtkdoc opt">!</span> synaescope <span class="gtkdoc opt">!</span> ximagesink</pre></td>
       </tr>
     </tbody>
   </table>
@@ -76,7 +76,7 @@ out-of phase properties of audio and draws this as clouds of stars.</p>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="id-1.2.117.6.4.1"></a><h3>Element Information</h3>
+<a name="id-1.2.64.6.4.1"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -102,7 +102,7 @@ out-of phase properties of audio and draws this as clouds of stars.</p>
 </div>
 <hr>
 <div class="refsect2">
-<a name="id-1.2.117.6.4.2"></a><h3>Element Pads</h3>
+<a name="id-1.2.64.6.4.2"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -153,16 +153,19 @@ out-of phase properties of audio and draws this as clouds of stars.</p>
 </table></div>
 </div>
 </div>
+<p>
+</p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-synaescope.functions_details"></a><h2>Functions</h2>
-<p></p>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-synaescope.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
 <a name="GstSynaeScope-struct"></a><h3>struct GstSynaeScope</h3>
 <pre class="programlisting">struct GstSynaeScope;</pre>
+<p>
+</p>
 </div>
 </div>
 <div class="refsect1">
@@ -171,6 +174,7 @@ out-of phase properties of audio and draws this as clouds of stars.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25</div>
+<hr>
+          Generated by GTK-Doc V1.21</div>
 </body>
 </html>

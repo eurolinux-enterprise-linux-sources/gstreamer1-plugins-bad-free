@@ -36,7 +36,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 videotestsrc ! simplevideomark ! videoconvert ! ximagesink
+ * gst-launch videotestsrc ! simplevideomark ! ximagesink
  * ]| Add the default black/white squares at the bottom left of the video frames.
  * </refsect2>
  */
@@ -331,26 +331,14 @@ gst_video_mark_draw_box (GstSimpleVideoMark * simplevideomark, guint8 * data,
   }
 }
 
-static gint
-calculate_pw (gint pw, gint x, gint width)
-{
-  if (x < 0)
-    pw += x;
-  else if ((x + pw) > width)
-    pw = width - x;
-
-  return pw;
-}
-
 static GstFlowReturn
 gst_video_mark_yuv (GstSimpleVideoMark * simplevideomark, GstVideoFrame * frame)
 {
   gint i, pw, ph, row_stride, pixel_stride;
-  gint width, height, offset_calc, x, y;
+  gint width, height, req_width, req_height;
   guint8 *d;
   guint64 pattern_shift;
   guint8 color;
-  gint total_pattern;
 
   width = frame->info.width;
   height = frame->info.height;
@@ -360,42 +348,25 @@ gst_video_mark_yuv (GstSimpleVideoMark * simplevideomark, GstVideoFrame * frame)
   row_stride = GST_VIDEO_FRAME_COMP_STRIDE (frame, 0);
   pixel_stride = GST_VIDEO_FRAME_COMP_PSTRIDE (frame, 0);
 
-  d = GST_VIDEO_FRAME_COMP_DATA (frame, 0);
-  offset_calc =
-      row_stride * (height - ph - simplevideomark->bottom_offset) +
-      pixel_stride * simplevideomark->left_offset;
-  x = simplevideomark->left_offset;
-  y = height - ph - simplevideomark->bottom_offset;
-
-  total_pattern =
-      simplevideomark->pattern_count + simplevideomark->pattern_data_count;
-  /* If x and y offset values are outside the video, no need to draw */
-  if ((x + (pw * total_pattern)) < 0 || x > width || (y + height) < 0
-      || y > height) {
-    GST_ERROR_OBJECT (simplevideomark,
-        "simplevideomark pattern is outside the video. Not drawing.");
-    return GST_FLOW_OK;
+  req_width =
+      (simplevideomark->pattern_count +
+      simplevideomark->pattern_data_count) * pw + simplevideomark->left_offset;
+  req_height = simplevideomark->bottom_offset + ph;
+  if (req_width > width || req_height > height) {
+    GST_ELEMENT_ERROR (simplevideomark, STREAM, WRONG_TYPE, (NULL),
+        ("simplevideomark pattern doesn't fit video, need at least %ix%i (stream has %ix%i)",
+            req_width, req_height, width, height));
+    return GST_FLOW_ERROR;
   }
-
-  /* Offset calculation less than 0, then reset to 0 */
-  if (offset_calc < 0)
-    offset_calc = 0;
-  /* Y position of mark is negative or pattern exceeds the video height,
-     then recalculate pattern height for partial display */
-  if (y < 0)
-    ph += y;
-  else if ((y + ph) > height)
-    ph = height - y;
-  /* If pattern height is less than 0, need not draw anything */
-  if (ph < 0)
-    return GST_FLOW_OK;
-
-  /* move to start of bottom left */
-  d += offset_calc;
 
   /* draw the bottom left pixels */
   for (i = 0; i < simplevideomark->pattern_count; i++) {
-    gint draw_pw;
+    d = GST_VIDEO_FRAME_COMP_DATA (frame, 0);
+    /* move to start of bottom left */
+    d += row_stride * (height - ph - simplevideomark->bottom_offset) +
+        pixel_stride * simplevideomark->left_offset;
+    /* move to i-th pattern */
+    d += pixel_stride * pw * i;
 
     if (i & 1)
       /* odd pixels must be white */
@@ -403,23 +374,9 @@ gst_video_mark_yuv (GstSimpleVideoMark * simplevideomark, GstVideoFrame * frame)
     else
       color = 0;
 
-    /* X position of mark is negative or pattern exceeds the video width,
-       then recalculate pattern width for partial display */
-    draw_pw = calculate_pw (pw, x, width);
-    /* If pattern width is less than 0, continue with the next pattern */
-    if (draw_pw < 0)
-      continue;
-
     /* draw box of width * height */
-    gst_video_mark_draw_box (simplevideomark, d, draw_pw, ph, row_stride,
+    gst_video_mark_draw_box (simplevideomark, d, pw, ph, row_stride,
         pixel_stride, color);
-
-    /* move to i-th pattern */
-    d += pixel_stride * draw_pw;
-    x += draw_pw;
-
-    if ((x + (pw * (total_pattern - i - 1))) < 0 || x >= width)
-      return GST_FLOW_OK;
   }
 
   pattern_shift =
@@ -427,31 +384,24 @@ gst_video_mark_yuv (GstSimpleVideoMark * simplevideomark, GstVideoFrame * frame)
 
   /* get the data of the pattern */
   for (i = 0; i < simplevideomark->pattern_data_count; i++) {
-    gint draw_pw;
+    d = GST_VIDEO_FRAME_COMP_DATA (frame, 0);
+    /* move to start of bottom left, adjust for offsets */
+    d += row_stride * (height - ph - simplevideomark->bottom_offset) +
+        pixel_stride * simplevideomark->left_offset;
+    /* move after the fixed pattern */
+    d += pixel_stride * simplevideomark->pattern_count * pw;
+    /* move to i-th pattern data */
+    d += pixel_stride * pw * i;
+
     if (simplevideomark->pattern_data & pattern_shift)
       color = 255;
     else
       color = 0;
 
-    /* X position of mark is negative or pattern exceeds the video width,
-       then recalculate pattern width for partial display */
-    draw_pw = calculate_pw (pw, x, width);
-    /* If pattern width is less than 0, continue with the next pattern */
-    if (draw_pw < 0)
-      continue;
-
-    gst_video_mark_draw_box (simplevideomark, d, draw_pw, ph, row_stride,
+    gst_video_mark_draw_box (simplevideomark, d, pw, ph, row_stride,
         pixel_stride, color);
 
     pattern_shift >>= 1;
-
-    /* move to i-th pattern data */
-    d += pixel_stride * draw_pw;
-    x += draw_pw;
-
-    if ((x + (pw * (simplevideomark->pattern_data_count - i - 1))) < 0
-        || x >= width)
-      return GST_FLOW_OK;
   }
 
   return GST_FLOW_OK;

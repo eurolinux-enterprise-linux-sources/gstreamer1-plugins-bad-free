@@ -13,7 +13,7 @@
  *   Zaheer Abbas Merali <zaheerabbas at merali dot org>
  *   Edward Hervey <edward@collabora.com>
  *
- * This library is free software; you can redistribute it and/or
+ * This library is free softwagre; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
  * License as published by the Free Software Foundation; either
  * version 2 of the License, or (at your option) any later version.
@@ -49,7 +49,7 @@
  * @include: gst/mpegts/mpegts.h
  *
  * For more details, refer to the ITU H.222.0 or ISO/IEC 13818-1 specifications
- * and other specifications mentioned in the documentation.
+ * and other specifications mentionned in the documentation.
  */
 
 /*
@@ -127,7 +127,7 @@ static const guint32 crc_tab[256] = {
   0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
 };
 
-/* _calc_crc32 relicensed to LGPL from fluendo ts demuxer */
+/* _calc_crc32 relicenced to LGPL from fluendo ts demuxer */
 guint32
 _calc_crc32 (const guint8 * data, guint datalen)
 {
@@ -414,7 +414,7 @@ static gpointer
 _parse_pat (GstMpegtsSection * section)
 {
   GPtrArray *pat;
-  guint16 i, nb_programs;
+  guint16 i = 0, nb_programs;
   GstMpegtsPatProgram *program;
   guint8 *data, *end;
 
@@ -430,9 +430,7 @@ _parse_pat (GstMpegtsSection * section)
       g_ptr_array_new_full (nb_programs,
       (GDestroyNotify) _mpegts_pat_program_free);
 
-  GST_LOG ("nb_programs %u", nb_programs);
-
-  for (i = 0; i < nb_programs; i++) {
+  while (data < end - 4) {
     program = g_slice_new0 (GstMpegtsPatProgram);
     program->program_number = GST_READ_UINT16_BE (data);
     data += 2;
@@ -441,6 +439,8 @@ _parse_pat (GstMpegtsSection * section)
     data += 2;
 
     g_ptr_array_index (pat, i) = program;
+
+    i++;
   }
   pat->len = nb_programs;
 
@@ -632,8 +632,7 @@ _gst_mpegts_pmt_free (GstMpegtsPMT * pmt)
 {
   if (pmt->descriptors)
     g_ptr_array_unref (pmt->descriptors);
-  if (pmt->streams)
-    g_ptr_array_unref (pmt->streams);
+  g_ptr_array_unref (pmt->streams);
   g_slice_free (GstMpegtsPMT, pmt);
 }
 
@@ -657,7 +656,7 @@ _parse_pmt (GstMpegtsSection * section)
 
   GST_DEBUG ("Parsing %d Program Map Table", section->subtable_extension);
 
-  /* Assign program number from subtable extension,
+  /* Assign program number from subtable extenstion,
      and skip already parsed data */
   pmt->program_number = section->subtable_extension;
   data += 8;
@@ -715,11 +714,6 @@ _parse_pmt (GstMpegtsSection * section)
     i += 1;
   }
 
-  /* Section length was longer than the actual content of the PMT */
-  if (data < end - 4)
-    goto error;
-
-  /* Ensure we did not read after the end of our array */
   g_assert (data == end - 4);
 
   return (gpointer) pmt;
@@ -935,7 +929,7 @@ _parse_cat (GstMpegtsSection * section)
  * gst_mpegts_section_get_cat:
  * @section: a #GstMpegtsSection of type %GST_MPEGTS_SECTION_CAT
  *
- * Returns the array of #GstMpegtsDescriptor contained in the Conditional
+ * Returns the array of #GstMpegtsDescriptor contained in the Condtional
  * Access Table.
  *
  * Returns: (transfer container) (element-type GstMpegtsDescriptor): The
@@ -1134,12 +1128,9 @@ _packetize_common_section (GstMpegtsSection * section, gsize length)
       GST_WRITE_UINT16_BE (data, (section->section_length - 3) | 0x7000);
   }
 
-  /* short sections do not contain any further fields */
-  if (section->short_section)
-    return;
+  if (!section->short_section)
+    *data |= 0x80;
 
-  /* Set section_syntax_indicator bit since we do not have a short section */
-  *data |= 0x80;
   data += 2;
 
   /* subtable_extension               - 16 bit uimsbf */
@@ -1184,19 +1175,12 @@ gst_mpegts_section_new (guint16 pid, guint8 * data, gsize data_size)
   GstMpegtsSection *res = NULL;
   guint8 tmp;
   guint8 table_id;
-  guint16 section_length = 0;
-
-  /* The smallest section ever is 3 bytes */
-  if (G_UNLIKELY (data_size < 3))
-    goto short_packet;
+  guint16 section_length;
 
   /* Check for length */
   section_length = GST_READ_UINT16_BE (data + 1) & 0x0FFF;
   if (G_UNLIKELY (data_size < section_length + 3))
     goto short_packet;
-
-  GST_LOG ("data_size:%" G_GSIZE_FORMAT " section_length:%u",
-      data_size, section_length);
 
   /* Table id is in first byte */
   table_id = *data;
@@ -1212,13 +1196,6 @@ gst_mpegts_section_new (guint16 pid, guint8 * data, gsize data_size)
   /* section_length (already parsed) : 12 bit */
   res->section_length = section_length + 3;
   if (!res->short_section) {
-    /* A long packet needs to be at least 11 bytes long
-     * _ 3 for the bytes above
-     * _ 5 for the bytes below
-     * _ 4 for the CRC */
-    if (G_UNLIKELY (data_size < 11))
-      goto bad_long_packet;
-
     /* CRC is after section_length (-4 for the size of the CRC) */
     res->crc = GST_READ_UINT32_BE (res->data + res->section_length - 4);
     /* Skip to after section_length */
@@ -1248,13 +1225,6 @@ short_packet:
     g_free (data);
     return NULL;
   }
-bad_long_packet:
-  {
-    GST_WARNING ("PID 0x%04x long section is too short (%" G_GSIZE_FORMAT
-        " bytes, need at least 11)", pid, data_size);
-    gst_mpegts_section_unref (res);
-    return NULL;
-  }
 }
 
 /**
@@ -1262,7 +1232,7 @@ bad_long_packet:
  * @section: (transfer none): the #GstMpegtsSection that holds the data
  * @output_size: (out): #gsize to hold the size of the data
  *
- * If the data in @section has already been packetized, the data pointer is returned
+ * If the data in @section has aldready been packetized, the data pointer is returned
  * immediately. Otherwise, the data field is allocated and populated.
  *
  * Returns: (transfer none): pointer to section data, or %NULL on fail

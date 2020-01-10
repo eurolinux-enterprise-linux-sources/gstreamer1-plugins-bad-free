@@ -28,7 +28,7 @@
  * <refsect2>
  * <title>Example launch line (upload a JPEG file to an HTTP server)</title>
  * |[
- * gst-launch-1.0 filesrc location=image.jpg ! jpegparse ! curlhttpsink  \
+ * gst-launch filesrc location=image.jpg ! jpegparse ! curlhttpsink  \
  *     file-name=image.jpg  \
  *     location=http://192.168.0.1:8080/cgi-bin/patupload.cgi/  \
  *     user=test passwd=test  \
@@ -352,12 +352,10 @@ gst_curl_http_sink_set_header_unlocked (GstCurlBaseSink * bcsink)
 
 set_headers:
 
-  if (bcsink->file_name) {
-    tmp = g_strdup_printf ("Content-Disposition: attachment; filename="
-        "\"%s\"", bcsink->file_name);
-    sink->header_list = curl_slist_append (sink->header_list, tmp);
-    g_free (tmp);
-  }
+  tmp = g_strdup_printf ("Content-Disposition: attachment; filename="
+      "\"%s\"", bcsink->file_name);
+  sink->header_list = curl_slist_append (sink->header_list, tmp);
+  g_free (tmp);
   res = curl_easy_setopt (bcsink->curl, CURLOPT_HTTPHEADER, sink->header_list);
   if (res != CURLE_OK) {
     bcsink->error = g_strdup_printf ("failed to set HTTP headers: %s",
@@ -401,7 +399,6 @@ gst_curl_http_sink_set_options_unlocked (GstCurlBaseSink * bcsink)
   parent_class = GST_CURL_TLS_SINK_GET_CLASS (sink);
 
   if (g_str_has_prefix (bcsink->url, "https://")) {
-    GST_DEBUG_OBJECT (bcsink, "setting up tls options");
     return parent_class->set_options_unlocked (bcsink);
   }
 
@@ -434,7 +431,6 @@ gst_curl_http_sink_transfer_prepare_poll_wait (GstCurlBaseSink * bcsink)
   if (!sink->proxy_conn_established
       && (sink->proxy_resp != RESPONSE_CONNECT_PROXY)
       && sink->proxy_auth) {
-    GST_DEBUG_OBJECT (sink, "prep transfers: connecting proxy");
     curl_easy_getinfo (bcsink->curl, CURLINFO_HTTP_CONNECTCODE,
         &sink->proxy_resp);
     if (sink->proxy_resp == RESPONSE_CONNECT_PROXY) {

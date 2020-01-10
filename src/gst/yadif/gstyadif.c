@@ -29,7 +29,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc pattern=ball ! interlace ! yadif ! xvimagesink
+ * gst-launch -v videotestsrc pattern=ball ! interlace ! yadif ! xvimagesink
  * ]|
  * This pipeline creates an interlaced test pattern, and then deinterlaces
  * it using the yadif filter.
@@ -131,10 +131,10 @@ gst_yadif_class_init (GstYadifClass * klass)
 
   /* Setting up pads and setting metadata should be moved to
      base_class_init if you intend to subclass this class. */
-  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
-      &gst_yadif_sink_template);
-  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
-      &gst_yadif_src_template);
+  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
+      gst_static_pad_template_get (&gst_yadif_sink_template));
+  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
+      gst_static_pad_template_get (&gst_yadif_src_template));
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "YADIF deinterlacer", "Video/Filter",
@@ -243,8 +243,8 @@ gst_yadif_transform_caps (GstBaseTransform * trans,
     gst_value_list_append_value (&value, &v);
 
     gst_caps_set_value (othercaps, "interlace-mode", &value);
-    g_value_unset (&value);
-    g_value_unset (&v);
+    g_value_reset (&value);
+    g_value_reset (&v);
   } else {
     gst_caps_set_simple (othercaps, "interlace-mode", G_TYPE_STRING,
         "progressive", NULL);

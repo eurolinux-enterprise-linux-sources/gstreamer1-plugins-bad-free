@@ -41,8 +41,7 @@ struct _GstGLFilterGlass
   GstGLShader *passthrough_shader;
   GstGLShader *shader;
   gint64 timestamp;
-  GstGLMemory *in_tex;
-  GstGLMemory *out_tex;
+  guint in_tex;
 };
 
 struct _GstGLFilterGlassClass

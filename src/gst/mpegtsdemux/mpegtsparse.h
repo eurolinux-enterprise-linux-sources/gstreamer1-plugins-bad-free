@@ -26,7 +26,6 @@
 #define GST_MPEG_TS_PARSE_H
 
 #include <gst/gst.h>
-#include <gst/base/gstflowcombiner.h>
 #include "mpegtsbase.h"
 #include "mpegtspacketizer.h"
 
@@ -52,29 +51,14 @@ struct _MpegTSParse2 {
   gboolean have_group_id;
   guint group_id;
 
-  GstClockTime smoothing_latency;
-  GstClockTime base_pcr;
-  GstClockTime ts_offset;
-  GstClockTime current_pcr;
-  gint user_pcr_pid;
-  gint pcr_pid;
-
   /* Always present source pad */
   GstPad *srcpad;
 
-  /* Request source (single program) pads */
   GList *srcpads;
 
-  GstFlowCombiner *flowcombiner;
-  
   /* state */
   gboolean first;
-  gboolean set_timestamps;
-
-  /* Pending buffer state */
   GList *pending_buffers;
-  GstClockTime previous_pcr;
-  guint bytes_since_pcr;
 };
 
 struct _MpegTSParse2Class {

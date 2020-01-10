@@ -181,8 +181,8 @@ gst_geometric_transform_do_map (GstGeometricTransform * gt, guint8 * in_data,
       break;
 
     case GST_GT_OFF_EDGES_PIXELS_WRAP:
-      in_x = gst_gm_mod_float (in_x, gt->width);
-      in_y = gst_gm_mod_float (in_y, gt->height);
+      in_x = mod_float (in_x, gt->width);
+      in_y = mod_float (in_y, gt->height);
       if (in_x < 0)
         in_x += gt->width;
       if (in_y < 0)
@@ -352,10 +352,10 @@ gst_geometric_transform_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_geometric_transform_sink_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_geometric_transform_src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_geometric_transform_sink_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_geometric_transform_src_template));
 }
 
 static void

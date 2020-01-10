@@ -44,8 +44,8 @@ typedef struct _GstOpusParseClass GstOpusParseClass;
 struct _GstOpusParse {
   GstBaseParse       element;
 
-  gboolean got_headers, header_sent;
-  guint64 pre_skip;
+  gboolean header_sent;
+  GSList *headers;
   GstClockTime next_ts;
   GstBuffer *id_header;
   GstBuffer *comment_header;

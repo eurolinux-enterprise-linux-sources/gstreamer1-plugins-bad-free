@@ -57,10 +57,10 @@
  * <refsect2>
  * <title>Example pipelines</title>
  * |[
- * gst-launch-1.0 -v openalsrc ! audioconvert ! wavenc ! filesink location=stream.wav
+ * gst-launch -v openalsrc ! audioconvert ! wavenc ! filesink location=stream.wav
  * ]| * will capture sound through OpenAL and encode it to a wav file.
  * |[
- * gst-launch-1.0 openalsrc ! "audio/x-raw,format=S16LE,rate=44100" ! audioconvert ! volume volume=0.25 ! openalsink
+ * gst-launch openalsrc ! "audio/x-raw,format=S16LE,rate=44100" ! audioconvert ! volume volume=0.25 ! openalsink
  * ]| will capture and play audio through OpenAL.
  * </refsect2>
  */
@@ -192,8 +192,8 @@ gst_openal_src_class_init (GstOpenalSrcClass * klass)
       "OpenAL Audio Source", "Source/Audio", "Input audio through OpenAL",
       "Juan Manuel Borges Caño <juanmabcmail@gmail.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &openalsrc_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&openalsrc_factory));
 }
 
 static void

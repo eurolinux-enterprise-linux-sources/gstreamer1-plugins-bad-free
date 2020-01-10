@@ -190,7 +190,7 @@ get_encoding (const gchar * text, guint * start_text, gboolean * is_multibyte)
       if (table < 17)
         encoding = _ICONV_UNKNOWN + table;
       else
-        encoding = _ICONV_UNKNOWN;
+        encoding = _ICONV_UNKNOWN;;
       *start_text = 3;
       break;
     }
@@ -635,6 +635,7 @@ void
 _packetize_descriptor_array (GPtrArray * array, guint8 ** out_data)
 {
   guint i;
+  guint8 header_size;
   GstMpegtsDescriptor *descriptor;
 
   g_return_if_fail (out_data != NULL);
@@ -646,8 +647,13 @@ _packetize_descriptor_array (GPtrArray * array, guint8 ** out_data)
   for (i = 0; i < array->len; i++) {
     descriptor = g_ptr_array_index (array, i);
 
-    memcpy (*out_data, descriptor->data, descriptor->length + 2);
-    *out_data += descriptor->length + 2;
+    if (descriptor->tag == GST_MTS_DESC_DVB_EXTENSION)
+      header_size = 3;
+    else
+      header_size = 2;
+
+    memcpy (*out_data, descriptor->data, descriptor->length + header_size);
+    *out_data += descriptor->length + header_size;
   }
 }
 
@@ -683,15 +689,15 @@ _new_descriptor_with_extension (guint8 tag, guint8 tag_extension, guint8 length)
 
   descriptor->tag = tag;
   descriptor->tag_extension = tag_extension;
-  descriptor->length = length + 1;
+  descriptor->length = length;
 
   descriptor->data = g_malloc (length + 3);
 
   data = descriptor->data;
 
   *data++ = descriptor->tag;
-  *data++ = descriptor->length;
-  *data = descriptor->tag_extension;
+  *data++ = descriptor->tag_extension;
+  *data = descriptor->length;
 
   return descriptor;
 }
@@ -769,7 +775,7 @@ gst_mpegts_parse_descriptors (guint8 * buffer, gsize buf_len)
   }
 
   GST_DEBUG ("Saw %d descriptors, read %" G_GSIZE_FORMAT " bytes",
-      nb_desc, (gsize) (data - buffer));
+      nb_desc, data - buffer);
 
   if (data - buffer != buf_len) {
     GST_WARNING ("descriptors size %d expected %" G_GSIZE_FORMAT,
@@ -963,7 +969,7 @@ gst_mpegts_descriptor_parse_iso_639_language (const GstMpegtsDescriptor *
 
   g_return_val_if_fail (descriptor != NULL && desc != NULL, FALSE);
   /* This descriptor can be empty, no size check needed */
-  __common_desc_check_base (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, FALSE);
+  __common_desc_checks (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, 0, FALSE);
 
   data = (guint8 *) descriptor->data + 2;
 
@@ -1005,7 +1011,7 @@ gst_mpegts_descriptor_parse_iso_639_language_idx (const GstMpegtsDescriptor *
 
   g_return_val_if_fail (descriptor != NULL && lang != NULL, FALSE);
   /* This descriptor can be empty, no size check needed */
-  __common_desc_check_base (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, FALSE);
+  __common_desc_checks (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, 0, FALSE);
 
   if (descriptor->length / 4 <= idx)
     return FALSE;
@@ -1034,33 +1040,9 @@ gst_mpegts_descriptor_parse_iso_639_language_nb (const GstMpegtsDescriptor *
 {
   g_return_val_if_fail (descriptor != NULL, 0);
   /* This descriptor can be empty, no size check needed */
-  __common_desc_check_base (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, FALSE);
+  __common_desc_checks (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, 0, FALSE);
 
   return descriptor->length / 4;
-}
-
-/**
- * gst_mpegts_descriptor_from_iso_639_language:
- * @language: (transfer none): ISO-639-2 language 3-char code
- *
- * Creates a %GST_MTS_DESC_ISO_639_LANGUAGE #GstMpegtsDescriptor with
- * a single language
- *
- * Return: #GstMpegtsDescriptor, %NULL on failure
- */
-GstMpegtsDescriptor *
-gst_mpegts_descriptor_from_iso_639_language (const gchar * language)
-{
-  GstMpegtsDescriptor *descriptor;
-
-  g_return_val_if_fail (language != NULL, NULL);
-
-  descriptor = _new_descriptor (GST_MTS_DESC_ISO_639_LANGUAGE, 4 + 4);  /* a language takes 4 bytes */
-
-  memcpy (descriptor->data + 2, language, 3);
-  descriptor->data[2 + 3] = 0;  /* set audio type to undefined */
-
-  return descriptor;
 }
 
 /**
@@ -1081,8 +1063,7 @@ gst_mpegts_descriptor_parse_logical_channel (const GstMpegtsDescriptor *
 
   g_return_val_if_fail (descriptor != NULL && res != NULL, FALSE);
   /* This descriptor loop can be empty, no size check required */
-  __common_desc_check_base (descriptor, GST_MTS_DESC_DTG_LOGICAL_CHANNEL,
-      FALSE);
+  __common_desc_checks (descriptor, GST_MTS_DESC_DTG_LOGICAL_CHANNEL, 0, FALSE);
 
   data = (guint8 *) descriptor->data + 2;
 
@@ -1120,31 +1101,6 @@ gst_mpegts_descriptor_from_custom (guint8 tag, const guint8 * data,
 
   if (data && (length > 0))
     memcpy (descriptor->data + 2, data, length);
-
-  return descriptor;
-}
-
-/**
- * gst_mpegts_descriptor_from_custom_with_extension:
- * @tag: descriptor tag
- * @tag_extension: descriptor tag extension
- * @data: (transfer none): descriptor data (after tag and length field)
- * @length: length of @data
- *
- * Creates a #GstMpegtsDescriptor with custom @tag, @tag_extension and @data
- *
- * Returns: #GstMpegtsDescriptor
- */
-GstMpegtsDescriptor *
-gst_mpegts_descriptor_from_custom_with_extension (guint8 tag,
-    guint8 tag_extension, const guint8 * data, gsize length)
-{
-  GstMpegtsDescriptor *descriptor;
-
-  descriptor = _new_descriptor_with_extension (tag, tag_extension, length);
-
-  if (data && (length > 0))
-    memcpy (descriptor->data + 3, data, length);
 
   return descriptor;
 }

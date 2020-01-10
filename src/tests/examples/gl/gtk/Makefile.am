@@ -1,5 +1,5 @@
 
-SUBDIRS = . filternovideooverlay filtervideooverlay fxtest switchvideooverlay 3dvideo
+SUBDIRS = . gtkvideooverlay filternovideooverlay filtervideooverlay fxtest switchvideooverlay
 
 noinst_LTLIBRARIES = libgstgtkhelper.la
 

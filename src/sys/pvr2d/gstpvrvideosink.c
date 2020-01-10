@@ -1316,8 +1316,11 @@ gst_pvrvideosink_dcontext_free (GstDrawContext * dcontext)
 {
   GST_DEBUG ("Freeing dcontext %p", dcontext);
 
-  g_free (dcontext->p_blt_info);
-  g_free (dcontext->p_blt2d_info);
+  if (dcontext->p_blt_info)
+    g_free (dcontext->p_blt_info);
+
+  if (dcontext->p_blt2d_info)
+    g_free (dcontext->p_blt2d_info);
 
   if (dcontext->x_lock)
     g_mutex_lock (dcontext->x_lock);
@@ -1464,8 +1467,8 @@ gst_pvrvideosink_class_init (GstPVRVideoSinkClass * klass)
       "A PVR videosink",
       "Luciana Fujii Pontello <luciana.fujii@collabora.co.uk");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_pvrvideosink_sink_template_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_pvrvideosink_sink_template_factory));
 
   gstelement_class->change_state = gst_pvrvideosink_change_state;
 

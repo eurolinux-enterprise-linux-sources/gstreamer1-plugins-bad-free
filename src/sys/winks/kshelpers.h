@@ -22,7 +22,6 @@
 
 #include <glib.h>
 #include <windows.h>
-#include <mmsystem.h>
 #include <ks.h>
 
 G_BEGIN_DECLS
@@ -38,7 +37,7 @@ struct _KsDeviceEntry
 
 gboolean ks_is_valid_handle (HANDLE h);
 
-GList * ks_enumerate_devices (const GUID * devtype, const GUID * direction_category);
+GList * ks_enumerate_devices (const GUID * category);
 void ks_device_entry_free (KsDeviceEntry * entry);
 void ks_device_list_free (GList * devices);
 

@@ -153,10 +153,6 @@ gst_kate_util_decoder_base_queue_event (GstKateDecoderBase * decoder,
     case GST_EVENT_EOS:
       can_be_queued = FALSE;
       break;
-    case GST_EVENT_SEGMENT:
-      gst_kate_util_decoder_base_segment_event (decoder, event);
-      can_be_queued = TRUE;
-      break;
     default:
       can_be_queued = TRUE;
       break;
@@ -371,9 +367,11 @@ gst_kate_util_decoder_base_chain_kate_packet (GstKateDecoderBase * decoder,
         }
 
         /* update properties */
-        g_free (decoder->language);
+        if (decoder->language)
+          g_free (decoder->language);
         decoder->language = g_strdup (decoder->k.ki->language);
-        g_free (decoder->category);
+        if (decoder->category)
+          g_free (decoder->category);
         decoder->category = g_strdup (decoder->k.ki->category);
         decoder->original_canvas_width = decoder->k.ki->original_canvas_width;
         decoder->original_canvas_height = decoder->k.ki->original_canvas_height;

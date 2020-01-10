@@ -22,7 +22,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
-#include <gst/base/gstaggregator.h>
+#include <gst/base/gstcollectpads.h>
 
 #include "mxfessence.h"
 
@@ -39,6 +39,26 @@ G_BEGIN_DECLS
 #define GST_IS_MXF_MUX_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_MXF_MUX))
 
+typedef struct
+{
+  GstCollectData collect;
+
+  guint64 pos;
+  GstClockTime last_timestamp;
+
+  MXFMetadataFileDescriptor *descriptor;
+
+  GstAdapter *adapter;
+  gboolean have_complete_edit_unit;
+
+  gpointer mapping_data;
+  const MXFEssenceElementWriter *writer;
+  MXFEssenceElementWriteFunc write_func;
+
+  MXFMetadataSourcePackage *source_package;
+  MXFMetadataTimelineTrack *source_track;
+} GstMXFMuxPad;
+
 typedef enum
 {
   GST_MXF_MUX_STATE_HEADER,
@@ -48,9 +68,14 @@ typedef enum
 } GstMXFMuxState;
 
 typedef struct _GstMXFMux {
-  GstAggregator parent;
+  GstElement element;
+
+  GstPad *srcpad;
+  GstCollectPads *collect;
 
   /* <private> */
+  GstPadEventFunction collect_event;
+
   GstMXFMuxState state;
   guint n_pads;
 
@@ -58,7 +83,7 @@ typedef struct _GstMXFMux {
 
   MXFPartitionPack partition;
   MXFPrimerPack primer;
-
+  
   GHashTable *metadata;
   GList *metadata_list;
   MXFMetadataPreface *preface;
@@ -68,12 +93,10 @@ typedef struct _GstMXFMux {
   GstClockTime last_gc_timestamp;
 
   gchar *application;
-
-  GArray *index_table;
 } GstMXFMux;
 
 typedef struct _GstMXFMuxClass {
-  GstAggregatorClass parent;
+  GstElementClass parent;
 } GstMXFMuxClass;
 
 GType gst_mxf_mux_get_type (void);

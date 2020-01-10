@@ -31,7 +31,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 filesrc location=test.ogg ! decodebin ! audioconvert ! speed speed=1.5 ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch filesrc location=test.ogg ! decodebin ! audioconvert ! speed speed=1.5 ! audioconvert ! audioresample ! autoaudiosink
  * ]| Plays an .ogg file at 1.5x speed.
  * </refsect2>
  */
@@ -52,8 +52,8 @@ GST_DEBUG_CATEGORY_STATIC (speed_debug);
 
 enum
 {
-  PROP_0,
-  PROP_SPEED
+  ARG_0,
+  ARG_SPEED
 };
 
 /* assumption here: sizeof (gfloat) = 4 */
@@ -388,9 +388,9 @@ gst_speed_class_init (GstSpeedClass * klass)
   gobject_class->get_property = speed_get_property;
   gstelement_class->change_state = speed_change_state;
 
-  g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_SPEED,
+  g_object_class_install_property (G_OBJECT_CLASS (klass), ARG_SPEED,
       g_param_spec_float ("speed", "speed", "speed",
-          0.1f, 40.0, 1.0,
+          0.1, 40.0, 1.0,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_set_static_metadata (gstelement_class, "Speed",
@@ -399,10 +399,10 @@ gst_speed_class_init (GstSpeedClass * klass)
       "Andy Wingo <apwingo@eos.ncsu.edu>, "
       "Tim-Philipp Müller <tim@centricular.net>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_speed_src_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_speed_sink_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_speed_src_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_speed_sink_template));
 }
 
 static void
@@ -641,7 +641,7 @@ speed_set_property (GObject * object, guint prop_id, const GValue * value,
   GstSpeed *filter = GST_SPEED (object);
 
   switch (prop_id) {
-    case PROP_SPEED:
+    case ARG_SPEED:
       filter->speed = g_value_get_float (value);
       break;
     default:
@@ -658,7 +658,7 @@ speed_get_property (GObject * object, guint prop_id, GValue * value,
   GstSpeed *filter = GST_SPEED (object);
 
   switch (prop_id) {
-    case PROP_SPEED:
+    case ARG_SPEED:
       g_value_set_float (value, filter->speed);
       break;
     default:

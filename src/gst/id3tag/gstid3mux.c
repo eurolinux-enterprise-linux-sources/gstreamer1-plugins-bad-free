@@ -37,12 +37,12 @@
  * <refsect2>
  * <title>Example pipelines</title>
  * |[
- * gst-launch-1.0 -v filesrc location=foo.ogg ! decodebin ! audioconvert ! id3mux ! filesink location=foo.mp3
+ * gst-launch -v filesrc location=foo.ogg ! decodebin ! audioconvert ! lame ! id3mux ! filesink location=foo.mp3
  * ]| A pipeline that transcodes a file from Ogg/Vorbis to mp3 format with
  * ID3 tags that contain the same metadata as the the Ogg/Vorbis file.
  * Make sure the Ogg/Vorbis file actually has comments to preserve.
  * |[
- * gst-launch-1.0 -m filesrc location=foo.mp3 ! id3demux ! fakesink silent=TRUE
+ * gst-launch -m filesrc location=foo.mp3 ! id3demux ! fakesink silent=TRUE 2&gt; /dev/null | grep taglist
  * ]| Verify that tags have been written.
  * </refsect2>
  */
@@ -61,10 +61,10 @@ GST_DEBUG_CATEGORY (gst_id3_mux_debug);
 
 enum
 {
-  PROP_0,
-  PROP_WRITE_V1,
-  PROP_WRITE_V2,
-  PROP_V2_MAJOR_VERSION
+  ARG_0,
+  ARG_WRITE_V1,
+  ARG_WRITE_V2,
+  ARG_V2_MAJOR_VERSION
 };
 
 #define DEFAULT_WRITE_V1 FALSE
@@ -102,17 +102,17 @@ gst_id3_mux_class_init (GstId3MuxClass * klass)
   gobject_class->set_property = gst_id3_mux_set_property;
   gobject_class->get_property = gst_id3_mux_get_property;
 
-  g_object_class_install_property (gobject_class, PROP_WRITE_V1,
+  g_object_class_install_property (gobject_class, ARG_WRITE_V1,
       g_param_spec_boolean ("write-v1", "Write id3v1 tag",
           "Write an id3v1 tag at the end of the file", DEFAULT_WRITE_V1,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_WRITE_V2,
+  g_object_class_install_property (gobject_class, ARG_WRITE_V2,
       g_param_spec_boolean ("write-v2", "Write id3v2 tag",
           "Write an id3v2 tag at the start of the file", DEFAULT_WRITE_V2,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_V2_MAJOR_VERSION,
+  g_object_class_install_property (gobject_class, ARG_V2_MAJOR_VERSION,
       g_param_spec_int ("v2-version", "Version (3 or 4) of id3v2 tag",
           "Set version (3 for id3v2.3, 4 for id3v2.4) of id3v2 tags",
           3, 4, DEFAULT_V2_MAJOR_VERSION,
@@ -129,8 +129,11 @@ gst_id3_mux_class_init (GstId3MuxClass * klass)
       "Michael Smith <msmith@songbirdnest.com>, "
       "Tim-Philipp Müller <tim centricular net>");
 
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
-  gst_element_class_add_static_pad_template (element_class, &src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
+
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
 }
 
 static void
@@ -149,13 +152,13 @@ gst_id3_mux_set_property (GObject * object, guint prop_id,
   GstId3Mux *mux = GST_ID3_MUX (object);
 
   switch (prop_id) {
-    case PROP_WRITE_V1:
+    case ARG_WRITE_V1:
       mux->write_v1 = g_value_get_boolean (value);
       break;
-    case PROP_WRITE_V2:
+    case ARG_WRITE_V2:
       mux->write_v2 = g_value_get_boolean (value);
       break;
-    case PROP_V2_MAJOR_VERSION:
+    case ARG_V2_MAJOR_VERSION:
       mux->v2_major_version = g_value_get_int (value);
       break;
     default:
@@ -171,13 +174,13 @@ gst_id3_mux_get_property (GObject * object, guint prop_id,
   GstId3Mux *mux = GST_ID3_MUX (object);
 
   switch (prop_id) {
-    case PROP_WRITE_V1:
+    case ARG_WRITE_V1:
       g_value_set_boolean (value, mux->write_v1);
       break;
-    case PROP_WRITE_V2:
+    case ARG_WRITE_V2:
       g_value_set_boolean (value, mux->write_v2);
       break;
-    case PROP_V2_MAJOR_VERSION:
+    case ARG_V2_MAJOR_VERSION:
       g_value_set_int (value, mux->v2_major_version);
       break;
     default:

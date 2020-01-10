@@ -24,22 +24,22 @@
  * SECTION:element-ladspa
  * @short_description: bridge for LADSPA (Linux Audio Developer's Simple Plugin API)
  * @see_also: #GstAudioConvert #GstAudioResample, #GstAudioTestSrc, #GstAutoAudioSink
- *
+ * 
  * The LADSPA (Linux Audio Developer's Simple Plugin API) element is a bridge
  * for plugins using the <ulink url="http://www.ladspa.org/">LADSPA</ulink> API.
  * It scans all installed LADSPA plugins and registers them as gstreamer
  * elements. If available it can also parse LRDF files and use the metadata for
  * element classification. The functionality you get depends on the LADSPA plugins
  * you have installed.
- *
+ * 
  * <refsect2>
  * <title>Example LADSPA line without this plugins</title>
  * |[
  * (padsp) listplugins
  * (padsp) analyseplugin cmt.so amp_mono
- * gst-launch-1.0 -e filesrc location="$myfile" ! decodebin ! audioconvert ! audioresample ! "audio/x-raw,format=S16LE,rate=48000,channels=1" ! wavenc ! filesink location="testin.wav"
- * (padsp) applyplugin testin.wav testout.wav cmt.so amp_mono 2
- * gst-launch-1.0 playbin uri=file://"$PWD"/testout.wav
+ * gst-launch -e filesrc location="$myfile" ! decodebin ! audioconvert ! audioresample ! "audio/x-raw,format=S16LE,rate=48000,channels=1" ! wavenc ! filesink location="testin.wav"
+ * (padsp) applyplugin testin.wav testout.wav cmt.so amp_mono 2 
+ * gst-launch playbin uri=file://"$PWD"/testout.wav
  * ]| Decode any audio file into wav with the format expected for the specific ladspa plugin to be applied, apply the ladspa filter and play it.
  * </refsect2>
  *
@@ -48,7 +48,7 @@
  * <refsect2>
  * <title>Example LADSPA line with this plugins</title>
  * |[
- * gst-launch-1.0 autoaudiosrc ! ladspa-cmt-so-amp-mono gain=2 ! ladspa-caps-so-plate ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! tee name=myT myT. ! queue ! autoaudiosink myT. ! queue ! audioconvert ! goom ! videoconvert ! xvimagesink pixel-aspect-ratio=3/4
+ * gst-launch autoaudiosrc ! ladspa-cmt-so-amp-mono gain=2 ! ladspa-caps-so-plate ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! tee name=myT myT. ! queue ! autoaudiosink myT. ! queue ! audioconvert ! goom ! videoconvert ! xvimagesink pixel-aspect-ratio=3/4
  * ]| Get audio input, filter it through CAPS Plate and TAP Stereo Echo, play it and show a visualization (recommended hearphones).
  * </refsect2>
  *
@@ -76,33 +76,33 @@
  * ]| List details of the plugin, parameters, range and defaults included.
  * </refsect2>
  *
- * The elements categorize in:
+ * The elements categorize in: 
  * <itemizedlist>
  * <listitem><para>Filter/Effect/Audio/LADSPA:</para>
  * <refsect2>
  * <title>Example Filter/Effect/Audio/LADSPA line with this plugins</title>
  * |[
- * gst-launch-1.0 filesrc location="$myfile" ! decodebin ! audioconvert ! audioresample ! ladspa-calf-so-reverb decay-time=15 high-frq-damp=20000 room-size=5 diffusion=1 wet-amount=2 dry-amount=2 pre-delay=50 bass-cut=20000 treble-cut=20000 ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! autoaudiosink
+ * gst-launch filesrc location="$myfile" ! decodebin ! audioconvert ! audioresample ! ladspa-calf-so-reverb decay-time=15 high-frq-damp=20000 room-size=5 diffusion=1 wet-amount=2 dry-amount=2 pre-delay=50 bass-cut=20000 treble-cut=20000 ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! autoaudiosink
  * ]| Decode any audio file, filter it through Calf Reverb LADSPA then TAP Stereo Echo, and play it.
  * </refsect2>
  * </listitem>
- * <listitem><para>Source/Audio/LADSPA:</para>
+ * <listitem><para>Source/Audio/LADSPA:</para> 
  * <refsect2>
  * <title>Example Source/Audio/LADSPA line with this plugins</title>
  * |[
- * gst-launch-1.0 ladspasrc-sine-so-sine-fcac frequency=220 amplitude=100 ! audioconvert ! autoaudiosink
+ * gst-launch ladspasrc-sine-so-sine-fcac frequency=220 amplitude=100 ! audioconvert ! autoaudiosink
  * ]| Generate a sine wave with Sine Oscillator (Freq:control, Amp:control) and play it.
  * </refsect2>
  * <refsect2>
  * <title>Example Source/Audio/LADSPA line with this plugins</title>
  * |[
- * gst-launch-1.0 ladspasrc-caps-so-click bpm=240 volume=1 ! autoaudiosink
+ * gst-launch ladspasrc-caps-so-click bpm=240 volume=1 ! autoaudiosink
  * ]| Generate clicks with CAPS Click - Metronome at 240 beats per minute and play it.
  * </refsect2>
  * <refsect2>
  * <title>Example Source/Audio/LADSPA line with this plugins</title>
  * |[
- * gst-launch-1.0 ladspasrc-random-1661-so-random-fcsc-oa ! ladspa-cmt-so-amp-mono gain=1.5 ! ladspa-caps-so-plate ! tee name=myT myT. ! queue ! autoaudiosink myT. ! queue ! audioconvert ! wavescope ! videoconvert ! autovideosink
+ * gst-launch ladspasrc-random-1661-so-random-fcsc-oa ! ladspa-cmt-so-amp-mono gain=1.5 ! ladspa-caps-so-plate ! tee name=myT myT. ! queue ! autoaudiosink myT. ! queue ! audioconvert ! wavescope ! videoconvert ! autovideosink
  * ]| Generate random wave, filter it trhough Mono Amplifier and Versatile Plate Reverb, and play, while showing, it.
  * </refsect2>
  * </listitem>
@@ -110,7 +110,7 @@
  * <refsect2>
  * <title>Example Sink/Audio/LADSPA line with this plugins</title>
  * |[
- * gst-launch-1.0 autoaudiosrc ! ladspa-cmt-so-amp-mono gain=2 ! ladspa-caps-so-plate ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! tee name=myT myT. ! audioconvert ! audioresample ! queue ! ladspasink-cmt-so-null-ai myT. ! audioconvert ! audioresample ! queue ! goom ! videoconvert ! xvimagesink pixel-aspect-ratio=3/4
+ * gst-launch autoaudiosrc ! ladspa-cmt-so-amp-mono gain=2 ! ladspa-caps-so-plate ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! tee name=myT myT. ! audioconvert ! audioresample ! queue ! ladspasink-cmt-so-null-ai myT. ! audioconvert ! audioresample ! queue ! goom ! videoconvert ! xvimagesink pixel-aspect-ratio=3/4
  * ]| Get audio input, filter it trhough Mono Amplifier, CAPS Plate LADSPA and TAP Stereo Echo, explicitily anulate audio with Null (Audio Output), and play a visualization (recommended hearphones).
  * </refsect2>
  * </listitem>
@@ -236,7 +236,8 @@ ladspa_describe_plugin (const gchar * file_name, const gchar * entry_name,
       continue;
     }
 
-    ladspa_meta = gst_structure_new ("ladspa",
+    ladspa_meta = gst_structure_new_empty ("ladspa");
+    gst_structure_set (ladspa_meta,
         "plugin-filename", G_TYPE_STRING, file_name,
         "element-ix", G_TYPE_UINT, i,
         "element-type-name", G_TYPE_STRING, type_name,
@@ -359,7 +360,7 @@ ladspa_plugin_path_search (GstPlugin * plugin)
     }
     if (skip)
       break;
-    /*
+    /* 
      * transform path: /usr/lib/ladspa -> /usr/share/ladspa/rdf/
      * yes, this is ugly, but lrdf has not searchpath
      */
@@ -401,8 +402,8 @@ plugin_init (GstPlugin * plugin)
   GST_DEBUG_CATEGORY_INIT (ladspa_debug, "ladspa", 0, "LADSPA plugins");
 
 #ifdef ENABLE_NLS
-  GST_DEBUG_OBJECT (plugin, "binding text domain %s to locale dir %s",
-      GETTEXT_PACKAGE, LOCALEDIR);
+  GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+      LOCALEDIR);
   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 #endif
@@ -419,12 +420,13 @@ plugin_init (GstPlugin * plugin)
   if (ladspa_meta_all) {
     n = gst_structure_n_fields (ladspa_meta_all);
   }
-  GST_INFO_OBJECT (plugin, "%d entries in cache", n);
+  GST_INFO ("%d entries in cache", n);
   if (!n) {
     ladspa_meta_all = gst_structure_new_empty ("ladspa");
-    if ((res = ladspa_plugin_path_search (plugin))) {
+    res = ladspa_plugin_path_search (plugin);
+    if (res) {
       n = gst_structure_n_fields (ladspa_meta_all);
-      GST_INFO_OBJECT (plugin, "%d entries after scanning", n);
+      GST_INFO ("%d entries after scanning", n);
       gst_plugin_set_cache_data (plugin, ladspa_meta_all);
     }
   } else {
@@ -436,7 +438,7 @@ plugin_init (GstPlugin * plugin)
     const gchar *name;
     const GValue *value;
 
-    GST_INFO_OBJECT (plugin, "register types");
+    GST_INFO ("register types");
 
     for (i = 0; i < n; i++) {
       name = gst_structure_nth_field_name (ladspa_meta_all, i);
@@ -450,7 +452,7 @@ plugin_init (GstPlugin * plugin)
   }
 
   if (!res) {
-    GST_WARNING_OBJECT (plugin, "no LADSPA plugins found, check LADSPA_PATH");
+    GST_WARNING ("no LADSPA plugins found, check LADSPA_PATH");
   }
 
   /* we don't want to fail, even if there are no elements registered */

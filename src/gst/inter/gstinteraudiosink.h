@@ -41,8 +41,8 @@ struct _GstInterAudioSink
   GstInterSurface *surface;
   char *channel;
 
-  GstAdapter *input_adapter;
-  GstAudioInfo info;
+  int fps_n;
+  int fps_d;
 };
 
 struct _GstInterAudioSinkClass

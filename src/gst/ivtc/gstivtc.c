@@ -27,8 +27,8 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc pattern=ball ! video/x-raw,framerate=24/1 !
- *     interlace !
+ * gst-launch -v videotestsrc pattern=ball ! video/x-raw,framerate=24/1 !
+ *     interlace field-pattern=3:2 !
  *     ivtc ! video/x-raw,framerate=24/1 ! fakesink
  * ]|
  *
@@ -119,10 +119,10 @@ gst_ivtc_class_init (GstIvtcClass * klass)
 
   /* Setting up pads and setting metadata should be moved to
      base_class_init if you intend to subclass this class. */
-  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
-      &gst_ivtc_sink_template);
-  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
-      &gst_ivtc_src_template);
+  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
+      gst_static_pad_template_get (&gst_ivtc_sink_template));
+  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
+      gst_static_pad_template_get (&gst_ivtc_src_template));
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "Inverse Telecine", "Video/Filter", "Inverse Telecine Filter",
@@ -169,8 +169,8 @@ gst_ivtc_transform_caps (GstBaseTransform * trans,
       gst_structure_set_value (structure, "interlace-mode", &value);
       gst_structure_remove_field (structure, "framerate");
     }
-    g_value_unset (&value);
-    g_value_unset (&v);
+    g_value_reset (&value);
+    g_value_reset (&v);
   } else {
     for (i = 0; i < gst_caps_get_size (othercaps); i++) {
       GstStructure *structure = gst_caps_get_structure (othercaps, i);

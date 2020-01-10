@@ -56,7 +56,6 @@ struct _GstIvfParse
   guint height;
   guint fps_n;
   guint fps_d;
-  guint32 fourcc;
   gboolean update_caps;
 };
 

@@ -29,15 +29,20 @@
  *
  * Sample pipeline:
  * |[
- * gst-launch-1.0 videotestsrc pattern=smpte75 ! \
+ * gst-launch videotestsrc pattern=smpte75 ! \
  *   chromahold target-r=0 target-g=0 target-b=255 ! \
  *   videoconvert ! autovideosink     \
  * ]| This pipeline only keeps the red color.
  */
 
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
+/* FIXME 0.11: suppress warnings for deprecated API such as GStaticRecMutex
+ * with newer GLib versions (>= 2.31.0) */
+#define GLIB_DISABLE_DEPRECATION_WARNINGS
 
 #include "gstchromahold.h"
 
@@ -59,7 +64,8 @@ enum
   PROP_TARGET_R,
   PROP_TARGET_G,
   PROP_TARGET_B,
-  PROP_TOLERANCE
+  PROP_TOLERANCE,
+  PROP_LAST
 };
 
 static GstStaticPadTemplate gst_chroma_hold_src_template =
@@ -153,10 +159,10 @@ gst_chroma_hold_class_init (GstChromaHoldClass * klass)
       "Removes all color information except for one color",
       "Sebastian Dröge <sebastian.droege@collabora.co.uk>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_chroma_hold_sink_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_chroma_hold_src_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_chroma_hold_sink_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_chroma_hold_src_template));
 
   GST_DEBUG_CATEGORY_INIT (gst_chroma_hold_debug, "chromahold", 0,
       "chromahold - Removes all color information except for one color");

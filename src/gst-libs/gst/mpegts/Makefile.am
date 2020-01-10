@@ -63,9 +63,8 @@ gir_sources=$(patsubst %,$(srcdir)/%, $(libgstmpegts_@GST_API_VERSION@_la_SOURCE
 gir_sources+=$(patsubst %,$(builddir)/%, $(built_sources))
 
 GstMpegts-@GST_API_VERSION@.gir: $(INTROSPECTION_SCANNER) libgstmpegts-@GST_API_VERSION@.la
-	$(AM_V_GEN)PKG_CONFIG_PATH="$(GST_PKG_CONFIG_PATH)"  GI_SCANNER_DISABLE_CACHE=yes\
+	$(AM_V_GEN)PKG_CONFIG_PATH="$(GST_PKG_CONFIG_PATH)" \
 		GST_PLUGIN_SYSTEM_PATH_1_0="" GST_PLUGIN_PATH_1_0="" GST_REGISTRY_UPDATE=no \
-		CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CC="$(CC)" PKG_CONFIG="$(PKG_CONFIG)" DLLTOOL="$(DLLTOOL)" \
 		$(INTROSPECTION_SCANNER) -v --namespace GstMpegts \
 		--nsversion=@GST_API_VERSION@ \
 		--identifier-prefix=GstMpegts \
@@ -83,7 +82,7 @@ GstMpegts-@GST_API_VERSION@.gir: $(INTROSPECTION_SCANNER) libgstmpegts-@GST_API_
 		--pkg gstreamer-@GST_API_VERSION@ \
 		--pkg gstreamer-video-@GST_API_VERSION@ \
 		--pkg-export gstreamer-mpegts-@GST_API_VERSION@ \
-		--add-init-section="$(INTROSPECTION_INIT)" \
+		--add-init-section="gst_init(NULL,NULL);" \
 		-DGST_USE_UNSTABLE_API \
 		--output $@ \
 		$(gir_headers) \
@@ -109,5 +108,21 @@ typelibs_DATA = $(BUILT_GIRSOURCES:.gir=.typelib)
 
 CLEANFILES += $(BUILT_GIRSOURCES) $(typelibs_DATA)
 endif
+
+Android.mk:  $(BUILT_SOURCES) Makefile.am
+	androgenizer -:PROJECT libgstmpegts -:STATIC libgstmpegts-@GST_API_VERSION@ \
+	 -:TAGS eng debug \
+         -:REL_TOP $(top_srcdir) -:ABS_TOP $(abs_top_srcdir) \
+	 -:SOURCES $(libgstmpegts_@GST_API_VERSION@_la_SOURCES) \
+         $(built_sources) \
+	 -:CFLAGS $(DEFS) $(libgstmpegts_@GST_API_VERSION@_la_CFLAGS) \
+	 -:LDFLAGS $(libgstmpegts_@GST_API_VERSION@_la_LDFLAGS) \
+	           $(libgstmpegts@GST_API_VERSION@_la_LIBADD) \
+	           -ldl \
+	 -:HEADER_TARGET gstreamer-@GST_API_VERSION@/gst/mpegts \
+	 -:HEADERS $(libgstmpegtsinclude_HEADERS) \
+         $(built_headers) \
+	 -:PASSTHROUGH LOCAL_ARM_MODE:=arm \
+	> $@
 
 include $(top_srcdir)/common/gst-glib-gen.mak

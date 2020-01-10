@@ -62,7 +62,7 @@
  * <para>
  * This encodes a DVD SPU track to a Kate stream:
  * <programlisting>
- * gst-launch-1.0 dvdreadsrc ! dvddemux ! dvdsubparse ! kateenc category=spu-subtitles ! oggmux ! filesink location=test.ogg
+ * gst-launch dvdreadsrc ! dvddemux ! dvdsubparse ! kateenc category=spu-subtitles ! oggmux ! filesink location=test.ogg
  * </programlisting>
  * </para>
  * </refsect2>
@@ -214,8 +214,10 @@ gst_kate_enc_class_init (GstKateEncClass * klass)
   gstelement_class->change_state =
       GST_DEBUG_FUNCPTR (gst_kate_enc_change_state);
 
-  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
-  gst_element_class_add_static_pad_template (gstelement_class, &sink_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sink_factory));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Kate stream encoder", "Codec/Encoder/Subtitle",
@@ -789,9 +791,12 @@ gst_kate_enc_chain_spu (GstKateEnc * ke, GstBuffer * buf)
   kbitmap = (kate_bitmap *) g_malloc (sizeof (kate_bitmap));
   kpalette = (kate_palette *) g_malloc (sizeof (kate_palette));
   if (!kregion || !kpalette || !kbitmap) {
-    g_free (kregion);
-    g_free (kbitmap);
-    g_free (kpalette);
+    if (kregion)
+      g_free (kregion);
+    if (kbitmap)
+      g_free (kbitmap);
+    if (kpalette)
+      g_free (kpalette);
     GST_ELEMENT_ERROR (ke, STREAM, ENCODE, (NULL), ("Out of memory"));
     return GST_FLOW_ERROR;
   }

@@ -100,7 +100,8 @@ gst_mms_class_init (GstMMSClass * klass)
           0, G_MAXINT / 1000, DEFAULT_CONNECTION_SPEED,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&src_factory));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "MMS streaming source", "Source/Network",
@@ -608,7 +609,8 @@ gst_mms_uri_set_uri (GstURIHandler * handler, const gchar * uri,
   }
 
   GST_OBJECT_LOCK (src);
-  g_free (src->uri_name);
+  if (src->uri_name)
+    g_free (src->uri_name);
   src->uri_name = fixed_uri;
   GST_OBJECT_UNLOCK (src);
 

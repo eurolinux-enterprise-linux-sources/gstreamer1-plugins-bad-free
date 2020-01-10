@@ -87,10 +87,10 @@ gst_rgb2bayer_class_init (GstRGB2BayerClass * klass)
 
   gobject_class->finalize = gst_rgb2bayer_finalize;
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_rgb2bayer_src_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_rgb2bayer_sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_rgb2bayer_src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_rgb2bayer_sink_template));
 
   gst_element_class_set_static_metadata (element_class,
       "RGB to Bayer converter",
@@ -126,35 +126,41 @@ static GstCaps *
 gst_rgb2bayer_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter)
 {
-  GstRGB2Bayer *rgb2bayer;
-  GstCaps *res_caps, *tmp_caps;
   GstStructure *structure;
-  guint i, caps_size;
+  GstStructure *new_structure;
+  GstCaps *newcaps;
+  const GValue *value;
 
-  rgb2bayer = GST_RGB_2_BAYER (trans);
+  GST_DEBUG_OBJECT (trans, "transforming caps (from) %" GST_PTR_FORMAT, caps);
 
-  res_caps = gst_caps_copy (caps);
-  caps_size = gst_caps_get_size (res_caps);
-  for (i = 0; i < caps_size; i++) {
-    structure = gst_caps_get_structure (res_caps, i);
-    if (direction == GST_PAD_SRC) {
-      gst_structure_set_name (structure, "video/x-raw");
-      gst_structure_remove_field (structure, "format");
-    } else {
-      gst_structure_set_name (structure, "video/x-bayer");
-      gst_structure_remove_fields (structure, "format", "colorimetry",
-          "chroma-site", NULL);
-    }
+  structure = gst_caps_get_structure (caps, 0);
+
+  if (direction == GST_PAD_SRC) {
+    newcaps = gst_caps_new_empty_simple ("video/x-raw");
+  } else {
+    newcaps = gst_caps_new_empty_simple ("video/x-bayer");
   }
+  new_structure = gst_caps_get_structure (newcaps, 0);
+
+  value = gst_structure_get_value (structure, "width");
+  gst_structure_set_value (new_structure, "width", value);
+
+  value = gst_structure_get_value (structure, "height");
+  gst_structure_set_value (new_structure, "height", value);
+
+  value = gst_structure_get_value (structure, "framerate");
+  gst_structure_set_value (new_structure, "framerate", value);
+
+  GST_DEBUG_OBJECT (trans, "transforming caps (into) %" GST_PTR_FORMAT,
+      newcaps);
+
   if (filter) {
-    tmp_caps = res_caps;
-    res_caps =
-        gst_caps_intersect_full (filter, tmp_caps, GST_CAPS_INTERSECT_FIRST);
-    gst_caps_unref (tmp_caps);
+    GstCaps *tmpcaps = newcaps;
+    newcaps = gst_caps_intersect (newcaps, filter);
+    gst_caps_unref (tmpcaps);
   }
-  GST_DEBUG_OBJECT (rgb2bayer, "transformed %" GST_PTR_FORMAT " into %"
-      GST_PTR_FORMAT, caps, res_caps);
-  return res_caps;
+
+  return newcaps;
 }
 
 static gboolean
@@ -173,7 +179,7 @@ gst_rgb2bayer_get_unit_size (GstBaseTransform * trans, GstCaps * caps,
     name = gst_structure_get_name (structure);
     /* Our name must be either video/x-bayer video/x-raw */
     if (g_str_equal (name, "video/x-bayer")) {
-      *size = GST_ROUND_UP_4 (width) * height;
+      *size = width * height;
       return TRUE;
     } else {
       /* For output, calculate according to format */
@@ -237,20 +243,15 @@ gst_rgb2bayer_transform (GstBaseTransform * trans, GstBuffer * inbuf,
   int width = rgb2bayer->width;
   GstVideoFrame frame;
 
-  if (!gst_video_frame_map (&frame, &rgb2bayer->info, inbuf, GST_MAP_READ))
-    goto map_failed;
+  gst_video_frame_map (&frame, &rgb2bayer->info, inbuf, GST_MAP_READ);
 
-  if (!gst_buffer_map (outbuf, &map, GST_MAP_READ)) {
-    gst_video_frame_unmap (&frame);
-    goto map_failed;
-  }
-
+  gst_buffer_map (outbuf, &map, GST_MAP_READ);
   dest = map.data;
   src = GST_VIDEO_FRAME_PLANE_DATA (&frame, 0);
 
   for (j = 0; j < height; j++) {
-    guint8 *dest_line = dest + GST_ROUND_UP_4 (width) * j;
-    guint8 *src_line = src + frame.info.stride[0] * j;
+    guint8 *dest_line = dest + width * j;
+    guint8 *src_line = src + width * 4 * j;
 
     for (i = 0; i < width; i++) {
       int is_blue = ((j & 1) << 1) | (i & 1);
@@ -263,13 +264,8 @@ gst_rgb2bayer_transform (GstBaseTransform * trans, GstBuffer * inbuf,
       }
     }
   }
-
   gst_buffer_unmap (outbuf, &map);
   gst_video_frame_unmap (&frame);
 
-  return GST_FLOW_OK;
-
-map_failed:
-  GST_WARNING_OBJECT (trans, "Could not map buffer, skipping");
   return GST_FLOW_OK;
 }

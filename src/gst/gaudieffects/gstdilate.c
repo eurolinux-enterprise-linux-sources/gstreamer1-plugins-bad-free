@@ -1,6 +1,6 @@
 /*
  * GStreamer
- * Copyright (C) <2010-2015> Luis de Bethencourt <luis@debethencourt.com>
+ * Copyright (C) <2010-2012> Luis de Bethencourt <luis@debethencourt.com>
  *
  * Dilate - dilated eye video effect.
  * Based on Pete Warden's FreeFrame plugin with the same name.
@@ -52,7 +52,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! dilate ! videoconvert ! autovideosink
+ * gst-launch -v videotestsrc ! dilate ! videoconvert ! autovideosink
  * ]| This pipeline shows the effect of dilate on a test stream
  * </refsect2>
  */
@@ -89,6 +89,7 @@ enum
 {
   PROP_0,
   PROP_ERODE,
+  PROP_SILENT
 };
 
 /* Initializations */
@@ -140,10 +141,10 @@ gst_dilate_class_init (GstDilateClass * klass)
       "Dilate copies the brightest pixel around.",
       "Luis de Bethencourt <luis@debethencourt.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_dilate_sink_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_dilate_src_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_dilate_sink_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_dilate_src_template));
 
   gobject_class->set_property = gst_dilate_set_property;
   gobject_class->get_property = gst_dilate_get_property;
@@ -152,6 +153,10 @@ gst_dilate_class_init (GstDilateClass * klass)
   g_object_class_install_property (gobject_class, PROP_ERODE,
       g_param_spec_boolean ("erode", "Erode", "Erode parameter", FALSE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE));
+
+  g_object_class_install_property (gobject_class, PROP_SILENT,
+      g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
+          FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   vfilter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_dilate_transform_frame);
@@ -166,6 +171,7 @@ static void
 gst_dilate_init (GstDilate * filter)
 {
   filter->erode = DEFAULT_ERODE;
+  filter->silent = FALSE;
 }
 
 static void
@@ -175,6 +181,9 @@ gst_dilate_set_property (GObject * object, guint prop_id,
   GstDilate *filter = GST_DILATE (object);
 
   switch (prop_id) {
+    case PROP_SILENT:
+      filter->silent = g_value_get_boolean (value);
+      break;
     case PROP_ERODE:
       filter->erode = g_value_get_boolean (value);
       break;
@@ -192,6 +201,9 @@ gst_dilate_get_property (GObject * object, guint prop_id,
 
   GST_OBJECT_LOCK (filter);
   switch (prop_id) {
+    case PROP_SILENT:
+      g_value_set_boolean (value, filter->silent);
+      break;
     case PROP_ERODE:
       g_value_set_boolean (value, filter->erode);
       break;
@@ -293,63 +305,122 @@ transform (guint32 * src, guint32 * dest, gint video_area, gint width,
   guint32 *down;
   guint32 *right;
 
-  while (src != src_end) {
-    guint32 *src_line_start = src;
-    guint32 *src_line_end = src + width;
+  if (erode) {
 
-    while (src != src_line_end) {
-      up = src - width;
-      if (up < src) {
-        up = src;
+    while (src != src_end) {
+      guint32 *src_line_start = src;
+      guint32 *src_line_end = src + width;
+      while (src != src_line_end) {
+
+        up = src - width;
+        if (up < src) {
+          up = src;
+        }
+
+        left = src - 1;
+        if (left < src_line_start) {
+          left = src;
+        }
+
+        down = src + width;
+        if (down >= src_end) {
+          down = src;
+        }
+
+        right = src + 1;
+        if (right >= src_line_end) {
+          right = src;
+        }
+
+        *dest = *src;
+        out_luminance = get_luminance (*src);
+
+        down_luminance = get_luminance (*down);
+        if (down_luminance < out_luminance) {
+          *dest = *down;
+          out_luminance = down_luminance;
+        }
+
+        right_luminance = get_luminance (*right);
+        if (right_luminance < out_luminance) {
+          *dest = *right;
+          out_luminance = right_luminance;
+        }
+
+        up_luminance = get_luminance (*up);
+        if (up_luminance < out_luminance) {
+          *dest = *up;
+          out_luminance = up_luminance;
+        }
+
+        left_luminance = get_luminance (*left);
+        if (left_luminance < out_luminance) {
+          *dest = *left;
+          out_luminance = left_luminance;
+        }
+
+        src += 1;
+        dest += 1;
       }
+    }
 
-      left = src - 1;
-      if (left < src_line_start) {
-        left = src;
+  } else {
+
+    while (src != src_end) {
+      guint32 *src_line_start = src;
+      guint32 *src_line_end = src + width;
+      while (src != src_line_end) {
+
+        up = src - width;
+        if (up < src) {
+          up = src;
+        }
+
+        left = src - 1;
+        if (left < src_line_start) {
+          left = src;
+        }
+
+        down = src + width;
+        if (down >= src_end) {
+          down = src;
+        }
+
+        right = src + 1;
+        if (right >= src_line_end) {
+          right = src;
+        }
+
+        *dest = *src;
+        out_luminance = get_luminance (*src);
+
+        down_luminance = get_luminance (*down);
+        if (down_luminance > out_luminance) {
+          *dest = *down;
+          out_luminance = down_luminance;
+        }
+
+        right_luminance = get_luminance (*right);
+        if (right_luminance > out_luminance) {
+          *dest = *right;
+          out_luminance = right_luminance;
+        }
+
+        up_luminance = get_luminance (*up);
+        if (up_luminance > out_luminance) {
+          *dest = *up;
+          out_luminance = up_luminance;
+        }
+
+        left_luminance = get_luminance (*left);
+        if (left_luminance > out_luminance) {
+          *dest = *left;
+          out_luminance = left_luminance;
+        }
+
+        src += 1;
+        dest += 1;
       }
-
-      down = src + width;
-      if (down >= src_end) {
-        down = src;
-      }
-
-      right = src + 1;
-      if (right >= src_line_end) {
-        right = src;
-      }
-
-      *dest = *src;
-      out_luminance = get_luminance (*src);
-
-      down_luminance = get_luminance (*down);
-      if ((erode && down_luminance < out_luminance) ||
-          (!erode && down_luminance > out_luminance)) {
-        *dest = *down;
-        out_luminance = down_luminance;
-      }
-
-      right_luminance = get_luminance (*right);
-      if ((erode && right_luminance < out_luminance) ||
-          (!erode && right_luminance > out_luminance)) {
-        *dest = *right;
-        out_luminance = right_luminance;
-      }
-
-      up_luminance = get_luminance (*up);
-      if ((erode && up_luminance < out_luminance) ||
-          (!erode && up_luminance > out_luminance)) {
-        *dest = *up;
-        out_luminance = up_luminance;
-      }
-
-      left_luminance = get_luminance (*left);
-      if ((erode && left_luminance < out_luminance) ||
-          (!erode && left_luminance > out_luminance)) {
-        *dest = *left;
-      }
-
-      src += 1;
-      dest += 1;
     }
   }
 }

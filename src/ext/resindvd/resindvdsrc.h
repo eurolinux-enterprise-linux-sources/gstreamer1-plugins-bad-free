@@ -23,9 +23,7 @@
 
 #include <gst/base/gstbasesrc.h>
 
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
-#endif
+#include "_stdint.h"
 
 #include <dvdnav/dvdnav.h>
 #include <dvdread/ifo_read.h>
@@ -52,9 +50,9 @@ struct _resinDvdSrc
 
   gboolean	faststart;
 
-  GMutex	dvd_lock;
-  GCond		still_cond;
-  GMutex	branch_lock;
+  GMutex	*dvd_lock;
+  GCond		*still_cond;
+  GMutex	*branch_lock;
   gboolean	branching;
 
   gchar		*device;

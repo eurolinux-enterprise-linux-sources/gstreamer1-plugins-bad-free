@@ -2,15 +2,15 @@
 # Czech translations of gst-plugins.
 # Copyright (C) 2004 gst-plugins' COPYRIGHT HOLDER
 # This file is put in the public domain.
-# Peter Tuhársky <tuharsky@misbb.sk>, 2007, 2008, 2009, 2010, 2014, 2016.
+# Peter Tuhársky <tuharsky@misbb.sk>, 2007, 2008, 2009, 2010, 2014.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: gst-plugins-bad 1.7.2\n"
+"Project-Id-Version: gst-plugins-bad 1.2.1\n"
 "Report-Msgid-Bugs-To: http://bugzilla.gnome.org/\n"
-"POT-Creation-Date: 2017-02-23 15:17+0200\n"
-"PO-Revision-Date: 2016-05-20 12:33+0100\n"
-"Last-Translator: Peter Tuhársky <tuharsky@misbb.sk>\n"
+"POT-Creation-Date: 2014-12-18 12:07+0100\n"
+"PO-Revision-Date: 2014-01-30 10:44+0100\n"
+"Last-Translator: Peter Tuharsky <tuharsky@misbb.sk>\n"
 "Language-Team: Slovak <sk-i18n@lists.linux.sk>\n"
 "Language: sk\n"
 "MIME-Version: 1.0\n"
@@ -18,19 +18,103 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
 "%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
-"X-Generator: Poedit 1.6.10\n"
+"X-Poedit-Language: Slovak\n"
+"X-Poedit-Country: SLOVAKIA\n"
 
-msgid "failed to draw pattern"
-msgstr ""
-
-msgid "A GL error occured"
-msgstr ""
+msgid "Internal data stream error."
+msgstr "Vnútorná chyba prúdu údajov."
 
 msgid "format wasn't negotiated before get function"
-msgstr "formát nebol dohodnutý pred funkciou stiahnutia"
+msgstr ""
 
-msgid "OpenCV failed to load template image"
-msgstr "OpenCV nedokázalo načítať obrazovú šablónu"
+msgid "default GStreamer sound events audiosink"
+msgstr ""
+
+msgid ""
+"GStreamer can play audio using any number of output elements. Some possible "
+"choices are osssink, pulsesink and alsasink. The audiosink can be a partial "
+"pipeline instea of just one element."
+msgstr ""
+
+msgid "description for default GStreamer sound events audiosink"
+msgstr ""
+
+msgid "Describes the selected audiosink element."
+msgstr ""
+
+msgid "default GStreamer audiosink for Audio/Video Conferencing"
+msgstr ""
+
+msgid ""
+"description for default GStreamer audiosink for Audio/Video Conferencing"
+msgstr ""
+
+msgid "default GStreamer audiosink for Music and Movies"
+msgstr ""
+
+msgid "description for default GStreamer audiosink for Music and Movies"
+msgstr ""
+
+msgid "default GStreamer videosink"
+msgstr ""
+
+msgid ""
+"GStreamer can play video using any number of output elements. Some possible "
+"choices are xvimagesink, ximagesink, sdlvideosink and aasink. The videosink "
+"can be a partial pipeline instead of just one element."
+msgstr ""
+
+msgid "description for default GStreamer videosink"
+msgstr ""
+
+msgid "Describes the selected videosink element."
+msgstr ""
+
+msgid "default GStreamer audiosrc"
+msgstr ""
+
+msgid ""
+"GStreamer can record audio using any number of input elements. Some possible "
+"choices are osssrc, pulsesrc and alsasrc. The audio source can be a partial "
+"pipeline instead of just one element."
+msgstr ""
+
+msgid "description for default GStreamer audiosrc"
+msgstr ""
+
+msgid "Describes the selected audiosrc element."
+msgstr ""
+
+msgid "default GStreamer videosrc"
+msgstr ""
+
+msgid ""
+"GStreamer can record video from any number of input elements. Some possible "
+"choices are v4lsrc, v4l2src and videotestsrc. The video source can be a "
+"partial pipeline instead of just one element."
+msgstr ""
+
+msgid "description for default GStreamer videosrc"
+msgstr ""
+
+msgid "Describes the selected videosrc element."
+msgstr ""
+
+msgid "default GStreamer visualization"
+msgstr ""
+
+msgid ""
+"GStreamer can put visualization plugins in a pipeline to transform audio "
+"streams in video frames. Some possible choices are goom, goom2k1 and "
+"synaesthesia. The visualization plugin can be a partial pipeline instead of "
+"just one element."
+msgstr ""
+
+msgid "description for default GStreamer visualization"
+msgstr ""
+
+msgid "Describes the selected visualization element."
+msgstr ""
 
 msgid "Could not read title information for DVD."
 msgstr "Nepodarilo sa prečítať titulok DVD."
@@ -55,8 +139,18 @@ msgstr "Nepodarilo sa prečítať DVD."
 msgid "This file contains no playable streams."
 msgstr "Tento súbor neobsahuje prehrateľné prúdy údajov."
 
+msgid "Couldn't get the Manifest's URI"
+msgstr "Nepodarilo sa získať URI Manifestu"
+
+msgid "Failed to get fragment URL."
+msgstr "Nepodarilo sa získať URL fragmentu."
+
+msgid "Couldn't download fragments"
+msgstr "Nepodarilo sa získať fragmenty"
+
+#, fuzzy
 msgid "Could not open sndfile stream for reading."
-msgstr "Nepodarilo sa otvoriť prúd údajov na čítanie."
+msgstr "Nepodarilo sa otvoriť súbor \"%s\" na čítanie."
 
 msgid "Could not establish connection to sndio"
 msgstr "Nepodarilo sa pripojiť na sndio"
@@ -69,6 +163,9 @@ msgstr "Nepodarilo nastaviť sndio"
 
 msgid "Could not start sndio"
 msgstr "Nepodarilo sa spustiť sndio"
+
+msgid "Internal data flow error."
+msgstr "Vnútorná chyba prúdu údajov."
 
 msgid "Generated file has a larger preroll time than its streams duration"
 msgstr ""
@@ -83,20 +180,8 @@ msgstr ""
 "Umiestnenie súboru je nastavené na NULOVÉ, prosím nastavte platný názov "
 "súboru"
 
-msgid "Digitalzoom element couldn't be created"
-msgstr "Prvok digitálneho priblíženia sa nepodarilo vytvoriť"
-
 msgid "Subpicture format was not configured before data flow"
 msgstr "Formát podobrázku nebol nastavený pred prúdom údajov."
-
-msgid "Failed to get fragment URL."
-msgstr "Nepodarilo sa získať URL fragmentu."
-
-msgid "Couldn't download fragments"
-msgstr "Nepodarilo sa získať fragmenty"
-
-msgid "Internal data stream error."
-msgstr "Vnútorná chyba prúdu údajov."
 
 msgid "No file name specified for writing."
 msgstr "Nebolo zadané žiadne meno súboru pre zápis."
@@ -123,7 +208,7 @@ msgstr "Nepodarilo sa otvoriť ovládacie zariadenie \"%s\"."
 msgid "Could not get settings from frontend device \"%s\"."
 msgstr "Nepodarilo sa získať nastavenia od zariadenia \"%s\"."
 
-#, c-format
+#, fuzzy, c-format
 msgid "Cannot enumerate delivery systems from frontend device \"%s\"."
 msgstr "Nepodarilo sa získať nastavenia od zariadenia \"%s\"."
 
@@ -131,39 +216,19 @@ msgstr "Nepodarilo sa získať nastavenia od zariadenia \"%s\"."
 msgid "Could not open file \"%s\" for reading."
 msgstr "Nepodarilo sa otvoriť súbor \"%s\" na čítanie."
 
-#, fuzzy
-msgid "Couldn't find channel configuration file"
+msgid "Couldn't find DVB channel configuration file"
 msgstr "Nepodarilo sa nájsť konfiguračný súbor DVB kanálu"
 
-#, fuzzy, c-format
-msgid "Couldn't load channel configuration file: '%s'"
+#, c-format
+msgid "Couldn't load DVB channel configuration file: %s"
 msgstr "Nepodarilo sa načítať konfiguračný súbor DVB kanálu: %s"
 
-#, fuzzy, c-format
-msgid "Couldn't find details for channel '%s'"
-msgstr "Nepodarilo sa nájsť podrobnosti o DVB kanáli %s"
-
-#, fuzzy, c-format
-msgid "No properties for channel '%s'"
-msgstr "Nepodarilo sa nájsť podrobnosti o DVB kanáli %s"
-
-#, fuzzy, c-format
-msgid "Failed to set properties for channel '%s'"
-msgstr "Nepodarilo sa nájsť podrobnosti o DVB kanáli %s"
-
-#, fuzzy, c-format
-msgid "Couldn't find channel configuration file: '%s'"
-msgstr "Nepodarilo sa nájsť konfiguračný súbor DVB kanálu"
-
-#, fuzzy
-msgid "Channel configuration file doesn't contain any channels"
+msgid "DVB channel configuration file doesn't contain any channels"
 msgstr "Konfiguračný súbor DVB kanála neobsahuje žiadne kanály"
 
-#~ msgid "Internal data flow error."
-#~ msgstr "Vnútorná chyba prúdu údajov."
-
-#~ msgid "Couldn't get the Manifest's URI"
-#~ msgstr "Nepodarilo sa získať URI Manifestu"
+#, c-format
+msgid "Couldn't find details for DVB channel %s"
+msgstr "Nepodarilo sa nájsť podrobnosti o DVB kanáli %s"
 
 #~ msgid "Could not write to file \"%s\"."
 #~ msgstr "Nepodarilo sa zapísať do súboru \"%s\"."

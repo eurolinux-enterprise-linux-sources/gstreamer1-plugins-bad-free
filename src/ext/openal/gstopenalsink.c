@@ -34,13 +34,13 @@
  * <refsect2>
  * <title>Example pipelines</title>
  * |[
- * gst-launch-1.0 audiotestsrc ! audioconvert ! volume volume=0.5 ! openalsink
+ * gst-launch audiotestsrc ! audioconvert ! volume volume=0.5 ! openalsink
  * ]| will play a sine wave (continuous beep sound) through OpenAL.
  * |[
- * gst-launch-1.0 filesrc location=stream.wav ! decodebin ! audioconvert ! openalsink
+ * gst-launch filesrc location=stream.wav ! decodebin ! audioconvert ! openalsink
  * ]| will play a wav audio file through OpenAL.
  * |[
- * gst-launch-1.0 openalsrc ! "audio/x-raw,format=S16LE,rate=44100" ! audioconvert ! volume volume=0.25 ! openalsink
+ * gst-launch openalsrc ! "audio/x-raw,format=S16LE,rate=44100" ! audioconvert ! volume volume=0.25 ! openalsink
  * ]| will capture and play audio through OpenAL.
  * </refsect2>
  */
@@ -229,8 +229,8 @@ gst_openal_sink_class_init (GstOpenALSinkClass * klass)
       "Sink/Audio", "Output audio through OpenAL",
       "Juan Manuel Borges Caño <juanmabcmail@gmail.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &openalsink_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&openalsink_factory));
 
 }
 

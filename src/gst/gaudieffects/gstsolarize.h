@@ -53,6 +53,7 @@
 
 G_BEGIN_DECLS
 
+/* #defines don't like whitespacey bits */
 #define GST_TYPE_SOLARIZE \
   (gst_solarize_get_type())
 #define GST_SOLARIZE(obj) \
@@ -72,7 +73,9 @@ struct _GstSolarize
   GstVideoFilter videofilter;
 
   /* < private > */
+
   gint threshold, start, end;
+  gboolean silent;
 };
 
 struct _GstSolarizeClass

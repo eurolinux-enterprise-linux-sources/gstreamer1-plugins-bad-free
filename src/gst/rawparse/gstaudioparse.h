@@ -23,6 +23,11 @@
 #define __GST_AUDIO_PARSE_H__
 
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
+#include <gst/base/gstadapter.h>
+#include <gst/audio/audio.h>
+
+#include "gstrawparse.h"
 
 #define GST_TYPE_AUDIO_PARSE \
   (gst_audio_parse_get_type())
@@ -40,13 +45,23 @@ typedef struct _GstAudioParseClass GstAudioParseClass;
 
 struct _GstAudioParse
 {
-  GstBin parent;
-  GstElement *rawaudioparse;
+  GstRawParse parent;
+
+  /* properties */
+  gboolean use_sink_caps;
+  gint format;
+  GstAudioFormat raw_format;
+  gint channels;
+  gboolean interleaved;
+  GValueArray *channel_positions;
+
+  GstAudioChannelPosition *channel_pos;
+  GstAudioChannelPosition *channel_order;
 };
 
 struct _GstAudioParseClass
 {
-  GstBinClass parent_class;
+  GstRawParseClass parent_class;
 };
 
 

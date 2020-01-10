@@ -23,32 +23,15 @@
 
 #include <gst/video/gstvideosink.h>
 #include <gst/gl/gl.h>
-#include <gst/gl/egl/gstegl.h>
-
-#if defined(__GNUC__)
-#ifndef __VCCOREVER__
-#define __VCCOREVER__ 0x04000000
-#endif
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wredundant-decls"
-#pragma GCC optimize ("gnu89-inline")
-#endif
-
 #include <bcm_host.h>
-
-#if defined(__GNUC__)
-#pragma GCC reset_options
-#pragma GCC diagnostic pop
-#endif
 
 G_BEGIN_DECLS
 
 #define GST_GL_TYPE_WINDOW_DISPMANX_EGL         (gst_gl_window_dispmanx_egl_get_type())
 #define GST_GL_WINDOW_DISPMANX_EGL(o)           (G_TYPE_CHECK_INSTANCE_CAST((o), GST_GL_TYPE_WINDOW_DISPMANX_EGL, GstGLWindowDispmanxEGL))
 #define GST_GL_WINDOW_DISPMANX_EGL_CLASS(k)     (G_TYPE_CHECK_CLASS((k), GST_GL_TYPE_WINDOW_DISPMANX_EGL, GstGLWindowDispmanxEGLClass))
-#define GST_IS_GL_WINDOW_DISPMANX_EGL(o)        (G_TYPE_CHECK_INSTANCE_TYPE((o), GST_GL_TYPE_WINDOW_DISPMANX_EGL))
-#define GST_IS_GL_WINDOW_DISPMANX_EGL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE((k), GST_GL_TYPE_WINDOW_DISPMANX_EGL))
+#define GST_GL_IS_WINDOW_DISPMANX_EGL(o)        (G_TYPE_CHECK_INSTANCE_TYPE((o), GST_GL_TYPE_WINDOW_DISPMANX_EGL))
+#define GST_GL_IS_WINDOW_DISPMANX_EGL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE((k), GST_GL_TYPE_WINDOW_DISPMANX_EGL))
 #define GST_GL_WINDOW_DISPMANX_EGL_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS((o), GST_GL_TYPE_WINDOW_DISPMANX_EGL, GstGLWindowDispmanxEGL_Class))
 
 typedef struct _GstGLWindowDispmanxEGL        GstGLWindowDispmanxEGL;
@@ -64,13 +47,9 @@ struct _GstGLWindowDispmanxEGL {
   uint32_t dp_height;
   uint32_t dp_width;
   EGL_DISPMANX_WINDOW_T native;
-  EGL_DISPMANX_WINDOW_T foreign;
 
-  gint preferred_width;
-  gint preferred_height;
-  GstVideoRectangle render_rect;
-
-  gboolean visible;
+  GMainContext *main_context;
+  GMainLoop *loop;
 
   gpointer _reserved[GST_PADDING];
 };
@@ -85,8 +64,7 @@ struct _GstGLWindowDispmanxEGLClass {
 
 GType gst_gl_window_dispmanx_egl_get_type     (void);
 
-GstGLWindowDispmanxEGL * gst_gl_window_dispmanx_egl_new  (GstGLDisplay * display);
-gboolean gst_gl_window_dispmanx_egl_create_window (GstGLWindowDispmanxEGL * window_egl);
+GstGLWindowDispmanxEGL * gst_gl_window_dispmanx_egl_new  (void);
 
 G_END_DECLS
 

@@ -1,7 +1,6 @@
 /* GStreamer
  * Copyright (C) 2010 Marc-Andre Lureau <marcandre.lureau@gmail.com>
  * Copyright (C) 2010 Andoni Morales Alastruey <ylatuya@gmail.com>
- * Copyright (C) 2015 Tim-Philipp Müller <tim@centricular.com>
  *
  * gsthlsdemux.h:
  *
@@ -26,12 +25,11 @@
 #define __GST_HLS_DEMUX_H__
 
 #include <gst/gst.h>
+#include <gst/base/gstadapter.h>
 #include "m3u8.h"
-#include "gsthls.h"
-#include <gst/adaptivedemux/gstadaptivedemux.h>
-#if defined(HAVE_OPENSSL)
-#include <openssl/evp.h>
-#elif defined(HAVE_NETTLE)
+#include "gstfragmented.h"
+#include <gst/uridownloader/gsturidownloader.h>
+#ifdef HAVE_NETTLE
 #include <nettle/aes.h>
 #include <nettle/cbc.h>
 #else
@@ -39,7 +37,6 @@
 #endif
 
 G_BEGIN_DECLS
-
 #define GST_TYPE_HLS_DEMUX \
   (gst_hls_demux_get_type())
 #define GST_HLS_DEMUX(obj) \
@@ -54,74 +51,8 @@ G_BEGIN_DECLS
   (G_TYPE_INSTANCE_GET_CLASS ((obj),GST_TYPE_HLS_DEMUX,GstHLSDemuxClass))
 #define GST_HLS_DEMUX_CAST(obj) \
   ((GstHLSDemux *)obj)
-
 typedef struct _GstHLSDemux GstHLSDemux;
 typedef struct _GstHLSDemuxClass GstHLSDemuxClass;
-typedef struct _GstHLSDemuxStream GstHLSDemuxStream;
-typedef struct _GstHLSTSReader GstHLSTSReader;
-
-#define GST_HLS_DEMUX_STREAM_CAST(stream) ((GstHLSDemuxStream *)(stream))
-
-typedef enum {
-  GST_HLS_TSREADER_NONE,
-  GST_HLS_TSREADER_MPEGTS,
-  GST_HLS_TSREADER_ID3
-} GstHLSTSReaderType;
-
-struct _GstHLSTSReader
-{
-  GstHLSTSReaderType rtype;
-  gboolean have_id3;
-
-  gint packet_size;
-  gint pmt_pid;
-  gint pcr_pid;
-
-  GstClockTime last_pcr;
-  GstClockTime first_pcr;
-};
-
-struct _GstHLSDemuxStream
-{
-  GstAdaptiveDemuxStream adaptive_demux_stream;
-
-  GstHLSTSReaderType stream_type;
-
-  GstM3U8 *playlist;
-  gboolean is_primary_playlist;
-
-  gboolean do_typefind;         /* Whether we need to typefind the next buffer */
-  GstBuffer *pending_typefind_buffer; /* for collecting data until typefind succeeds */
-
-  GstAdapter *pending_encrypted_data;  /* for chunking data into 16 byte multiples for decryption */
-  GstBuffer *pending_decrypted_buffer; /* last decrypted buffer for pkcs7 unpadding.
-                                          We only know that it is the last at EOS */
-  guint64 current_offset;              /* offset we're currently at */
-  gboolean reset_pts;
-
-  /* decryption tooling */
-#if defined(HAVE_OPENSSL)
-  EVP_CIPHER_CTX aes_ctx;
-#elif defined(HAVE_NETTLE)
-  struct CBC_CTX (struct aes_ctx, AES_BLOCK_SIZE) aes_ctx;
-#else
-  gcry_cipher_hd_t aes_ctx;
-#endif
-
-  gchar     *current_key;
-  guint8    *current_iv;
-
-  /* Accumulator for reading PAT/PMT/PCR from
-   * the stream so we can set timestamps/segments
-   * and switch cleanly */
-  GstBuffer *pending_pcr_buffer;
-
-  GstHLSTSReader tsreader;
-};
-
-typedef struct {
-  guint8 data[16];
-} GstHLSKey;
 
 /**
  * GstHLSDemux:
@@ -130,32 +61,92 @@ typedef struct {
  */
 struct _GstHLSDemux
 {
-  GstAdaptiveDemux parent;
+  GstBin parent;
 
+  GstPad *sinkpad;
+  GstPad *srcpad;
   gint srcpad_counter;
 
-  /* Decryption key cache: url => GstHLSKey */
-  GHashTable *keys;
-  GMutex      keys_lock;
+  gboolean have_group_id;
+  guint group_id;
 
-  /* FIXME: check locking, protected automatically by manifest_lock already? */
-  /* The master playlist with the available variant streams */
-  GstHLSMasterPlaylist *master;
+  GstBuffer *playlist;
+  GstCaps *input_caps;
+  GstUriDownloader *downloader;
+  gchar *uri;                   /* Original playlist URI */
+  GstM3U8Client *client;        /* M3U8 client */
+  gboolean do_typefind;         /* Whether we need to typefind the next buffer */
+  gboolean new_playlist;        /* Whether a new playlist is about to start and pads should be switched */
 
-  GstHLSVariantStream  *current_variant;
+  /* Properties */
+  guint fragments_cache;        /* number of fragments needed to be cached to start playing */
+  gfloat bitrate_limit;         /* limit of the available bitrate to use */
+  guint connection_speed;       /* Network connection speed in kbps (0 = unknown) */
+
+  /* Streaming task */
+  GstTask *stream_task;
+  GRecMutex stream_lock;
+  gboolean stop_stream_task;
+  GMutex download_lock;         /* Used for protecting queue and the two conds */
+  GCond download_cond;          /* Signalled when something is added to the queue */
+  gboolean end_of_playlist;
+  gint download_failed_count;
+  gint64 next_download;
+
+  /* Updates task */
+  GstTask *updates_task;
+  GRecMutex updates_lock;
+  gint64 next_update;           /* Time of the next update */
+  gboolean stop_updates_task;
+  GMutex updates_timed_lock;
+  GCond updates_timed_cond;     /* Signalled when the playlist should be updated */
+
+  /* Position in the stream */
+  GstSegment segment;
+  gboolean need_segment;
+  gboolean discont;
+
+  /* Cache for the last key */
+  gchar *key_url;
+  GstFragment *key_fragment;
+
+  /* Current download rate (bps) */
+  gint current_download_rate;
+
+  /* fragment download tooling */
+  GstElement *src;
+  GstPad *src_srcpad; /* handy link to src's src pad */
+  GMutex fragment_download_lock;
+  GCond fragment_download_cond;
+  GstClockTime current_timestamp;
+  GstClockTime current_duration;
+  gboolean starting_fragment;
+  gboolean reset_crypto;
+  gint64 download_start_time;
+  gint64 download_total_time;
+  gint64 download_total_bytes;
+  GstFlowReturn last_ret;
+  GError *last_error;
+
+  /* decryption tooling */
+#ifdef HAVE_NETTLE
+  struct CBC_CTX (struct aes_ctx, AES_BLOCK_SIZE) aes_ctx;
+#else
+  gcry_cipher_hd_t aes_ctx;
+#endif
+  const gchar *current_key;
+  const guint8 *current_iv;
+  GstAdapter *adapter; /* used to accumulate 16 bytes multiple chunks */
+  GstBuffer *pending_buffer; /* decryption scenario:
+                              * the last buffer can only be pushed when
+                              * resized, so need to store and wait for
+                              * EOS to know it is the last */
 };
 
 struct _GstHLSDemuxClass
 {
-  GstAdaptiveDemuxClass parent_class;
+  GstBinClass parent_class;
 };
-
-
-void gst_hlsdemux_tsreader_init (GstHLSTSReader *r);
-void gst_hlsdemux_tsreader_set_type (GstHLSTSReader *r, GstHLSTSReaderType rtype);
-
-gboolean gst_hlsdemux_tsreader_find_pcrs (GstHLSTSReader *r, GstBuffer **buffer,
-    GstClockTime *first_pcr, GstClockTime *last_pcr, GstTagList **tags);
 
 GType gst_hls_demux_get_type (void);
 

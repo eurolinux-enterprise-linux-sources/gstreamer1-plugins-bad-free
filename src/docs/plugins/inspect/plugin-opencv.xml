@@ -3,7 +3,7 @@
   <description>GStreamer OpenCV Plugins</description>
   <filename>../../ext/opencv/.libs/libgstopencv.so</filename>
   <basename>libgstopencv.so</basename>
-  <version>1.10.4</version>
+  <version>1.4.5</version>
   <license>LGPL</license>
   <source>gst-plugins-bad</source>
   <package>GStreamer Bad Plug-ins source release</package>
@@ -83,13 +83,13 @@
           <name>sink</name>
           <direction>sink</direction>
           <presence>always</presence>
-          <details>video/x-raw, format=(string)RGB, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
+          <details>video/x-raw, format=(string)GRAY8, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
         </caps>
         <caps>
           <name>src</name>
           <direction>source</direction>
           <presence>always</presence>
-          <details>video/x-raw, format=(string)RGB, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
+          <details>video/x-raw, format=(string)GRAY16_LE, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
         </caps>
       </pads>
     </element>
@@ -125,13 +125,13 @@
           <name>sink</name>
           <direction>sink</direction>
           <presence>always</presence>
-          <details>video/x-raw, format=(string)RGB, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
+          <details>video/x-raw, format=(string)GRAY8, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
         </caps>
         <caps>
           <name>src</name>
           <direction>source</direction>
           <presence>always</presence>
-          <details>video/x-raw, format=(string)RGB, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
+          <details>video/x-raw, format=(string)GRAY16_LE, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
         </caps>
       </pads>
     </element>
@@ -182,7 +182,7 @@
       <longname>faceblur</longname>
       <class>Filter/Effect/Video</class>
       <description>Blurs faces in images and videos</description>
-      <author>Michael Sheldon &lt;mike@mikeasoft.com&gt;,Robert Jobbagy &lt;jobbagy.robert@gmail.com&gt;</author>
+      <author>Michael Sheldon &lt;mike@mikeasoft.com&gt;</author>
       <pads>
         <caps>
           <name>sink</name>
@@ -290,6 +290,27 @@ IF nothing is present, then nothing is done.</description>
       <class>Filter/Effect/Video</class>
       <description>Write text on the top of video</description>
       <author>sreerenj&lt;bsreerenj@gmail.com&gt;</author>
+      <pads>
+        <caps>
+          <name>sink</name>
+          <direction>sink</direction>
+          <presence>always</presence>
+          <details>video/x-raw, format=(string)RGB, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
+        </caps>
+        <caps>
+          <name>src</name>
+          <direction>source</direction>
+          <presence>always</presence>
+          <details>video/x-raw, format=(string)RGB, width=(int)[ 1, 2147483647 ], height=(int)[ 1, 2147483647 ], framerate=(fraction)[ 0/1, 2147483647/1 ]</details>
+        </caps>
+      </pads>
+    </element>
+    <element>
+      <name>pyramidsegment</name>
+      <longname>pyramidsegment</longname>
+      <class>Filter/Effect/Video</class>
+      <description>Applies pyramid segmentation to a video or image.</description>
+      <author>Michael Sheldon &lt;mike@mikeasoft.com&gt;</author>
       <pads>
         <caps>
           <name>sink</name>

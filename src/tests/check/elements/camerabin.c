@@ -32,8 +32,6 @@
 #include <gst/video/video.h>
 #include <gst/check/gstcheck.h>
 #include <gst/basecamerabinsrc/gstbasecamerasrc.h>
-#include <gst/base/gstpushsrc.h>
-#include <gst/interfaces/photography.h>
 #include <gst/pbutils/encoding-profile.h>
 
 #define IMAGE_FILENAME "image"
@@ -43,11 +41,6 @@
 
 #define VIDEO_PAD_SUPPORTED_CAPS "video/x-raw, format=RGB, width=600, height=480"
 #define IMAGE_PAD_SUPPORTED_CAPS "video/x-raw, format=RGB, width=800, height=600"
-
-static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-raw, format=RGB"));
 
 static GstStaticPadTemplate vfsrc_template =
 GST_STATIC_PAD_TEMPLATE (GST_BASE_CAMERA_SRC_VIEWFINDER_PAD_NAME,
@@ -74,6 +67,10 @@ GST_STATIC_PAD_TEMPLATE (GST_BASE_CAMERA_SRC_VIDEO_PAD_NAME,
   (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_TEST_CAMERA_SRC,GstTestCameraSrc))
 #define GST_TEST_CAMERA_SRC_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_TEST_CAMERA_SRC,GstTestCameraSrcClass))
+#define GST_IS_TEST_REVERSE_NEGOTIATION_SINK(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_TEST_CAMERA_SRC))
+#define GST_IS_TEST_REVERSE_NEGOTIATION_SINK_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_TEST_CAMERA_SRC))
 #define GST_TEST_CAMERA_SRC_CAST(obj) ((GstTestCameraSrc *)obj)
 
 typedef struct _GstTestCameraSrc GstTestCameraSrc;
@@ -96,6 +93,7 @@ struct _GstTestCameraSrcClass
 
 GType gst_test_camera_src_get_type (void);
 
+#define gst_test_camera_src_parent_class parent_class
 G_DEFINE_TYPE (GstTestCameraSrc, gst_test_camera_src, GST_TYPE_BASE_CAMERA_SRC);
 
 static gboolean
@@ -162,11 +160,12 @@ gst_test_camera_src_class_init (GstTestCameraSrcClass * klass)
       "Some test camera src",
       "Thiago Santos <thiago.sousa.santos@collabora.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &vidsrc_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &imgsrc_template);
-  gst_element_class_add_static_pad_template (gstelement_class, &vfsrc_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&vidsrc_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&imgsrc_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&vfsrc_template));
 }
 
 static void
@@ -202,244 +201,9 @@ gst_test_camera_src_init (GstTestCameraSrc * self)
 
 /* end of custom test camera src element */
 
-/* custom video source element that implements GstPhotography iface */
-
-#define GST_TYPE_TEST_VIDEO_SRC \
-  (gst_test_video_src_get_type())
-#define GST_TEST_VIDEO_SRC(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_TEST_VIDEO_SRC,GstTestVideoSrc))
-#define GST_TEST_VIDEO_SRC_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_TEST_VIDEO_SRC,GstTestVideoSrcClass))
-#define GST_TEST_VIDEO_SRC_CAST(obj) ((GstTestVideoSrc *)obj)
-
-typedef struct _GstTestVideoSrc GstTestVideoSrc;
-typedef struct _GstTestVideoSrcClass GstTestVideoSrcClass;
-struct _GstTestVideoSrc
-{
-  GstPushSrc element;
-
-  gint width, height;
-  GstCaps *caps;
-
-  /* if TRUE, this element will only output resolutions with       *
-   * same width and height (square frames). This allows us testing *
-   * extra cropping feature with GstPhotography interface captures */
-  gboolean enable_resolution_restriction;
-};
-
-struct _GstTestVideoSrcClass
-{
-  GstPushSrcClass parent_class;
-};
-
-GType gst_test_video_src_get_type (void);
-
-enum
-{
-  PROP_0,
-  PROP_WB_MODE,
-  PROP_COLOR_TONE,
-  PROP_SCENE_MODE,
-  PROP_FLASH_MODE,
-  PROP_FLICKER_MODE,
-  PROP_FOCUS_MODE,
-  PROP_CAPABILITIES,
-  PROP_EV_COMP,
-  PROP_ISO_SPEED,
-  PROP_APERTURE,
-  PROP_EXPOSURE_TIME,
-  PROP_IMAGE_PREVIEW_SUPPORTED_CAPS,
-  PROP_IMAGE_CAPTURE_SUPPORTED_CAPS,
-  PROP_ZOOM,
-  PROP_COLOR_TEMPERATURE,
-  PROP_WHITE_POINT,
-  PROP_ANALOG_GAIN,
-  PROP_LENS_FOCUS,
-  PROP_MIN_EXPOSURE_TIME,
-  PROP_MAX_EXPORURE_TIME,
-  PROP_NOISE_REDUCTION
-};
-
-static gboolean
-gst_test_video_src_prepare_for_capture (GstPhotography * photo,
-    GstPhotographyCapturePrepared func, GstCaps * capture_caps,
-    gpointer user_data)
-{
-  GstCaps *caps;
-  GstTestVideoSrc *testvideosrc = GST_TEST_VIDEO_SRC (photo);
-
-  if (testvideosrc->enable_resolution_restriction) {
-    GstStructure *str = gst_caps_get_structure (capture_caps, 0);
-    gint width, height;
-
-    gst_structure_get_int (str, "width", &width);
-    gst_structure_get_int (str, "height", &height);
-
-    width = height = MAX (width, height);
-    str = gst_structure_copy (str);
-    gst_structure_set (str, "width", G_TYPE_INT, width, "height", G_TYPE_INT,
-        height, NULL);
-    caps = gst_caps_new_full (str, NULL);
-    caps = gst_caps_fixate (caps);
-    fail_unless (testvideosrc->caps == NULL);
-    testvideosrc->caps = gst_caps_ref (caps);
-  } else {
-    caps = gst_caps_ref (capture_caps);
-  }
-
-  func (user_data, caps);
-  gst_caps_unref (caps);
-  return TRUE;
-}
-
-static void
-gst_test_video_src_photography_init (gpointer g_iface, gpointer iface_data)
-{
-  GstPhotographyInterface *iface = g_iface;
-
-  iface->prepare_for_capture = gst_test_video_src_prepare_for_capture;
-}
-
-G_DEFINE_TYPE_WITH_CODE (GstTestVideoSrc, gst_test_video_src, GST_TYPE_PUSH_SRC,
-    G_IMPLEMENT_INTERFACE (GST_TYPE_PHOTOGRAPHY,
-        gst_test_video_src_photography_init));
-
-static void
-gst_test_video_src_get_property (GObject * object,
-    guint prop_id, GValue * value, GParamSpec * pspec)
-{
-  /* don't care */
-}
-
-static void
-gst_test_video_src_set_property (GObject * object,
-    guint prop_id, const GValue * value, GParamSpec * pspec)
-{
-  /* don't care */
-}
-
-static gboolean
-gst_test_video_src_set_caps (GstBaseSrc * src, GstCaps * caps)
-{
-  GstTestVideoSrc *self = GST_TEST_VIDEO_SRC (src);
-  GstStructure *structure = gst_caps_get_structure (caps, 0);
-
-
-  fail_unless (gst_structure_get_int (structure, "width", &self->width));
-  fail_unless (gst_structure_get_int (structure, "height", &self->height));
-
-  return TRUE;
-}
-
-static GstFlowReturn
-gst_test_video_src_alloc (GstPushSrc * src, GstBuffer ** buf)
-{
-  GstTestVideoSrc *self = GST_TEST_VIDEO_SRC (src);
-  guint8 *data;
-  gsize data_size;
-
-  if (self->caps) {
-    gst_base_src_set_caps (GST_BASE_SRC (self), self->caps);
-    gst_caps_unref (self->caps);
-    self->caps = NULL;
-  }
-
-  data_size = self->width * self->height * 3;   /* RGB size */
-  data = g_malloc (data_size);
-  *buf = gst_buffer_new_wrapped (data, data_size);
-
-  return GST_FLOW_OK;
-}
-
-static GstFlowReturn
-gst_test_video_src_fill (GstPushSrc * src, GstBuffer * buf)
-{
-  /* NOP */
-  return GST_FLOW_OK;
-}
-
-static void
-gst_test_video_src_class_init (GstTestVideoSrcClass * klass)
-{
-  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
-  GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
-  GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS (klass);
-  GstPushSrcClass *gstpushsrc_class = GST_PUSH_SRC_CLASS (klass);
-
-  gst_element_class_set_static_metadata (gstelement_class,
-      "Test Camera Video Src",
-      "Video/Src",
-      "Test camera video src", "Thiago Santos <thiagoss@osg.samsung.com>");
-
-  gst_element_class_add_static_pad_template (gstelement_class, &src_template);
-
-  gobject_class->get_property = gst_test_video_src_get_property;
-  gobject_class->set_property = gst_test_video_src_set_property;
-
-  gstbasesrc_class->set_caps = gst_test_video_src_set_caps;
-  gstpushsrc_class->alloc = gst_test_video_src_alloc;
-  gstpushsrc_class->fill = gst_test_video_src_fill;
-
-  /* photography interface properties */
-  g_object_class_override_property (gobject_class, PROP_WB_MODE,
-      GST_PHOTOGRAPHY_PROP_WB_MODE);
-  g_object_class_override_property (gobject_class, PROP_COLOR_TONE,
-      GST_PHOTOGRAPHY_PROP_COLOR_TONE);
-  g_object_class_override_property (gobject_class, PROP_SCENE_MODE,
-      GST_PHOTOGRAPHY_PROP_SCENE_MODE);
-  g_object_class_override_property (gobject_class, PROP_FLASH_MODE,
-      GST_PHOTOGRAPHY_PROP_FLASH_MODE);
-  g_object_class_override_property (gobject_class, PROP_FLICKER_MODE,
-      GST_PHOTOGRAPHY_PROP_FLICKER_MODE);
-  g_object_class_override_property (gobject_class, PROP_FOCUS_MODE,
-      GST_PHOTOGRAPHY_PROP_FOCUS_MODE);
-  g_object_class_override_property (gobject_class, PROP_CAPABILITIES,
-      GST_PHOTOGRAPHY_PROP_CAPABILITIES);
-  g_object_class_override_property (gobject_class, PROP_EV_COMP,
-      GST_PHOTOGRAPHY_PROP_EV_COMP);
-  g_object_class_override_property (gobject_class, PROP_ISO_SPEED,
-      GST_PHOTOGRAPHY_PROP_ISO_SPEED);
-  g_object_class_override_property (gobject_class, PROP_APERTURE,
-      GST_PHOTOGRAPHY_PROP_APERTURE);
-  g_object_class_override_property (gobject_class, PROP_EXPOSURE_TIME,
-      GST_PHOTOGRAPHY_PROP_EXPOSURE_TIME);
-  g_object_class_override_property (gobject_class,
-      PROP_IMAGE_PREVIEW_SUPPORTED_CAPS,
-      GST_PHOTOGRAPHY_PROP_IMAGE_PREVIEW_SUPPORTED_CAPS);
-  g_object_class_override_property (gobject_class,
-      PROP_IMAGE_CAPTURE_SUPPORTED_CAPS,
-      GST_PHOTOGRAPHY_PROP_IMAGE_CAPTURE_SUPPORTED_CAPS);
-  g_object_class_override_property (gobject_class, PROP_ZOOM,
-      GST_PHOTOGRAPHY_PROP_ZOOM);
-  g_object_class_override_property (gobject_class, PROP_COLOR_TEMPERATURE,
-      GST_PHOTOGRAPHY_PROP_COLOR_TEMPERATURE);
-  g_object_class_override_property (gobject_class, PROP_WHITE_POINT,
-      GST_PHOTOGRAPHY_PROP_WHITE_POINT);
-  g_object_class_override_property (gobject_class, PROP_ANALOG_GAIN,
-      GST_PHOTOGRAPHY_PROP_ANALOG_GAIN);
-  g_object_class_override_property (gobject_class, PROP_LENS_FOCUS,
-      GST_PHOTOGRAPHY_PROP_LENS_FOCUS);
-  g_object_class_override_property (gobject_class, PROP_MIN_EXPOSURE_TIME,
-      GST_PHOTOGRAPHY_PROP_MIN_EXPOSURE_TIME);
-  g_object_class_override_property (gobject_class, PROP_MAX_EXPORURE_TIME,
-      GST_PHOTOGRAPHY_PROP_MAX_EXPOSURE_TIME);
-  g_object_class_override_property (gobject_class, PROP_NOISE_REDUCTION,
-      GST_PHOTOGRAPHY_PROP_NOISE_REDUCTION);
-}
-
-static void
-gst_test_video_src_init (GstTestVideoSrc * self)
-{
-  gst_base_src_set_format (GST_BASE_SRC (self), GST_FORMAT_TIME);
-}
-
-/* end of custom test camera src element */
-/* end of custom video source element that implements GstPhotography iface */
-
 
 static GstElement *camera;
-static GstElement *testsrc;
-static GstBus *bus = NULL;
+static guint bus_source;
 static GMainLoop *main_loop;
 static gint capture_count = 0;
 guint32 test_id = 0;
@@ -615,46 +379,29 @@ extract_jpeg_tags (const gchar * filename, gint num)
   gchar *pipeline_str = g_strdup_printf ("filesrc location=%s ! "
       "jpegparse ! fakesink", filepath);
   GstElement *pipeline;
+  guint source;
 
   pipeline = gst_parse_launch (pipeline_str, NULL);
   fail_unless (pipeline != NULL);
   g_free (pipeline_str);
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
-  gst_bus_add_watch (bus, (GstBusFunc) validity_bus_cb, loop);
+  source = gst_bus_add_watch (bus, (GstBusFunc) validity_bus_cb, loop);
 
   gst_element_set_state (pipeline, GST_STATE_PLAYING);
   g_main_loop_run (loop);
   gst_element_set_state (pipeline, GST_STATE_NULL);
 
-  gst_bus_remove_watch (bus);
   gst_object_unref (bus);
+  g_source_remove (source);
   gst_object_unref (pipeline);
   g_main_loop_unref (loop);
 }
 
 static void
-setup_camerabin_common (void)
-{
-  test_id = g_random_int ();
-
-  main_loop = g_main_loop_new (NULL, TRUE);
-
-  camera = gst_check_setup_element ("camerabin");
-  fail_unless (camera != NULL, "failed to create camerabin element");
-
-  bus = gst_pipeline_get_bus (GST_PIPELINE (camera));
-  gst_bus_add_watch (bus, (GstBusFunc) capture_bus_cb, main_loop);
-
-  tags_found = NULL;
-  capture_count = 0;
-  image_filename = make_test_file_name (IMAGE_FILENAME, -1);
-  video_filename = make_test_file_name (VIDEO_FILENAME, -1);
-}
-
-static void
 setup_wrappercamerabinsrc_videotestsrc (void)
 {
+  GstBus *bus;
   GstElement *vfbin;
   GstElement *fakevideosink;
   GstElement *src;
@@ -663,8 +410,13 @@ setup_wrappercamerabinsrc_videotestsrc (void)
 
   GST_INFO ("init");
 
-  setup_camerabin_common ();
+  test_id = g_random_int ();
+  bus_source = 0;
 
+  main_loop = g_main_loop_new (NULL, TRUE);
+
+  camera = gst_check_setup_element ("camerabin");
+  fail_unless (camera != NULL, "failed to create camerabin element");
   fakevideosink = gst_element_factory_make ("fakesink", NULL);
   fail_unless (fakevideosink != NULL, "failed to create fakesink element");
   src = gst_element_factory_make ("wrappercamerabinsrc", NULL);
@@ -691,46 +443,14 @@ setup_wrappercamerabinsrc_videotestsrc (void)
   gst_object_unref (vfbin);
   gst_object_unref (fakevideosink);
 
-  GST_INFO ("init finished");
-}
+  bus = gst_pipeline_get_bus (GST_PIPELINE (camera));
+  bus_source = gst_bus_add_watch (bus, (GstBusFunc) capture_bus_cb, main_loop);
+  gst_object_unref (bus);
 
-static void
-setup_test_camerasrc (void)
-{
-  GstElement *vfbin;
-  GstElement *fakevideosink;
-  GstElement *src;
-  GstElement *audiosrc;
-
-  GST_INFO ("init");
-
-  setup_camerabin_common ();
-
-  fakevideosink = gst_element_factory_make ("fakesink", NULL);
-  fail_unless (fakevideosink != NULL, "failed to create fakesink element");
-  src = gst_element_factory_make ("wrappercamerabinsrc", NULL);
-  fail_unless (src != NULL, "failed to create wrappercamerabinsrc element");
-  testsrc = g_object_new (GST_TYPE_TEST_VIDEO_SRC, NULL);
-  fail_unless (testsrc != NULL, "failed to create testvideosrc element");
-  g_object_set (testsrc, "name", "testsrc", NULL);
-  audiosrc = gst_element_factory_make ("audiotestsrc", NULL);
-  fail_unless (audiosrc != NULL, "failed to create audiotestsrc element");
-
-  preview_caps = gst_caps_new_simple ("video/x-raw", "width", G_TYPE_INT,
-      320, "height", G_TYPE_INT, 240, NULL);
-
-  g_object_set (G_OBJECT (audiosrc), "is-live", TRUE, NULL);
-  g_object_set (G_OBJECT (src), "video-source", testsrc, NULL);
-  g_object_set (G_OBJECT (camera), "camera-source", src, "preview-caps",
-      preview_caps, "post-previews", TRUE, "audio-source", audiosrc, NULL);
-  gst_object_unref (src);
-  gst_object_unref (testsrc);
-  gst_object_unref (audiosrc);
-
-  vfbin = gst_bin_get_by_name (GST_BIN (camera), "vf-bin");
-  g_object_set (G_OBJECT (vfbin), "video-sink", fakevideosink, NULL);
-  gst_object_unref (vfbin);
-  gst_object_unref (fakevideosink);
+  tags_found = NULL;
+  capture_count = 0;
+  image_filename = make_test_file_name (IMAGE_FILENAME, -1);
+  video_filename = make_test_file_name (VIDEO_FILENAME, -1);
 
   GST_INFO ("init finished");
 }
@@ -744,10 +464,8 @@ teardown (void)
     gst_check_teardown_element (camera);
   camera = NULL;
 
-  if (bus) {
-    gst_bus_remove_watch (bus);
-    gst_object_unref (bus);
-  }
+  if (bus_source)
+    g_source_remove (bus_source);
 
   if (main_loop)
     g_main_loop_unref (main_loop);
@@ -840,6 +558,7 @@ check_file_validity (const gchar * filename, gint num, GstTagList * taglist,
   GstCaps *caps;
   gint caps_width, caps_height;
   GstState state;
+  guint source;
 
   GMainLoop *loop = g_main_loop_new (NULL, FALSE);
   GstElement *playbin = gst_element_factory_make ("playbin", NULL);
@@ -853,7 +572,7 @@ check_file_validity (const gchar * filename, gint num, GstTagList * taglist,
       "audio-sink", fakeaudio, NULL);
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (playbin));
-  gst_bus_add_watch (bus, (GstBusFunc) validity_bus_cb, loop);
+  source = gst_bus_add_watch (bus, (GstBusFunc) validity_bus_cb, loop);
 
   gst_element_set_state (playbin, GST_STATE_PAUSED);
   gst_element_get_state (playbin, &state, NULL, GST_SECOND * 3);
@@ -896,7 +615,7 @@ check_file_validity (const gchar * filename, gint num, GstTagList * taglist,
   }
 
   g_free (uri);
-  gst_bus_remove_watch (bus);
+  g_source_remove (source);
   gst_object_unref (bus);
   gst_object_unref (playbin);
   g_main_loop_unref (loop);
@@ -988,8 +707,7 @@ wait_for_idle_state (void)
   fail_unless (idle);
 }
 
-static void
-run_single_image_capture_test (GstCaps * viewfinder_caps, GstCaps * image_caps)
+GST_START_TEST (test_single_image_capture)
 {
   gboolean idle;
   GstMessage *msg;
@@ -998,11 +716,6 @@ run_single_image_capture_test (GstCaps * viewfinder_caps, GstCaps * image_caps)
 
   /* set still image mode */
   g_object_set (camera, "mode", 1, "location", image_filename, NULL);
-
-  if (viewfinder_caps)
-    g_object_set (camera, "viewfinder-caps", viewfinder_caps, NULL);
-  if (image_caps)
-    g_object_set (camera, "image-capture-caps", image_caps, NULL);
 
   if (gst_element_set_state (GST_ELEMENT (camera), GST_STATE_PLAYING) ==
       GST_STATE_CHANGE_FAILURE) {
@@ -1028,27 +741,6 @@ run_single_image_capture_test (GstCaps * viewfinder_caps, GstCaps * image_caps)
   gst_element_set_state (GST_ELEMENT (camera), GST_STATE_NULL);
   check_file_validity (image_filename, 0, NULL, 0, 0, NO_AUDIO);
   remove_file (image_filename, 0);
-}
-
-GST_START_TEST (test_single_image_capture)
-{
-  run_single_image_capture_test (NULL, NULL);
-}
-
-GST_END_TEST;
-
-
-/* Verify that incompatible caps can be used in viewfinder and image capture
- * at the same time */
-GST_START_TEST (test_single_image_capture_with_different_caps)
-{
-  GstCaps *vf_caps =
-      gst_caps_from_string ("video/x-raw, width=480, height=320");
-  GstCaps *img_caps =
-      gst_caps_from_string ("video/x-raw, width=800, height=600");
-  run_single_image_capture_test (vf_caps, img_caps);
-  gst_caps_unref (vf_caps);
-  gst_caps_unref (img_caps);
 }
 
 GST_END_TEST;
@@ -1869,40 +1561,6 @@ GST_START_TEST (test_image_location_switching)
     g_free (filenames[i]);
   }
   g_signal_handler_disconnect (src, notify_id);
-  gst_object_unref (src);
-}
-
-GST_END_TEST;
-
-
-GST_START_TEST (test_photography_iface_image_capture)
-{
-  run_single_image_capture_test (NULL, NULL);
-}
-
-GST_END_TEST;
-
-
-GST_START_TEST (test_photography_iface_image_capture_with_caps)
-{
-  GstCaps *caps = gst_caps_from_string ("video/x-raw, width=800, height=600");
-
-  run_single_image_capture_test (NULL, caps);
-  gst_caps_unref (caps);
-}
-
-GST_END_TEST;
-
-
-GST_START_TEST (test_photography_iface_image_capture_with_caps_and_restriction)
-{
-  GstCaps *caps = gst_caps_from_string ("video/x-raw, width=800, height=600");
-
-  /* the source will actually provide an image with 800x800 resolution */
-  GST_TEST_VIDEO_SRC (testsrc)->enable_resolution_restriction = TRUE;
-
-  run_single_image_capture_test (NULL, caps);
-  gst_caps_unref (caps);
 }
 
 GST_END_TEST;
@@ -1925,7 +1583,6 @@ camerabin_suite (void)
   Suite *s = suite_create ("camerabin");
   gint i;
   TCase *tc_generic = tcase_create ("generic");
-  TCase *tc_phography_iface = tcase_create ("photography-iface");
 
   jpegenc_factory = gst_element_factory_find ("jpegenc");
   if (jpegenc_factory == NULL) {
@@ -1947,10 +1604,14 @@ camerabin_suite (void)
     tcase_add_checked_fixture (tc_basic, tests[i].setup_func, teardown);
 
     tcase_add_test (tc_basic, test_single_image_capture);
-    tcase_add_test (tc_basic, test_single_image_capture_with_different_caps);
     tcase_add_test (tc_basic, test_single_video_recording);
     tcase_add_test (tc_basic, test_image_video_cycle);
-    tcase_add_test (tc_basic, test_multiple_image_captures);
+    if (gst_plugin_feature_check_version ((GstPluginFeature *) jpegenc_factory,
+            0, 10, 27))
+      tcase_add_test (tc_basic, test_multiple_image_captures);
+    else
+      GST_WARNING ("Skipping image capture test because -good 0.10.27 is "
+          "needed");
     tcase_add_test (tc_basic, test_multiple_video_recordings);
 
     tcase_add_test (tc_basic, test_image_capture_previews);
@@ -1965,26 +1626,6 @@ camerabin_suite (void)
 
     tcase_add_test (tc_basic, test_image_location_switching);
   }
-
-  /* This is the GstPhotography interface test case. It was added in 0.10
-   * to make it easy for integrating with hardware and providing lower
-   * delays from action to capture.
-   * There is also has a feature in wrappercamerabinsrc that allows
-   * captures with the interface to have a different(higher) resolution than
-   * requested and wrappercamerabinsrc will crop to the requested one.
-   * This doesn't make sense and seems to be very hardware specific but we
-   * can't simply remove it at this point.
-   *
-   * FIXME 2.0: revisit GstPhotography interface and its interaction with
-   * camerabin */
-  suite_add_tcase (s, tc_phography_iface);
-  tcase_add_checked_fixture (tc_phography_iface, setup_test_camerasrc,
-      teardown);
-  tcase_add_test (tc_phography_iface, test_photography_iface_image_capture);
-  tcase_add_test (tc_phography_iface,
-      test_photography_iface_image_capture_with_caps);
-  tcase_add_test (tc_phography_iface,
-      test_photography_iface_image_capture_with_caps_and_restriction);
 
 end:
   return s;

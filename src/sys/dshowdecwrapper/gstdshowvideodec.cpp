@@ -47,17 +47,17 @@
 #include "config.h"
 #endif
 
+#include <atlbase.h>
 #include <dmoreg.h>
 #include <wmcodecdsp.h>
 
 #include "gstdshowvideodec.h"
-#include <gst/video/video.h>
 
 GST_DEBUG_CATEGORY_STATIC (dshowvideodec_debug);
 #define GST_CAT_DEFAULT dshowvideodec_debug
 
-#define gst_dshowvideodec_parent_class parent_class
-G_DEFINE_TYPE(GstDshowVideoDec, gst_dshowvideodec, GST_TYPE_ELEMENT)
+GST_BOILERPLATE (GstDshowVideoDec, gst_dshowvideodec, GstElement,
+    GST_TYPE_ELEMENT);
 
 static void gst_dshowvideodec_finalize (GObject * object);
 static GstStateChangeReturn gst_dshowvideodec_change_state
@@ -65,8 +65,8 @@ static GstStateChangeReturn gst_dshowvideodec_change_state
 
 /* sink pad overwrites */
 static gboolean gst_dshowvideodec_sink_setcaps (GstPad * pad, GstCaps * caps);
-static gboolean gst_dshowvideodec_sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
-static GstFlowReturn gst_dshowvideodec_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer);
+static gboolean gst_dshowvideodec_sink_event (GstPad * pad, GstEvent * event);
+static GstFlowReturn gst_dshowvideodec_chain (GstPad * pad, GstBuffer * buffer);
 
 /* src pad overwrites */
 static GstCaps *gst_dshowvideodec_src_getcaps (GstPad * pad);
@@ -139,6 +139,7 @@ static PreferredFilter preferred_mpeg1_filters[] = {
   {&CLSID_MPEG_VIDEO_DECODER}, {0}
 };
 
+
 /* video codecs array */
 static const VideoCodecEntry video_dec_codecs[] = {
   {"dshowvdec_wmv1", "Windows Media Video 7",
@@ -146,7 +147,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_WMVV1,
    "video/x-wmv, wmvversion = (int) 1",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_wmv_filters},
 
   {"dshowvdec_wmv2", "Windows Media Video 8",
@@ -154,7 +155,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_WMVV2,
    "video/x-wmv, wmvversion = (int) 2",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_wmv_filters},
 
   {"dshowvdec_wmv3", "Windows Media Video 9",
@@ -162,7 +163,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_WMVV3,
    "video/x-wmv, wmvversion = (int) 3, " "format = (string) WMV3",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_wmv_filters},
 
   {"dshowvdec_wmvp", "Windows Media Video 9 Image",
@@ -170,7 +171,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_WMVP,
    "video/x-wmv, wmvversion = (int) 3, " "format = (string) { WMVP, MSS1 }",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_wmv_filters},
 
   {"dshowvdec_wmva", "Windows Media Video 9 Advanced",
@@ -178,7 +179,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_WMVA,
    "video/x-wmv, wmvversion = (int) 3, " "format = (string) WMVA",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_wmv_filters},
 
    {"dshowvdec_wvc1", "Windows Media VC1 video",
@@ -186,7 +187,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_WVC1,
    "video/x-wmv, wmvversion = (int) 3, " "format = (string) WVC1",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_wmv_filters},
 
   {"dshowvdec_cinepak", "Cinepack",
@@ -194,7 +195,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_CVID,
    "video/x-cinepak",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_RGB32,
-   "video/x-raw, format=(string)RGB, bpp=(int)32, depth=(int)24, "
+   "video/x-raw-rgb, bpp=(int)32, depth=(int)24, "
        "endianness=(int)4321, red_mask=(int)65280, "
        "green_mask=(int)16711680, blue_mask=(int)-16777216",
    preferred_cinepack_filters},
@@ -204,7 +205,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_MP4S,
    "video/x-msmpeg, msmpegversion=(int)41",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_mp4s_filters},
 
   {"dshowvdec_msmpeg42", "Microsoft ISO MPEG-4 version 2",
@@ -212,7 +213,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_MP42,
    "video/x-msmpeg, msmpegversion=(int)42",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_mpeg4_filters},
 
   {"dshowvdec_msmpeg43", "Microsoft ISO MPEG-4 version 3",
@@ -220,7 +221,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_MP43,
    "video/x-msmpeg, msmpegversion=(int)43",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_mp43_filters},
 
   {"dshowvdec_msmpeg4", "Microsoft ISO MPEG-4 version 1.1",
@@ -228,7 +229,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_M4S2,
    "video/x-msmpeg, msmpegversion=(int)4",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_mp4s_filters},
 
   {"dshowvdec_mpeg1",
@@ -238,7 +239,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    "video/mpeg, mpegversion= (int) 1, "
        "parsed= (boolean) true, " "systemstream= (boolean) false",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_mpeg1_filters},
    
   {"dshowvdec_mpeg4", "MPEG-4 Video",
@@ -246,7 +247,7 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_MPG4,
    "video/mpeg, msmpegversion=(int)4",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2"),
+   "video/x-raw-yuv, format=(fourcc)YUY2",
    preferred_mpeg4_filters},
 
   /* The rest of these have no preferred filter; windows doesn't come
@@ -256,39 +257,38 @@ static const VideoCodecEntry video_dec_codecs[] = {
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_XVID,
    "video/x-xvid",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2")},
+   "video/x-raw-yuv, format=(fourcc)YUY2"},
 
   {"dshowvdec_divx5", "DIVX 5.0 Video",
    GST_MAKE_FOURCC ('D', 'X', '5', '0'),
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_DX50,
    "video/x-divx, divxversion=(int)5",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2")},
+   "video/x-raw-yuv, format=(fourcc)YUY2"},
 
   {"dshowvdec_divx4", "DIVX 4.0 Video",
    GST_MAKE_FOURCC ('D', 'I', 'V', 'X'),
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_DIVX,
    "video/x-divx, divxversion=(int)4",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2")},
+   "video/x-raw-yuv, format=(fourcc)YUY2"},
 
   {"dshowvdec_divx3", "DIVX 3.0 Video",
    GST_MAKE_FOURCC ('D', 'I', 'V', '3'),
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_MP43,
    "video/x-divx, divxversion=(int)3",
    GUID_MEDIATYPE_VIDEO, GUID_MEDIASUBTYPE_YUY2,
-   GST_VIDEO_CAPS_MAKE("YUY2")}
+   "video/x-raw-yuv, format=(fourcc)YUY2"}
 };
 
 HRESULT VideoFakeSink::DoRenderSample(IMediaSample *pMediaSample)
 {
   gboolean in_seg = FALSE;
-  guint64 clip_start = 0, clip_stop = 0;
+  gint64 clip_start = 0, clip_stop = 0;
   GstDshowVideoDecClass *klass =
       (GstDshowVideoDecClass *) G_OBJECT_GET_CLASS (mDec);
   GstBuffer *buf = NULL;
   GstClockTime start, stop;
-  GstMapInfo map;
 
   if(pMediaSample)
   {
@@ -315,7 +315,10 @@ HRESULT VideoFakeSink::DoRenderSample(IMediaSample *pMediaSample)
 
     /* buffer is in our segment, allocate a new out buffer and clip its
      * timestamps */
-    gst_buffer_pool_acquire_buffer(mDec->buffer_pool, &buf, NULL);
+    mDec->last_ret = gst_pad_alloc_buffer (mDec->srcpad, 
+        GST_BUFFER_OFFSET_NONE,
+        size, 
+        GST_PAD_CAPS (mDec->srcpad), &buf);
     if (!buf) {
       GST_WARNING_OBJECT (mDec,
           "cannot allocate a new GstBuffer");
@@ -326,7 +329,6 @@ HRESULT VideoFakeSink::DoRenderSample(IMediaSample *pMediaSample)
     GST_BUFFER_TIMESTAMP (buf) = clip_start;
     GST_BUFFER_DURATION (buf) = clip_stop - clip_start;
 
-    gst_buffer_map(buf, &map, GST_MAP_WRITE);
     if (strstr (klass->entry->srccaps, "rgb")) {
       /* FOR RGB directshow decoder will return bottom-up BITMAP 
        * There is probably a way to get top-bottom video frames from
@@ -336,13 +338,12 @@ HRESULT VideoFakeSink::DoRenderSample(IMediaSample *pMediaSample)
       guint stride = mDec->width * 4;
 
       for (; line < mDec->height; line++) {
-        memcpy (map.data + (line * stride),
+        memcpy (GST_BUFFER_DATA (buf) + (line * stride),
             pBuffer + (size - ((line + 1) * (stride))), stride);
       }
     } else {
-      memcpy (map.data, pBuffer, MIN ((unsigned int)size, map.size));
+      memcpy (GST_BUFFER_DATA (buf), pBuffer, MIN ((unsigned int)size, GST_BUFFER_SIZE (buf)));
     }
-    gst_buffer_unmap(buf, &map);
 
     GST_LOG_OBJECT (mDec,
         "push_buffer (size %d)=> pts %" GST_TIME_FORMAT " stop %" GST_TIME_FORMAT
@@ -376,25 +377,25 @@ gst_dshowvideodec_base_init (gpointer klass)
   GstPadTemplate *src, *sink;
   GstCaps *srccaps, *sinkcaps;
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+  GstElementDetails details;
   const VideoCodecEntry *tmp;
   gpointer qdata;
-  gchar *longname, *description;
 
   qdata = g_type_get_qdata (G_OBJECT_CLASS_TYPE (klass), DSHOW_CODEC_QDATA);
 
   /* element details */
   tmp = videodec_class->entry = (VideoCodecEntry *) qdata;
 
-  longname = g_strdup_printf ("DirectShow %s Decoder Wrapper",
+  details.longname = g_strdup_printf ("DirectShow %s Decoder Wrapper",
       tmp->element_longname);
-  description = g_strdup_printf ("DirectShow %s Decoder Wrapper",
+  details.klass = g_strdup ("Codec/Decoder/Video");
+  details.description = g_strdup_printf ("DirectShow %s Decoder Wrapper",
       tmp->element_longname);
-
-  gst_element_class_set_metadata(element_class, longname, "Codec/Decoder/Video", description, 
-    "Sebastien Moutte <sebastien@moutte.net>");
-
-  g_free (longname);
-  g_free (description);
+  details.author = "Sebastien Moutte <sebastien@moutte.net>";
+  gst_element_class_set_details (element_class, &details);
+  g_free (details.longname);
+  g_free (details.klass);
+  g_free (details.description);
 
   sinkcaps = gst_caps_from_string (tmp->sinkcaps);
   gst_caps_set_simple (sinkcaps,
@@ -430,7 +431,7 @@ gst_dshowvideodec_com_thread (GstDshowVideoDec * vdec)
 {
   HRESULT res;
 
-  g_mutex_lock (&vdec->com_init_lock);
+  g_mutex_lock (vdec->com_init_lock);
 
   /* Initialize COM with a MTA for this process. This thread will
    * be the first one to enter the apartement and the last one to leave
@@ -447,23 +448,24 @@ gst_dshowvideodec_com_thread (GstDshowVideoDec * vdec)
   vdec->comInitialized = TRUE;
 
   /* Signal other threads waiting on this condition that COM was initialized */
-  g_cond_signal (&vdec->com_initialized);
+  g_cond_signal (vdec->com_initialized);
 
-  g_mutex_unlock (&vdec->com_init_lock);
+  g_mutex_unlock (vdec->com_init_lock);
 
   /* Wait until the unitialize condition is met to leave the COM apartement */
-  g_mutex_lock (&vdec->com_deinit_lock);
-  g_cond_wait (&vdec->com_uninitialize, &vdec->com_deinit_lock);
+  g_mutex_lock (vdec->com_deinit_lock);
+  g_cond_wait (vdec->com_uninitialize, vdec->com_deinit_lock);
 
   CoUninitialize ();
   GST_INFO_OBJECT (vdec, "COM unintialized succesfully");
   vdec->comInitialized = FALSE;
-  g_cond_signal (&vdec->com_uninitialized);
-  g_mutex_unlock (&vdec->com_deinit_lock);
+  g_cond_signal (vdec->com_uninitialized);
+  g_mutex_unlock (vdec->com_deinit_lock);
 }
 
 static void
-gst_dshowvideodec_init (GstDshowVideoDec * vdec)
+gst_dshowvideodec_init (GstDshowVideoDec * vdec,
+    GstDshowVideoDecClass * vdec_class)
 {
   GstElementClass *element_class = GST_ELEMENT_GET_CLASS (vdec);
 
@@ -472,6 +474,7 @@ gst_dshowvideodec_init (GstDshowVideoDec * vdec)
       gst_pad_new_from_template (gst_element_class_get_pad_template
       (element_class, "sink"), "sink");
 
+  gst_pad_set_setcaps_function (vdec->sinkpad, gst_dshowvideodec_sink_setcaps);
   gst_pad_set_event_function (vdec->sinkpad, gst_dshowvideodec_sink_event);
   gst_pad_set_chain_function (vdec->sinkpad, gst_dshowvideodec_chain);
   gst_element_add_pad (GST_ELEMENT (vdec), vdec->sinkpad);
@@ -496,23 +499,22 @@ gst_dshowvideodec_init (GstDshowVideoDec * vdec)
   vdec->segment = gst_segment_new ();
 
   vdec->setup = FALSE;
-  vdec->buffer_pool = NULL;
 
-  g_mutex_init (&vdec->com_init_lock);
-  g_mutex_init (&vdec->com_deinit_lock);
-  g_cond_init (&vdec->com_initialized);
-  g_cond_init (&vdec->com_uninitialize);
-  g_cond_init (&vdec->com_uninitialized);
+  vdec->com_init_lock = g_mutex_new();
+  vdec->com_deinit_lock = g_mutex_new();
+  vdec->com_initialized = g_cond_new();
+  vdec->com_uninitialize = g_cond_new();
+  vdec->com_uninitialized = g_cond_new();
 
-  g_mutex_lock (&vdec->com_init_lock);
+  g_mutex_lock (vdec->com_init_lock);
 
   /* create the COM initialization thread */
-  g_thread_new ("COM Init Thread", (GThreadFunc)gst_dshowvideodec_com_thread,
-    vdec);
+  g_thread_create ((GThreadFunc)gst_dshowvideodec_com_thread,
+      vdec, FALSE, NULL);
 
   /* wait until the COM thread signals that COM has been initialized */
-  g_cond_wait (&vdec->com_initialized, &vdec->com_init_lock);
-  g_mutex_unlock (&vdec->com_init_lock);
+  g_cond_wait (vdec->com_initialized, vdec->com_init_lock);
+  g_mutex_unlock (vdec->com_init_lock);
 }
 
 static void
@@ -525,24 +527,19 @@ gst_dshowvideodec_finalize (GObject * object)
     vdec->segment = NULL;
   }
 
-  if(vdec->buffer_pool) {
-    gst_object_unref(vdec->buffer_pool);
-    vdec->buffer_pool = NULL;
-  }
-
   /* signal the COM thread that it sould uninitialize COM */
   if (vdec->comInitialized) {
-    g_mutex_lock (&vdec->com_deinit_lock);
-    g_cond_signal (&vdec->com_uninitialize);
-    g_cond_wait (&vdec->com_uninitialized, &vdec->com_deinit_lock);
-    g_mutex_unlock (&vdec->com_deinit_lock);
+    g_mutex_lock (vdec->com_deinit_lock);
+    g_cond_signal (vdec->com_uninitialize);
+    g_cond_wait (vdec->com_uninitialized, vdec->com_deinit_lock);
+    g_mutex_unlock (vdec->com_deinit_lock);
   }
 
-  g_mutex_clear (&vdec->com_init_lock);
-  g_mutex_clear (&vdec->com_deinit_lock);
-  g_cond_clear (&vdec->com_initialized);
-  g_cond_clear (&vdec->com_uninitialize);
-  g_cond_clear (&vdec->com_uninitialized);
+  g_mutex_free (vdec->com_init_lock);
+  g_mutex_free (vdec->com_deinit_lock);
+  g_cond_free (vdec->com_initialized);
+  g_cond_free (vdec->com_uninitialize);
+  g_cond_free (vdec->com_uninitialized);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -586,22 +583,16 @@ gst_dshowvideodec_sink_setcaps (GstPad * pad, GstCaps * caps)
   GstDshowVideoDecClass *klass =
       (GstDshowVideoDecClass *) G_OBJECT_GET_CLASS (vdec);
   GstBuffer *extradata = NULL;
-  gsize extra_size;
   const GValue *v = NULL;
   guint size = 0;
-  GstCaps *caps_out = NULL;
+  GstCaps *caps_out;
   AM_MEDIA_TYPE output_mediatype, input_mediatype;
   VIDEOINFOHEADER *input_vheader = NULL, *output_vheader = NULL;
-  IPinPtr output_pin;
-  IPinPtr input_pin;
+  CComPtr<IPin> output_pin;
+  CComPtr<IPin> input_pin;
   IBaseFilter *srcfilter = NULL;
   IBaseFilter *sinkfilter = NULL;
   const GValue *fps, *par;
-  GstQuery *query = NULL;
-  GstBufferPool *pool = NULL;
-  GstStructure *pool_config = NULL;
-  guint pool_size, pool_min, pool_max;
-  GstVideoInfo video_info;
 
   /* read data */
   if (!gst_structure_get_int (s, "width", &vdec->width) ||
@@ -631,10 +622,8 @@ gst_dshowvideodec_sink_setcaps (GstPad * pad, GstCaps * caps)
     vdec->par_n = vdec->par_d = 1;
   }
 
-  if ((v = gst_structure_get_value (s, "codec_data"))) {
+  if ((v = gst_structure_get_value (s, "codec_data")))
     extradata = gst_value_get_buffer (v);
-    extra_size = gst_buffer_get_size(extradata);
-  }
 
   /* define the input type format */
   memset (&input_mediatype, 0, sizeof (AM_MEDIA_TYPE));
@@ -645,31 +634,33 @@ gst_dshowvideodec_sink_setcaps (GstPad * pad, GstCaps * caps)
 
   if (strstr (klass->entry->sinkcaps, "video/mpeg, mpegversion= (int) 1")) {
     size =
-        sizeof (MPEG1VIDEOINFO) + (extradata ? extra_size - 1 : 0);
+        sizeof (MPEG1VIDEOINFO) + (extradata ? GST_BUFFER_SIZE (extradata) -
+        1 : 0);
     input_vheader = (VIDEOINFOHEADER *)g_malloc0 (size);
 
     input_vheader->bmiHeader.biSize = sizeof (BITMAPINFOHEADER);
     if (extradata) {
       MPEG1VIDEOINFO *mpeg_info = (MPEG1VIDEOINFO *) input_vheader;
 
-      gst_buffer_extract(extradata, 0, mpeg_info->bSequenceHeader, extra_size);
-      mpeg_info->cbSequenceHeader = extra_size;
+      memcpy (mpeg_info->bSequenceHeader,
+          GST_BUFFER_DATA (extradata), GST_BUFFER_SIZE (extradata));
+      mpeg_info->cbSequenceHeader = GST_BUFFER_SIZE (extradata);
     }
     input_mediatype.formattype = FORMAT_MPEGVideo;
   } else {
     size =
-        sizeof (VIDEOINFOHEADER) + (extradata ? extra_size : 0);
+        sizeof (VIDEOINFOHEADER) +
+        (extradata ? GST_BUFFER_SIZE (extradata) : 0);
     input_vheader = (VIDEOINFOHEADER *)g_malloc0 (size);
-    input_vheader->bmiHeader.biSize = sizeof (BITMAPINFOHEADER);
 
+    input_vheader->bmiHeader.biSize = sizeof (BITMAPINFOHEADER);
     if (extradata) {            /* Codec data is appended after our header */
-      gst_buffer_extract(extradata, 0,
-        ((guchar *) input_vheader) + sizeof (VIDEOINFOHEADER), extra_size);
-      input_vheader->bmiHeader.biSize += extra_size;
+      memcpy (((guchar *) input_vheader) + sizeof (VIDEOINFOHEADER),
+          GST_BUFFER_DATA (extradata), GST_BUFFER_SIZE (extradata));
+      input_vheader->bmiHeader.biSize += GST_BUFFER_SIZE (extradata);
     }
     input_mediatype.formattype = FORMAT_VideoInfo;
   }
-
   input_vheader->rcSource.top = input_vheader->rcSource.left = 0;
   input_vheader->rcSource.right = vdec->width;
   input_vheader->rcSource.bottom = vdec->height;
@@ -786,52 +777,12 @@ gst_dshowvideodec_sink_setcaps (GstPad * pad, GstCaps * caps)
       "pixel-aspect-ratio", GST_TYPE_FRACTION, vdec->par_n, vdec->par_d, NULL);
 
   if (!gst_pad_set_caps (vdec->srcpad, caps_out)) {
+    gst_caps_unref (caps_out);
     GST_ELEMENT_ERROR (vdec, CORE, NEGOTIATION,
         ("Failed to negotiate output"), (NULL));
     goto end;
   }
-
-  /* request or create a buffer pool */
-  if (vdec->buffer_pool) {
-    gst_object_unref (vdec->buffer_pool);
-  }
-
-  query = gst_query_new_allocation(caps_out, TRUE);
-  gst_pad_peer_query(vdec->srcpad, query);
-
-  if (gst_query_get_n_allocation_pools (query) > 0) {
-    gst_query_parse_nth_allocation_pool (query, 0, &pool, &pool_size, &pool_min,
-      &pool_max);
-  }
-  else {
-    pool = NULL;
-    pool_size = output_mediatype.lSampleSize;
-    pool_min = 1;
-    pool_max = 0;
-  }
-
-  if (pool == NULL) {
-    pool = gst_video_buffer_pool_new ();
-  }
-
-  if (!pool) {
-    GST_ELEMENT_ERROR (vdec, CORE, NEGOTIATION,
-        ("Could not create buffer bool"), (NULL));
-    goto end;
-  }
-
-  pool_config = gst_buffer_pool_get_config (pool);
-  gst_buffer_pool_config_set_params (pool_config, caps_out, pool_size,
-    pool_min, pool_max);
-  gst_buffer_pool_set_config (pool, pool_config);
-
-  if (!gst_buffer_pool_set_active (pool, TRUE)) {
-    GST_ELEMENT_ERROR (vdec, CORE, NEGOTIATION,
-      ("Failed set buffer pool active"), (NULL));
-    goto end;
-  }
-
-  vdec->buffer_pool = pool;
+  gst_caps_unref (caps_out);
 
   hres = vdec->mediafilter->Run (-1);
   if (hres != S_OK) {
@@ -842,55 +793,57 @@ gst_dshowvideodec_sink_setcaps (GstPad * pad, GstCaps * caps)
 
   ret = TRUE;
 end:
-  if (caps_out)
-    gst_caps_unref (caps_out);
   gst_object_unref (vdec);
-  g_free (input_vheader);
+  if (input_vheader)
+    g_free (input_vheader);
   if (srcfilter)
     srcfilter->Release();
   if (sinkfilter)
     sinkfilter->Release();
-  if (query)
-    gst_query_unref(query);
   return ret;
 }
 
 static gboolean
-gst_dshowvideodec_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
+gst_dshowvideodec_sink_event (GstPad * pad, GstEvent * event)
 {
   gboolean ret = TRUE;
   GstDshowVideoDec *vdec = (GstDshowVideoDec *) gst_pad_get_parent (pad);
 
   switch (GST_EVENT_TYPE (event)) {
-    case GST_EVENT_CAPS:
-      GstCaps *caps;
-      gst_event_parse_caps(event, &caps);
-      ret = gst_dshowvideodec_sink_setcaps(pad, caps);
-      break;
-
     case GST_EVENT_FLUSH_STOP:
       gst_dshowvideodec_flush (vdec);
-      ret = gst_pad_event_default (pad, parent, event);
+      ret = gst_pad_event_default (pad, event);
       break;
-    case GST_EVENT_SEGMENT:
+    case GST_EVENT_NEWSEGMENT:
     {
-      const GstSegment *segment;
+      GstFormat format;
+      gdouble rate;
+      gint64 start, stop, time;
+      gboolean update;
 
-      gst_event_parse_segment (event, &segment);
+      gst_event_parse_new_segment (event, &update, &rate, &format, &start,
+          &stop, &time);
 
       /* save the new segment in our local current segment */
-      gst_segment_copy_into(segment, vdec->segment);
+      gst_segment_set_newsegment (vdec->segment, update, rate, format, start,
+          stop, time);
 
       GST_CAT_DEBUG_OBJECT (dshowvideodec_debug, vdec,
           "new segment received => start=%" GST_TIME_FORMAT " stop=%"
           GST_TIME_FORMAT, GST_TIME_ARGS (vdec->segment->start),
           GST_TIME_ARGS (vdec->segment->stop));
 
-      ret = gst_pad_event_default (pad, parent, event);
+      if (update) {
+        GST_CAT_DEBUG_OBJECT (dshowvideodec_debug, vdec,
+            "closing current segment flushing..");
+        gst_dshowvideodec_flush (vdec);
+      }
+
+      ret = gst_pad_event_default (pad, event);
       break;
     }
     default:
-      ret = gst_pad_event_default (pad, parent, event);
+      ret = gst_pad_event_default (pad, event);
       break;
   }
 
@@ -900,12 +853,11 @@ gst_dshowvideodec_sink_event (GstPad * pad, GstObject * parent, GstEvent * event
 }
 
 static GstFlowReturn
-gst_dshowvideodec_chain (GstPad * pad, GstObject *parent, GstBuffer * buffer)
+gst_dshowvideodec_chain (GstPad * pad, GstBuffer * buffer)
 {
   GstDshowVideoDec *vdec = (GstDshowVideoDec *) gst_pad_get_parent (pad);
   bool discont = FALSE;
   GstClockTime stop;
-  GstMapInfo map;
 
   if (!vdec->setup) {
     /* we are not setup */
@@ -914,7 +866,7 @@ gst_dshowvideodec_chain (GstPad * pad, GstObject *parent, GstBuffer * buffer)
     goto beach;
   }
 
-  if (vdec->last_ret != GST_FLOW_OK) {
+  if (GST_FLOW_IS_FATAL (vdec->last_ret)) {
     GST_DEBUG_OBJECT (vdec, "last decoding iteration generated a fatal error "
         "%s", gst_flow_get_name (vdec->last_ret));
     goto beach;
@@ -930,7 +882,7 @@ gst_dshowvideodec_chain (GstPad * pad, GstObject *parent, GstBuffer * buffer)
 
   GST_CAT_LOG_OBJECT (dshowvideodec_debug, vdec,
       "chain (size %d)=> pts %" GST_TIME_FORMAT " stop %" GST_TIME_FORMAT,
-      gst_buffer_get_size (buffer), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buffer)),
+      GST_BUFFER_SIZE (buffer), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buffer)),
       GST_TIME_ARGS (stop));
 
   /* if the incoming buffer has discont flag set => flush decoder data */
@@ -942,12 +894,10 @@ gst_dshowvideodec_chain (GstPad * pad, GstObject *parent, GstBuffer * buffer)
     discont = TRUE;
   }
 
-  gst_buffer_map(buffer, &map, GST_MAP_READ);
   /* push the buffer to the directshow decoder */
   vdec->fakesrc->GetOutputPin()->PushBuffer(
-      map.data, GST_BUFFER_TIMESTAMP (buffer), stop,
-      map.size, discont);
-  gst_buffer_unmap(buffer, &map);
+      GST_BUFFER_DATA (buffer), GST_BUFFER_TIMESTAMP (buffer), stop,
+      GST_BUFFER_SIZE (buffer), discont);
 
 beach:
   gst_buffer_unref (buffer);
@@ -966,8 +916,8 @@ gst_dshowvideodec_src_getcaps (GstPad * pad)
     vdec->srccaps = gst_caps_new_empty ();
 
   if (vdec->decfilter) {
-    IPinPtr output_pin;
-    IEnumMediaTypesPtr enum_mediatypes;
+    CComPtr<IPin> output_pin;
+    CComPtr<IEnumMediaTypes> enum_mediatypes;
     HRESULT hres;
     ULONG fetched;
 
@@ -1056,8 +1006,8 @@ static gboolean
 gst_dshowvideodec_get_filter_output_format (GstDshowVideoDec * vdec,
     const GUID subtype, VIDEOINFOHEADER ** format, guint * size)
 {
-  IPinPtr output_pin;
-  IEnumMediaTypesPtr enum_mediatypes;
+  CComPtr<IPin> output_pin;
+  CComPtr<IEnumMediaTypes> enum_mediatypes;
   HRESULT hres;
   ULONG fetched;
   BOOL ret = FALSE;
@@ -1302,7 +1252,7 @@ dshow_vdec_register (GstPlugin * plugin)
 
   for (i = 0; i < sizeof (video_dec_codecs) / sizeof (VideoCodecEntry); i++) {
     GType type;
-    IBaseFilterPtr filter;
+    CComPtr<IBaseFilter> filter;
     guint rank = GST_RANK_MARGINAL;
 
     filter = gst_dshow_find_filter (

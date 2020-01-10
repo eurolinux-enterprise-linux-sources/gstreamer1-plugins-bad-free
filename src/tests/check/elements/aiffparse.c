@@ -112,21 +112,15 @@ sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       gst_event_parse_tag (event, &aiff_tags);
       fail_unless (aiff_tags != NULL);
 
-      have_tags = TRUE;
       for (i = 0; i < sizeof (tags) / sizeof (*tags); i++) {
         buf = NULL;
-        if (!gst_tag_list_get_string (aiff_tags, tags[i][0], &buf)) {
-          have_tags = FALSE;
-          continue;
-        }
+        fail_unless (gst_tag_list_get_string (aiff_tags, tags[i][0], &buf));
         ret = g_strcmp0 (buf, tags[i][1]);
         g_free (buf);
-        if (ret != 0) {
-          have_tags = FALSE;
-          continue;
-        }
+        fail_unless (ret == 0);
       }
 
+      have_tags = TRUE;
       break;
     }
     default:

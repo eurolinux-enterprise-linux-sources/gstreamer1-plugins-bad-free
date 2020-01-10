@@ -31,7 +31,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 filesrc test.nuv ! nuvdemux name=demux  demux.audio_00 ! decodebin ! audioconvert ! audioresample ! autoaudiosink   demux.video_00 ! queue ! decodebin ! videoconvert ! videoscale ! autovideosink
+ * gst-launch filesrc test.nuv ! nuvdemux name=demux  demux.audio_00 ! decodebin ! audioconvert ! audioresample ! autoaudiosink   demux.video_00 ! queue ! decodebin ! videoconvert ! videoscale ! autovideosink
  * ]| Play (parse and decode) an .nuv file and try to output it to
  * an automatically detected soundcard and videosink. If the NUV file contains
  * compressed audio or video data, this will only work if you have the
@@ -124,11 +124,14 @@ gst_nuv_demux_base_init (gpointer klass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  gst_element_class_add_static_pad_template (element_class,
-      &audio_src_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &video_src_template);
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&audio_src_template));
+
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&video_src_template));
+
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
   gst_element_class_set_static_metadata (element_class, "Nuv demuxer",
       "Codec/Demuxer",
       "Demultiplex a MythTV NuppleVideo .nuv file into audio and video",
@@ -714,6 +717,7 @@ gst_nuv_demux_play (GstPad * pad)
       break;
     case GST_NUV_DEMUX_INVALID_DATA:
       goto pause;
+      break;
     default:
       g_assert_not_reached ();
   }
@@ -729,7 +733,9 @@ pause:
   if (res == GST_FLOW_UNEXPECTED) {
     gst_nuv_demux_send_eos (nuv);
   } else if (res == GST_FLOW_NOT_LINKED || res < GST_FLOW_UNEXPECTED) {
-    GST_ELEMENT_FLOW_ERROR (nuv, res);
+    GST_ELEMENT_ERROR (nuv, STREAM, FAILED,
+        (_("Internal data stream error.")),
+        ("streaming stopped, reason %s", gst_flow_get_name (res)));
 
     gst_nuv_demux_send_eos (nuv);
   }

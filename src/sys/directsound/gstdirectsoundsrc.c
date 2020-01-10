@@ -45,7 +45,7 @@
  */
 
 /*
-  TODO: add mixer device init for selection by device-guid
+  TODO: add device selection and check rate etc.
 */
 
 /**
@@ -56,7 +56,7 @@
  * <refsect2>
  * <title>Example pipelines</title>
  * |[
- * gst-launch-1.0 -v directsoundsrc ! audioconvert ! vorbisenc ! oggmux ! filesink location=dsound.ogg
+ * gst-launch -v directsoundsrc ! audioconvert ! vorbisenc ! oggmux ! filesink location=dsound.ogg
  * ]| Record from DirectSound and encode to Ogg/Vorbis.
  * </refsect2>
  */
@@ -73,23 +73,18 @@
 
 #include <windows.h>
 #include <dsound.h>
-#include <mmsystem.h>
 
 GST_DEBUG_CATEGORY_STATIC (directsoundsrc_debug);
 #define GST_CAT_DEFAULT directsoundsrc_debug
 
 /* defaults here */
 #define DEFAULT_DEVICE 0
-#define DEFAULT_MUTE FALSE
 
 /* properties */
 enum
 {
   PROP_0,
-  PROP_DEVICE_NAME,
-  PROP_DEVICE,
-  PROP_VOLUME,
-  PROP_MUTE
+  PROP_DEVICE_NAME
 };
 
 static HRESULT (WINAPI * pDSoundCaptureCreate) (LPGUID,
@@ -119,23 +114,6 @@ static void gst_directsound_src_dispose (GObject * object);
 
 static guint gst_directsound_src_delay (GstAudioSrc * asrc);
 
-static gboolean gst_directsound_src_mixer_find (GstDirectSoundSrc * dsoundsrc,
-    MIXERCAPS * mixer_caps);
-static void gst_directsound_src_mixer_init (GstDirectSoundSrc * dsoundsrc);
-
-static gdouble gst_directsound_src_get_volume (GstDirectSoundSrc * dsoundsrc);
-static void gst_directsound_src_set_volume (GstDirectSoundSrc * dsoundsrc,
-    gdouble volume);
-
-static gboolean gst_directsound_src_get_mute (GstDirectSoundSrc * dsoundsrc);
-static void gst_directsound_src_set_mute (GstDirectSoundSrc * dsoundsrc,
-    gboolean mute);
-
-static const gchar *gst_directsound_src_get_device (GstDirectSoundSrc *
-    dsoundsrc);
-static void gst_directsound_src_set_device (GstDirectSoundSrc * dsoundsrc,
-    const gchar * device_id);
-
 static GstStaticPadTemplate directsound_src_src_factory =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
@@ -146,9 +124,7 @@ GST_STATIC_PAD_TEMPLATE ("src",
         "rate = (int) [ 1, MAX ], " "channels = (int) [ 1, 2 ]"));
 
 #define gst_directsound_src_parent_class parent_class
-G_DEFINE_TYPE_WITH_CODE (GstDirectSoundSrc, gst_directsound_src,
-    GST_TYPE_AUDIO_SRC, G_IMPLEMENT_INTERFACE (GST_TYPE_STREAM_VOLUME, NULL)
-    );
+G_DEFINE_TYPE (GstDirectSoundSrc, gst_directsound_src, GST_TYPE_AUDIO_SRC);
 
 static void
 gst_directsound_src_dispose (GObject * object)
@@ -164,9 +140,6 @@ gst_directsound_src_finalize (GObject * object)
   g_mutex_clear (&dsoundsrc->dsound_lock);
 
   g_free (dsoundsrc->device_name);
-
-  g_free (dsoundsrc->device_id);
-
   g_free (dsoundsrc->device_guid);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
@@ -213,31 +186,13 @@ gst_directsound_src_class_init (GstDirectSoundSrcClass * klass)
       "Capture from a soundcard via DirectSound",
       "Joni Valtanen <joni.valtanen@movial.fi>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &directsound_src_src_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&directsound_src_src_factory));
 
   g_object_class_install_property
       (gobject_class, PROP_DEVICE_NAME,
       g_param_spec_string ("device-name", "Device name",
           "Human-readable name of the sound device", NULL, G_PARAM_READWRITE));
-
-  g_object_class_install_property (gobject_class,
-      PROP_DEVICE,
-      g_param_spec_string ("device", "Device",
-          "DirectSound playback device as a GUID string (volume and mute will not work!)",
-          NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property
-      (gobject_class, PROP_VOLUME,
-      g_param_spec_double ("volume", "Volume",
-          "Volume of this stream", 0.0, 1.0, 1.0,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property
-      (gobject_class, PROP_MUTE,
-      g_param_spec_boolean ("mute", "Mute",
-          "Mute state of this stream", DEFAULT_MUTE,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 static GstCaps *
@@ -266,15 +221,7 @@ gst_directsound_src_set_property (GObject * object, guint prop_id,
       if (g_value_get_string (value)) {
         src->device_name = g_strdup (g_value_get_string (value));
       }
-      break;
-    case PROP_VOLUME:
-      gst_directsound_src_set_volume (src, g_value_get_double (value));
-      break;
-    case PROP_MUTE:
-      gst_directsound_src_set_mute (src, g_value_get_boolean (value));
-      break;
-    case PROP_DEVICE:
-      gst_directsound_src_set_device (src, g_value_get_string (value));
+
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -294,15 +241,6 @@ gst_directsound_src_get_property (GObject * object, guint prop_id,
     case PROP_DEVICE_NAME:
       g_value_set_string (value, src->device_name);
       break;
-    case PROP_DEVICE:
-      g_value_set_string (value, gst_directsound_src_get_device (src));
-      break;
-    case PROP_VOLUME:
-      g_value_set_double (value, gst_directsound_src_get_volume (src));
-      break;
-    case PROP_MUTE:
-      g_value_set_boolean (value, gst_directsound_src_get_mute (src));
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -321,13 +259,7 @@ gst_directsound_src_init (GstDirectSoundSrc * src)
   GST_DEBUG_OBJECT (src, "initializing directsoundsrc");
   g_mutex_init (&src->dsound_lock);
   src->device_guid = NULL;
-  src->device_id = NULL;
   src->device_name = NULL;
-  src->mixer = NULL;
-  src->control_id_mute = -1;
-  src->control_id_volume = -1;
-  src->volume = 100;
-  src->mute = FALSE;
 }
 
 
@@ -339,58 +271,21 @@ gst_directsound_enum_callback (GUID * pGUID, TCHAR * strDesc,
     TCHAR * strDrvName, VOID * pContext)
 {
   GstDirectSoundSrc *dsoundsrc = GST_DIRECTSOUND_SRC (pContext);
-  gchar *driver, *description;
-
-  description = g_locale_to_utf8 (strDesc, -1, NULL, NULL, NULL);
-  if (!description) {
-    GST_ERROR_OBJECT (dsoundsrc,
-        "Failed to convert description from locale encoding to UTF8");
-    return TRUE;
-  }
-
-  driver = g_locale_to_utf8 (strDrvName, -1, NULL, NULL, NULL);
 
   if (pGUID && dsoundsrc && dsoundsrc->device_name &&
-      !g_strcmp0 (dsoundsrc->device_name, description)) {
+      !g_strcmp0 (dsoundsrc->device_name, strDesc)) {
     g_free (dsoundsrc->device_guid);
     dsoundsrc->device_guid = (GUID *) g_malloc0 (sizeof (GUID));
     memcpy (dsoundsrc->device_guid, pGUID, sizeof (GUID));
     GST_INFO_OBJECT (dsoundsrc, "found the requested audio device :%s",
         dsoundsrc->device_name);
-    g_free (description);
-    g_free (driver);
     return FALSE;
   }
 
   GST_INFO_OBJECT (dsoundsrc, "sound device names: %s, %s, requested device:%s",
-      description, driver, dsoundsrc->device_name);
-
-  g_free (description);
-  g_free (driver);
+      strDesc, strDrvName, dsoundsrc->device_name);
 
   return TRUE;
-}
-
-static LPGUID
-string_to_guid (const gchar * str)
-{
-  HRESULT ret;
-  gunichar2 *wstr;
-  LPGUID out;
-
-  wstr = g_utf8_to_utf16 (str, -1, NULL, NULL, NULL);
-  if (!wstr)
-    return NULL;
-
-  out = g_new (GUID, 1);
-  ret = CLSIDFromString ((LPOLESTR) wstr, out);
-  g_free (wstr);
-  if (ret != NOERROR) {
-    g_free (out);
-    return NULL;
-  }
-
-  return out;
 }
 
 static gboolean
@@ -419,35 +314,16 @@ gst_directsound_src_open (GstAudioSrc * asrc)
     goto capture_function;
   }
 
-  if (dsoundsrc->device_id) {
-    GST_DEBUG_OBJECT (asrc, "device id set to: %s ", dsoundsrc->device_id);
-    dsoundsrc->device_guid = string_to_guid (dsoundsrc->device_id);
-    if (dsoundsrc->device_guid == NULL) {
-      GST_ELEMENT_ERROR (dsoundsrc, RESOURCE, OPEN_READ,
-          ("gst_directsound_src_open: device set, but guid not found: %s",
-              dsoundsrc->device_id), (NULL));
-      g_free (dsoundsrc->device_guid);
-      return FALSE;
-    }
-  } else {
-
-    hRes = DirectSoundCaptureEnumerate ((LPDSENUMCALLBACK)
-        gst_directsound_enum_callback, (VOID *) dsoundsrc);
-
-    if (FAILED (hRes)) {
-      goto capture_enumerate;
-    }
+  hRes = DirectSoundCaptureEnumerate ((LPDSENUMCALLBACK)
+      gst_directsound_enum_callback, (VOID *) dsoundsrc);
+  if (FAILED (hRes)) {
+    goto capture_enumerate;
   }
+
   /* Create capture object */
   hRes = pDSoundCaptureCreate (dsoundsrc->device_guid, &dsoundsrc->pDSC, NULL);
-
-
   if (FAILED (hRes)) {
     goto capture_object;
-  }
-  // mixer is only supported when device-id is not set
-  if (!dsoundsrc->device_id) {
-    gst_directsound_src_mixer_init (dsoundsrc);
   }
 
   return TRUE;
@@ -497,9 +373,6 @@ gst_directsound_src_close (GstAudioSrc * asrc)
 
   /* Close library */
   FreeLibrary (dsoundsrc->DSoundDLL);
-
-  if (dsoundsrc->mixer)
-    mixerClose (dsoundsrc->mixer);
 
   return TRUE;
 }
@@ -621,14 +494,12 @@ gst_directsound_src_unprepare (GstAudioSrc * asrc)
 
   dsoundsrc = GST_DIRECTSOUND_SRC (asrc);
 
-  GST_DSOUND_LOCK (dsoundsrc);
-
   /* Stop capturing */
   IDirectSoundCaptureBuffer_Stop (dsoundsrc->pDSBSecondary);
 
   /* Release buffer  */
   IDirectSoundCaptureBuffer_Release (dsoundsrc->pDSBSecondary);
-  GST_DSOUND_UNLOCK (dsoundsrc);
+
   return TRUE;
 }
 
@@ -661,11 +532,6 @@ gst_directsound_src_read (GstAudioSrc * asrc, gpointer data, guint length,
   hRes = IDirectSoundCaptureBuffer_GetStatus (dsoundsrc->pDSBSecondary,
       &dwStatus);
 
-  if (FAILED (hRes)) {
-    GST_DSOUND_UNLOCK (dsoundsrc);
-    return -1;
-  }
-
   /* Starting capturing if not already */
   if (!(dwStatus & DSCBSTATUS_CAPTURING)) {
     hRes = IDirectSoundCaptureBuffer_Start (dsoundsrc->pDSBSecondary,
@@ -680,11 +546,6 @@ gst_directsound_src_read (GstAudioSrc * asrc, gpointer data, guint length,
     hRes =
         IDirectSoundCaptureBuffer_GetCurrentPosition (dsoundsrc->pDSBSecondary,
         &dwCurrentCaptureCursor, NULL);
-
-    if (FAILED (hRes)) {
-      GST_DSOUND_UNLOCK (dsoundsrc);
-      return -1;
-    }
 
     /* calculate the buffer */
     if (dwCurrentCaptureCursor < dsoundsrc->current_circular_offset) {
@@ -799,230 +660,4 @@ gst_directsound_src_reset (GstAudioSrc * asrc)
   }
 
   GST_DSOUND_UNLOCK (dsoundsrc);
-}
-
-/* If the PROP_DEVICE_NAME is set, find the mixer related to device;
- * otherwise we get the default input mixer. */
-static gboolean
-gst_directsound_src_mixer_find (GstDirectSoundSrc * dsoundsrc,
-    MIXERCAPS * mixer_caps)
-{
-  MMRESULT mmres;
-  guint i, num_mixers;
-
-  num_mixers = mixerGetNumDevs ();
-  for (i = 0; i < num_mixers; i++) {
-    mmres = mixerOpen (&dsoundsrc->mixer, i, 0L, 0L,
-        MIXER_OBJECTF_MIXER | MIXER_OBJECTF_WAVEIN);
-
-    if (mmres != MMSYSERR_NOERROR)
-      continue;
-
-    mmres = mixerGetDevCaps ((UINT_PTR)dsoundsrc->mixer,
-        mixer_caps, sizeof (MIXERCAPS));
-
-    if (mmres != MMSYSERR_NOERROR) {
-      mixerClose (dsoundsrc->mixer);
-      continue;
-    }
-
-    /* Get default mixer */
-    if (dsoundsrc->device_name == NULL) {
-      GST_DEBUG ("Got default input mixer: %s", mixer_caps->szPname);
-      return TRUE;
-    }
-
-    if (g_strstr_len (dsoundsrc->device_name, -1, mixer_caps->szPname) != NULL) {
-      GST_DEBUG ("Got requested input mixer: %s", mixer_caps->szPname);
-      return TRUE;
-    }
-
-    /* Wrong mixer */
-    mixerClose (dsoundsrc->mixer);
-  }
-
-  GST_DEBUG ("Can't find input mixer");
-  return FALSE;
-}
-
-static void
-gst_directsound_src_mixer_init (GstDirectSoundSrc * dsoundsrc)
-{
-  gint i, k;
-  gboolean found_mic;
-  MMRESULT mmres;
-  MIXERCAPS mixer_caps;
-  MIXERLINE mixer_line;
-  MIXERLINECONTROLS ml_ctrl;
-  PMIXERCONTROL pamixer_ctrls;
-
-  if (!gst_directsound_src_mixer_find (dsoundsrc, &mixer_caps))
-    goto mixer_init_fail;
-
-  /* Find the MIXERLINE related to MICROPHONE */
-  found_mic = FALSE;
-  for (i = 0; i < mixer_caps.cDestinations && !found_mic; i++) {
-    gint j, num_connections;
-
-    mixer_line.cbStruct = sizeof (mixer_line);
-    mixer_line.dwDestination = i;
-    mmres = mixerGetLineInfo ((HMIXEROBJ) dsoundsrc->mixer,
-        &mixer_line, MIXER_GETLINEINFOF_DESTINATION);
-
-    if (mmres != MMSYSERR_NOERROR)
-      goto mixer_init_fail;
-
-    num_connections = mixer_line.cConnections;
-    for (j = 0; j < num_connections && !found_mic; j++) {
-      mixer_line.cbStruct = sizeof (mixer_line);
-      mixer_line.dwDestination = i;
-      mixer_line.dwSource = j;
-      mmres = mixerGetLineInfo ((HMIXEROBJ) dsoundsrc->mixer,
-          &mixer_line, MIXER_GETLINEINFOF_SOURCE);
-
-      if (mmres != MMSYSERR_NOERROR)
-        goto mixer_init_fail;
-
-      if (mixer_line.dwComponentType == MIXERLINE_COMPONENTTYPE_SRC_MICROPHONE
-          || mixer_line.dwComponentType == MIXERLINE_COMPONENTTYPE_SRC_LINE)
-        found_mic = TRUE;
-    }
-  }
-
-  if (found_mic == FALSE) {
-    GST_DEBUG ("Can't find mixer line related to input");
-    goto mixer_init_fail;
-  }
-
-  /* Get control associated with microphone audio line */
-  pamixer_ctrls = g_malloc (sizeof (MIXERCONTROL) * mixer_line.cControls);
-  ml_ctrl.cbStruct = sizeof (ml_ctrl);
-  ml_ctrl.dwLineID = mixer_line.dwLineID;
-  ml_ctrl.cControls = mixer_line.cControls;
-  ml_ctrl.cbmxctrl = sizeof (MIXERCONTROL);
-  ml_ctrl.pamxctrl = pamixer_ctrls;
-  mmres = mixerGetLineControls ((HMIXEROBJ) dsoundsrc->mixer,
-      &ml_ctrl, MIXER_GETLINECONTROLSF_ALL);
-
-  /* Find control associated with volume and mute */
-  for (k = 0; k < mixer_line.cControls; k++) {
-    if (strstr (pamixer_ctrls[k].szName, "Volume") != NULL) {
-      dsoundsrc->control_id_volume = pamixer_ctrls[k].dwControlID;
-      dsoundsrc->dw_vol_max = pamixer_ctrls[k].Bounds.dwMaximum;
-      dsoundsrc->dw_vol_min = pamixer_ctrls[k].Bounds.dwMinimum;
-    } else if (strstr (pamixer_ctrls[k].szName, "Mute") != NULL) {
-      dsoundsrc->control_id_mute = pamixer_ctrls[k].dwControlID;
-    } else {
-      GST_DEBUG ("Control not handled: %s", pamixer_ctrls[k].szName);
-    }
-  }
-  g_free (pamixer_ctrls);
-
-  if (dsoundsrc->control_id_volume < 0 && dsoundsrc->control_id_mute < 0)
-    goto mixer_init_fail;
-
-  /* Save cChannels information to properly changes in volume */
-  dsoundsrc->mixerline_cchannels = mixer_line.cChannels;
-  return;
-
-mixer_init_fail:
-  GST_WARNING ("Failed to get Volume and Mute controls");
-  if (dsoundsrc->mixer != NULL) {
-    mixerClose (dsoundsrc->mixer);
-    dsoundsrc->mixer = NULL;
-  }
-}
-
-static gdouble
-gst_directsound_src_get_volume (GstDirectSoundSrc * dsoundsrc)
-{
-  return (gdouble) dsoundsrc->volume / 100;
-}
-
-static gboolean
-gst_directsound_src_get_mute (GstDirectSoundSrc * dsoundsrc)
-{
-  return dsoundsrc->mute;
-}
-
-static void
-gst_directsound_src_set_volume (GstDirectSoundSrc * dsoundsrc, gdouble volume)
-{
-  MMRESULT mmres;
-  MIXERCONTROLDETAILS details;
-  MIXERCONTROLDETAILS_UNSIGNED details_unsigned;
-  glong dwvolume;
-
-  if (dsoundsrc->mixer == NULL || dsoundsrc->control_id_volume < 0) {
-    GST_WARNING ("mixer not initialized");
-    return;
-  }
-
-  dwvolume = volume * dsoundsrc->dw_vol_max;
-  dwvolume = CLAMP (dwvolume, dsoundsrc->dw_vol_min, dsoundsrc->dw_vol_max);
-
-  GST_DEBUG ("max volume %ld | min volume %ld",
-      dsoundsrc->dw_vol_max, dsoundsrc->dw_vol_min);
-  GST_DEBUG ("set volume to %f (%ld)", volume, dwvolume);
-
-  details.cbStruct = sizeof (details);
-  details.dwControlID = dsoundsrc->control_id_volume;
-  details.cChannels = dsoundsrc->mixerline_cchannels;
-  details.cMultipleItems = 0;
-
-  details_unsigned.dwValue = dwvolume;
-  details.cbDetails = sizeof (MIXERCONTROLDETAILS_UNSIGNED);
-  details.paDetails = &details_unsigned;
-
-  mmres = mixerSetControlDetails ((HMIXEROBJ) dsoundsrc->mixer,
-      &details, MIXER_OBJECTF_HMIXER | MIXER_SETCONTROLDETAILSF_VALUE);
-
-  if (mmres != MMSYSERR_NOERROR)
-    GST_WARNING ("Failed to set volume");
-  else
-    dsoundsrc->volume = volume * 100;
-}
-
-static void
-gst_directsound_src_set_mute (GstDirectSoundSrc * dsoundsrc, gboolean mute)
-{
-  MMRESULT mmres;
-  MIXERCONTROLDETAILS details;
-  MIXERCONTROLDETAILS_BOOLEAN details_boolean;
-
-  if (dsoundsrc->mixer == NULL || dsoundsrc->control_id_mute < 0) {
-    GST_WARNING ("mixer not initialized");
-    return;
-  }
-
-  details.cbStruct = sizeof (details);
-  details.dwControlID = dsoundsrc->control_id_mute;
-  details.cChannels = dsoundsrc->mixerline_cchannels;
-  details.cMultipleItems = 0;
-
-  details_boolean.fValue = mute;
-  details.cbDetails = sizeof (MIXERCONTROLDETAILS_BOOLEAN);
-  details.paDetails = &details_boolean;
-
-  mmres = mixerSetControlDetails ((HMIXEROBJ) dsoundsrc->mixer,
-      &details, MIXER_OBJECTF_HMIXER | MIXER_SETCONTROLDETAILSF_VALUE);
-
-  if (mmres != MMSYSERR_NOERROR)
-    GST_WARNING ("Failed to set mute");
-  else
-    dsoundsrc->mute = mute;
-}
-
-static const gchar *
-gst_directsound_src_get_device (GstDirectSoundSrc * dsoundsrc)
-{
-  return dsoundsrc->device_id;
-}
-
-static void
-gst_directsound_src_set_device (GstDirectSoundSrc * dsoundsrc,
-    const gchar * device_id)
-{
-  g_free (dsoundsrc->device_id);
-  dsoundsrc->device_id = g_strdup (device_id);
 }

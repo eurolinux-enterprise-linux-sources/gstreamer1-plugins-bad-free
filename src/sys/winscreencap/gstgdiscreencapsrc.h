@@ -62,9 +62,7 @@ struct _GstGDIScreenCapSrc
   /* Runtime variables */
   RECT screen_rect;
   RECT src_rect;
-  guint64 frame_number;
-  GstClockID clock_id;
-
+  gint64 frames;
   BITMAPINFO info;
   BYTE *dibMem;
   HBITMAP hBitmap;

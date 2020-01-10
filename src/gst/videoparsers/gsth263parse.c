@@ -73,8 +73,10 @@ gst_h263_parse_class_init (GstH263ParseClass * klass)
 
   GST_DEBUG_CATEGORY_INIT (h263_parse_debug, "h263parse", 0, "h263 parser");
 
-  gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
-  gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&srctemplate));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sinktemplate));
   gst_element_class_set_static_metadata (gstelement_class, "H.263 parser",
       "Codec/Parser/Video",
       "Parses H.263 streams",
@@ -95,7 +97,6 @@ static void
 gst_h263_parse_init (GstH263Parse * h263parse)
 {
   GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (h263parse));
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (h263parse));
 }
 
 static gboolean
@@ -168,15 +169,10 @@ find_psc (GstBuffer * buffer, guint skip)
   if (gst_byte_reader_peek_uint24_be (&br, &psc) == FALSE)
     goto out;
 
-  /* Scan for the picture start code (22 bits - 0x0020)
-   * startcode  : 0000 0000 0000 0000 1000 00xx
-   * mask (bin) : 1111 1111 1111 1111 1111 1100
-   * mask (hex) :    f    f    f    f    f    c
-   * match      :    0    0    0    0    8    0
-   */
+  /* Scan for the picture start code (22 bits - 0x0020) */
   while ((gst_byte_reader_get_remaining (&br) >= 3)) {
     if (gst_byte_reader_peek_uint24_be (&br, &psc) &&
-        ((psc & 0xfffffc) == 0x000080)) {
+        ((psc & 0xffffc0) == 0x000080)) {
       psc_pos = gst_byte_reader_get_pos (&br);
       break;
     } else if (gst_byte_reader_skip (&br, 1) == FALSE)
@@ -276,8 +272,6 @@ gst_h263_parse_set_src_caps (GstH263Parse * h263parse,
 
   gst_pad_set_caps (GST_BASE_PARSE_SRC_PAD (GST_BASE_PARSE (h263parse)), caps);
   gst_caps_unref (caps);
-  if (sink_caps)
-    gst_caps_unref (sink_caps);
 }
 
 static GstFlowReturn
@@ -437,25 +431,16 @@ gst_h263_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
     GstTagList *taglist;
     GstCaps *caps;
 
+    taglist = gst_tag_list_new_empty ();
+
     /* codec tag */
     caps = gst_pad_get_current_caps (GST_BASE_PARSE_SRC_PAD (parse));
-    if (G_UNLIKELY (caps == NULL)) {
-      if (GST_PAD_IS_FLUSHING (GST_BASE_PARSE_SRC_PAD (parse))) {
-        GST_INFO_OBJECT (parse, "Src pad is flushing");
-        return GST_FLOW_FLUSHING;
-      } else {
-        GST_INFO_OBJECT (parse, "Src pad is not negotiated!");
-        return GST_FLOW_NOT_NEGOTIATED;
-      }
-    }
-
-    taglist = gst_tag_list_new_empty ();
     gst_pb_utils_add_codec_description_to_tag_list (taglist,
         GST_TAG_VIDEO_CODEC, caps);
     gst_caps_unref (caps);
 
-    gst_base_parse_merge_tags (parse, taglist, GST_TAG_MERGE_REPLACE);
-    gst_tag_list_unref (taglist);
+    gst_pad_push_event (GST_BASE_PARSE_SRC_PAD (h263parse),
+        gst_event_new_tag (taglist));
 
     /* also signals the end of first-frame processing */
     h263parse->sent_codec_tag = TRUE;

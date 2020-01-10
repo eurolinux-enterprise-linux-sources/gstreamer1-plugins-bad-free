@@ -17,16 +17,17 @@
  * Boston, MA 02110-1301, USA.
  */
 /**
- * SECTION:element-camerabin
+ * SECTION:element-camerabin2
  *
- * CameraBin is a high-level camera object that encapsulates gstreamer
+ * CameraBin2 is a high-level camera object that encapsulates gstreamer
  * elements, providing an API for controlling a digital camera.
  *
  * <note>
- * Note that camerabin is still UNSTABLE and under development.
+ * Note that camerabin2 is still UNSTABLE and under
+ * development.
  * </note>
  *
- * CameraBin has the following main features:
+ * CameraBin2 has the following main features:
  * <itemizedlist>
  * <listitem>
  * Record videos
@@ -45,12 +46,12 @@
  * <refsect2>
  * <title>Usage</title>
  * <para>
- * Camerabin can be created using gst_element_factory_make() just like
+ * Camerabin2 can be created using gst_element_factory_make() just like
  * any other element. Video or image capture mode can be selected using
  * the #GstCameraBin:mode property and the file to save the capture is
  * selected using #GstCameraBin:location property.
  *
- * After creating camerabin, applications might want to do some
+ * After creating camerabin2, applications might want to do some
  * customization (there's a section about this below), then select
  * the desired mode and start capturing.
  *
@@ -75,11 +76,11 @@
  * <refsect2>
  * <title>Customization</title>
  * <para>
- * Camerabin provides various customization properties, allowing the user
+ * Camerabin2 provides various customization properties, allowing the user
  * to set custom filters, selecting the viewfinder sink and formats to
  * use to encode the captured images/videos.
  *
- * #GstEncodingProfile<!-- -->s are used to tell camerabin which formats it
+ * #GstEncodingProfile<!-- -->s are used to tell camerabin2 which formats it
  * should encode the captures to, those should be set to
  * #GstCameraBin:image-profile and #GstCameraBin:video-profile. Default is
  * jpeg for images, and ogg (theora and vorbis) for video. If a profile without
@@ -88,7 +89,7 @@
  * #GstCameraBin:preview-caps can be used to select which format preview
  * images should be posted on the #GstBus. It has to be a raw video format.
  *
- * Camerabin has a #GstCameraBin:camera-source property so applications can
+ * Camerabin2 has a #GstCameraBin:camera-source property so applications can
  * set their source that will provide buffers for the viewfinder and for
  * captures. This camera source is a special type of source that has 3 pads.
  * To use a 'regular' source with a single pad you should use
@@ -102,7 +103,7 @@
  * #GstCameraBin:viewfinder-caps, these #GstCaps should be a subset of
  * #GstCameraBin:viewfinder-supported-caps.
  *
- * To select the desired resolution for captures, camerabin provides
+ * To select the desired resolution for captures, camerabin2 provides
  * #GstCameraBin:image-capture-caps and #GstCameraBin:video-capture-caps,
  * these caps must be a subset of what the source can produce. The allowed
  * caps can be probed using #GstCameraBin:image-capture-supported-caps and
@@ -120,11 +121,11 @@
  * <refsect2>
  * <title>Example launch line</title>
  * <para>
- * Unfortunately, camerabin can't be really used from gst-launch-1.0, as you
- * need to send signals to control it. The following pipeline might be able
+ * Unfortunately, camerabin can't be really used from gst-launch, as you need
+ * to send signals to control it. The following pipeline might be able
  * to show the viewfinder using all the default elements.
  * |[
- * gst-launch-1.0 -v -m camerabin
+ * gst-launch -v -m camerabin
  * ]|
  * </para>
  * </refsect2>
@@ -166,9 +167,15 @@
 #include <gst/pbutils/pbutils.h>
 #include <gst/glib-compat-private.h>
 
+#if GLIB_CHECK_VERSION(2,29,6)
+#define gst_camerabin2_atomic_int_add g_atomic_int_add
+#else
+#define gst_camerabin2_atomic_int_add g_atomic_int_exchange_and_add
+#endif
+
 #define GST_CAMERA_BIN2_PROCESSING_INC(c)                                \
 {                                                                       \
-  gint bef = g_atomic_int_add (&c->processing_counter, 1); \
+  gint bef = gst_camerabin2_atomic_int_add (&c->processing_counter, 1); \
   if (bef == 0)                                                         \
     g_object_notify (G_OBJECT (c), "idle");                             \
   GST_DEBUG_OBJECT ((c), "Processing counter incremented to: %d",       \
@@ -981,7 +988,14 @@ gst_camera_bin_video_reset_elements (gpointer u_data)
   if (camerabin->audio_src) {
     gst_element_set_state (camerabin->audio_capsfilter, GST_STATE_READY);
     gst_element_set_state (camerabin->audio_volume, GST_STATE_READY);
-    gst_element_set_state (camerabin->audio_src, GST_STATE_READY);
+
+    /* FIXME We need to set audiosrc to null to make it resync the ringbuffer
+     * while bug https://bugzilla.gnome.org/show_bug.cgi?id=648359 isn't
+     * fixed.
+     *
+     * Also, we don't reinit the audiosrc to keep audio devices from being open
+     * and running until we really need them */
+    gst_element_set_state (camerabin->audio_src, GST_STATE_NULL);
 
     if (camerabin->audio_filter) {
       gst_element_set_state (camerabin->audio_filter, GST_STATE_READY);
@@ -1087,24 +1101,17 @@ gst_camera_bin_handle_message (GstBin * bin, GstMessage * message)
 
         g_mutex_lock (&camerabin->video_capture_mutex);
         GST_DEBUG_OBJECT (bin, "EOS from video branch");
-        if (camerabin->video_state == GST_CAMERA_BIN_VIDEO_FINISHING) {
-          if (!g_thread_try_new ("reset-element-thread",
-                  gst_camera_bin_video_reset_elements,
-                  gst_object_ref (camerabin), NULL)) {
-            GST_WARNING_OBJECT (camerabin,
-                "Failed to create thread to "
-                "reset video elements' state, video recordings may not work "
-                "anymore");
-            gst_object_unref (camerabin);
-            camerabin->video_state = GST_CAMERA_BIN_VIDEO_IDLE;
-          }
-        } else if (camerabin->video_state == GST_CAMERA_BIN_VIDEO_IDLE) {
-          GST_DEBUG_OBJECT (camerabin, "Received EOS from video branch but "
-              "video recording is idle, ignoring");
-        } else {
-          GST_WARNING_OBJECT (camerabin, "Received EOS from video branch but "
-              "video is recording and stop-capture wasn't requested");
-          g_assert_not_reached ();
+        g_assert (camerabin->video_state == GST_CAMERA_BIN_VIDEO_FINISHING);
+
+        if (!g_thread_try_new ("reset-element-thread",
+                gst_camera_bin_video_reset_elements, gst_object_ref (camerabin),
+                NULL)) {
+          GST_WARNING_OBJECT (camerabin,
+              "Failed to create thread to "
+              "reset video elements' state, video recordings may not work "
+              "anymore");
+          gst_object_unref (camerabin);
+          camerabin->video_state = GST_CAMERA_BIN_VIDEO_IDLE;
         }
 
         g_mutex_unlock (&camerabin->video_capture_mutex);
@@ -1324,18 +1331,10 @@ static void
 gst_camera_bin_src_notify_max_zoom_cb (GObject * self, GParamSpec * pspec,
     gpointer user_data)
 {
-  GParamSpecFloat *zoom_pspec;
   GstCameraBin2 *camera = (GstCameraBin2 *) user_data;
 
   g_object_get (self, "max-zoom", &camera->max_zoom, NULL);
   GST_DEBUG_OBJECT (camera, "Max zoom updated to %f", camera->max_zoom);
-
-  /* update zoom pspec */
-  zoom_pspec =
-      G_PARAM_SPEC_FLOAT (g_object_class_find_property (G_OBJECT_GET_CLASS
-          (G_OBJECT (camera)), "zoom"));
-  zoom_pspec->maximum = camera->max_zoom;
-
   g_object_notify (G_OBJECT (camera), "max-zoom");
 }
 
@@ -1761,7 +1760,7 @@ gst_camera_bin_create_elements (GstCameraBin2 * camera)
         G_CALLBACK (gst_camera_bin_src_notify_readyforcapture), camera);
 
     if (!gst_element_link_pads (camera->src, "vfsrc",
-            camera->viewfinderbin_queue, "sink")) {
+	    camera->viewfinderbin_queue, "sink")) {
       GST_ERROR_OBJECT (camera,
           "Failed to link camera source's vfsrc pad to viewfinder queue");
       goto fail;
@@ -2025,7 +2024,7 @@ gst_camera_bin_set_audio_src (GstCameraBin2 * camera, GstElement * src)
     g_object_unref (camera->user_audio_src);
 
   if (src)
-    gst_object_ref (src);
+    g_object_ref (src);
   camera->user_audio_src = src;
 }
 
@@ -2039,7 +2038,7 @@ gst_camera_bin_set_camera_src (GstCameraBin2 * camera, GstElement * src)
     g_object_unref (camera->user_src);
 
   if (src)
-    gst_object_ref (src);
+    g_object_ref (src);
   camera->user_src = src;
 }
 

@@ -91,14 +91,11 @@ size_changed (GObject * obj, GParamSpec * pspec, IDirectFBWindow * window)
     gint width, height;
 
     if (!(gst_structure_get_int (s, "width", &width) &&
-            gst_structure_get_int (s, "height", &height))) {
-      gst_caps_unref (caps);
+            gst_structure_get_int (s, "height", &height)))
       return;
-    }
 
     window->Resize (window, width, height);
   }
-  gst_caps_unref (caps);
 }
 
 static void

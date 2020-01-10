@@ -53,6 +53,8 @@ struct _GstAmcVideoEnc
 
   /* < private > */
   GstAmcCodec *codec;
+  GstAmcBuffer *input_buffers, *output_buffers;
+  gsize n_input_buffers, n_output_buffers;
   GstAmcFormat *amc_format;
 
   GstVideoCodecState *input_state;
@@ -76,8 +78,9 @@ struct _GstAmcVideoEnc
   GCond drain_cond;
   /* TRUE if EOS buffers shouldn't be forwarded */
   gboolean draining;
-  /* TRUE if the component is drained */
-  gboolean drained;
+
+  /* TRUE if upstream is EOS */
+  gboolean eos;
 
   GstFlowReturn downstream_flow_ret;
 };

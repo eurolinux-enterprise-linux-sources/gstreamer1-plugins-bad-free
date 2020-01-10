@@ -38,8 +38,9 @@ typedef struct _GstPnmencClass GstPnmencClass;
 
 struct _GstPnmenc
 {
-  GstVideoEncoder parent;
-  GstVideoCodecState *input_state;
+  GstElement element;
+
+  GstVideoInfo vinfo;
   GstPnmInfo info;
 
   GstPad *src;
@@ -47,7 +48,7 @@ struct _GstPnmenc
 
 struct _GstPnmencClass
 {
-  GstVideoEncoderClass parent;
+  GstElementClass parent_class;
 };
 
 GType gst_pnmenc_get_type (void) G_GNUC_CONST;

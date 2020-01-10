@@ -15,7 +15,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <limits.h>
-#include <glib.h>
 
 typedef size_t VP8_BD_VALUE;
 
@@ -43,17 +42,14 @@ typedef struct
     void                *decrypt_state;
 } BOOL_DECODER;
 
-G_GNUC_INTERNAL
 extern const unsigned char vp8_norm[256];
 
-G_GNUC_INTERNAL
 int vp8dx_start_decode(BOOL_DECODER *br,
                        const unsigned char *source,
                        unsigned int source_sz,
                        vp8_decrypt_cb *decrypt_cb,
                        void *decrypt_state);
 
-G_GNUC_INTERNAL
 void vp8dx_bool_decoder_fill(BOOL_DECODER *br);
 
 

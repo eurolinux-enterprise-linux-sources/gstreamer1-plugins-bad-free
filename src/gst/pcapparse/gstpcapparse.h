@@ -47,9 +47,8 @@ typedef enum
 
 typedef enum
 {
-  LINKTYPE_ETHER  = 1,
-  LINKTYPE_RAW = 101,
-  LINKTYPE_SLL = 113
+  DLT_ETHER  = 1,
+  DLT_SLL = 113
 } GstPcapParseLinktype;
 
 /**
@@ -84,6 +83,8 @@ struct _GstPcapParse
   GstPcapParseLinktype linktype;
 
   gboolean newsegment_sent;
+
+  gint64 buffer_offset;
 };
 
 struct _GstPcapParseClass

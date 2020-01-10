@@ -47,6 +47,8 @@
 #ifndef __GST_DSHOWAUDIODEC_H__
 #define __GST_DSHOWAUDIODEC_H__
 
+#include <atlbase.h>
+
 #include <gst/gst.h>
 #include "gstdshowutil.h"
 #include "gstdshowfakesrc.h"
@@ -86,11 +88,11 @@ struct _GstDshowAudioDec
   FakeSrc *fakesrc;
   AudioFakeSink *fakesink;
 
-  IBaseFilterPtr decfilter;
+  CComPtr<IBaseFilter> decfilter;
   
   /* graph manager interfaces */  
-  IMediaFilterPtr mediafilter;
-  IFilterGraphPtr filtergraph;
+  CComPtr<IMediaFilter> mediafilter;
+  CComPtr<IFilterGraph> filtergraph;
 
   /* true when dshow graph is setup */
   gboolean setup;
@@ -111,11 +113,11 @@ struct _GstDshowAudioDec
   GstClockTime timestamp;
 
   gboolean comInitialized;
-  GMutex   com_init_lock;
-  GMutex   com_deinit_lock;
-  GCond    com_initialized;
-  GCond    com_uninitialize;
-  GCond    com_uninitialized;
+  GMutex   *com_init_lock;
+  GMutex   *com_deinit_lock;
+  GCond    *com_initialized;
+  GCond    *com_uninitialize;
+  GCond    *com_uninitialized;
 };
 
 struct _GstDshowAudioDecClass
@@ -147,7 +149,6 @@ public:
     m_MediaType.Set (*pmt);
     return S_OK;
   }
-  int GetBufferSize();
 
 protected:
   HRESULT m_hres;

@@ -25,7 +25,7 @@
 #include "mxfquark.h"
 #include "mxfdemux.h"
 #include "mxfmux.h"
-/*#include "mxfdms1.h"*/
+#include "mxfdms1.h"
 #include "mxfaes-bwf.h"
 #include "mxfalaw.h"
 #include "mxfd10.h"
@@ -59,7 +59,7 @@ plugin_init (GstPlugin * plugin)
   mxf_init ();
   mxf_quark_initialize ();
   mxf_metadata_init_types ();
-/*  mxf_dms1_initialize ();*/
+  mxf_dms1_initialize ();
   mxf_aes_bwf_init ();
   mxf_alaw_init ();
   mxf_d10_init ();
@@ -71,9 +71,8 @@ plugin_init (GstPlugin * plugin)
 
   /* mxfmux is disabled for now - it compiles but is completely untested */
   if (!gst_element_register (plugin, "mxfdemux", GST_RANK_PRIMARY,
-          GST_TYPE_MXF_DEMUX)
-      || !gst_element_register (plugin, "mxfmux", GST_RANK_PRIMARY,
-          GST_TYPE_MXF_MUX))
+          GST_TYPE_MXF_DEMUX))
+    /* || !gst_element_register (plugin, "mxfmux", GST_RANK_PRIMARY, GST_TYPE_MXF_MUX)) */
     return FALSE;
 
   return TRUE;

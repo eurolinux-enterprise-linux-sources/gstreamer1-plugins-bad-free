@@ -71,7 +71,7 @@
  * <refsect2>
  * <title>Example pipeline</title>
  * |[
- * echo 'Hello G-Streamer!' | gst-launch-1.0 fdsrc fd=0 ! festival ! wavparse ! audioconvert ! alsasink
+ * echo 'Hello G-Streamer!' | gst-launch fdsrc fd=0 ! festival ! wavparse ! audioconvert ! alsasink
  * ]|
  * </refsect2>
  */
@@ -142,7 +142,7 @@ enum
 
 enum
 {
-  PROP_0
+  ARG_0
       /* FILL ME */
 };
 
@@ -163,10 +163,10 @@ G_DEFINE_TYPE (GstFestival, gst_festival, GST_TYPE_ELEMENT)
       GST_DEBUG_FUNCPTR (gst_festival_change_state);
 
   /* register pads */
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &sink_template_factory);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &src_template_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&sink_template_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&src_template_factory));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Festival Text-to-Speech synthesizer", "Filter/Effect/Audio",

@@ -54,6 +54,8 @@ struct instanceOfMC
   int id;
   MotionCells *mc;
 };
+vector < instanceOfMC > motioncellsvector;
+vector < int >motioncellsfreeids;
 
 int searchIdx (int p_id);
 extern "C"

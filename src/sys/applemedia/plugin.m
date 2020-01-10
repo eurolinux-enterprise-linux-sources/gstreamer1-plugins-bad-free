@@ -22,17 +22,14 @@
 #endif
 
 #include <Foundation/Foundation.h>
-#include "corevideomemory.h"
 #ifdef HAVE_IOS
 #include "iosassetsrc.h"
-#endif
-#ifdef HAVE_QTKIT
+#else
 #include "qtkitvideosrc.h"
 #endif
 #ifdef HAVE_AVFOUNDATION
 #include "avfvideosrc.h"
 #include "avfassetsrc.h"
-#include "avsamplevideosink.h"
 #endif
 #ifdef HAVE_VIDEOTOOLBOX
 #include "vtdec.h"
@@ -65,18 +62,12 @@ plugin_init (GstPlugin * plugin)
 {
   gboolean res = TRUE;
 
-  gst_apple_core_video_memory_init ();
-
 #ifdef HAVE_IOS
-  gst_ios_gl_memory_init ();
-
   res &= gst_element_register (plugin, "iosassetsrc", GST_RANK_SECONDARY,
       GST_TYPE_IOS_ASSET_SRC);
 #else
   enable_mt_mode ();
-#endif
 
-#ifdef HAVE_QTKIT
   res = gst_element_register (plugin, "qtkitvideosrc", GST_RANK_SECONDARY,
       GST_TYPE_QTKIT_VIDEO_SRC);
 #endif
@@ -86,20 +77,17 @@ plugin_init (GstPlugin * plugin)
       GST_TYPE_AVF_VIDEO_SRC);
   res &= gst_element_register (plugin, "avfassetsrc", AV_RANK,
       GST_TYPE_AVF_ASSET_SRC);
-  res &= gst_element_register (plugin, "avsamplebufferlayersink",
-      GST_RANK_NONE, GST_TYPE_AV_SAMPLE_VIDEO_SINK);
 #endif
 
   res &= gst_element_register (plugin, "atdec", GST_RANK_MARGINAL, GST_TYPE_ATDEC);
 
 #ifdef HAVE_VIDEOTOOLBOX
   /* Check if the framework actually exists at runtime */
-  if (&VTCompressionSessionCreate != NULL) {
-    gst_vtdec_register_elements (plugin);
+  if (VTCompressionSessionCreate != NULL) {
+    res &= gst_element_register (plugin, "vtdec", GST_RANK_PRIMARY, GST_TYPE_VTDEC);
     gst_vtenc_register_elements (plugin);
   }
 #endif
-
 
   return res;
 }

@@ -26,10 +26,10 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v intersubsrc ! kateenc ! oggmux ! filesink location=out.ogv
+ * gst-launch -v intersubsrc ! kateenc ! oggmux ! filesink location=out.ogv
  * ]|
  * 
- * The intersubsrc element cannot be used effectively with gst-launch-1.0,
+ * The intersubsrc element cannot be used effectively with gst-launch,
  * as it requires a second pipeline in the application to send subtitles.
  * See the gstintertest.c example in the gst-plugins-bad source code for
  * more details.
@@ -48,6 +48,8 @@ GST_DEBUG_CATEGORY_STATIC (gst_inter_sub_src_debug_category);
 #define GST_CAT_DEFAULT gst_inter_sub_src_debug_category
 
 /* prototypes */
+
+
 static void gst_inter_sub_src_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_inter_sub_src_get_property (GObject * object,
@@ -69,9 +71,8 @@ enum
   PROP_CHANNEL
 };
 
-#define DEFAULT_CHANNEL ("default")
-
 /* pad templates */
+
 static GstStaticPadTemplate gst_inter_sub_src_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
@@ -93,8 +94,8 @@ gst_inter_sub_src_class_init (GstInterSubSrcClass * klass)
   GST_DEBUG_CATEGORY_INIT (gst_inter_sub_src_debug_category, "intersubsrc", 0,
       "debug category for intersubsrc element");
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gst_inter_sub_src_src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_inter_sub_src_src_template));
 
   gst_element_class_set_static_metadata (element_class,
       "Internal subtitle source",
@@ -113,7 +114,7 @@ gst_inter_sub_src_class_init (GstInterSubSrcClass * klass)
   g_object_class_install_property (gobject_class, PROP_CHANNEL,
       g_param_spec_string ("channel", "Channel",
           "Channel name to match inter src and sink elements",
-          DEFAULT_CHANNEL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+          "default", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -122,7 +123,7 @@ gst_inter_sub_src_init (GstInterSubSrc * intersubsrc)
   gst_base_src_set_format (GST_BASE_SRC (intersubsrc), GST_FORMAT_TIME);
   gst_base_src_set_live (GST_BASE_SRC (intersubsrc), TRUE);
 
-  intersubsrc->channel = g_strdup (DEFAULT_CHANNEL);
+  intersubsrc->channel = g_strdup ("default");
 }
 
 void
@@ -218,6 +219,7 @@ gst_inter_sub_src_get_times (GstBaseSrc * src, GstBuffer * buffer,
     *end = -1;
   }
 }
+
 
 static GstFlowReturn
 gst_inter_sub_src_create (GstBaseSrc * src, guint64 offset, guint size,

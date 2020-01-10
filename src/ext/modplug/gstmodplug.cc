@@ -34,7 +34,7 @@
  * <refsect2>
  * <title>Example pipeline</title>
  * |[
- * gst-launch-1.0 -v filesrc location=1990s-nostalgia.xm ! modplug ! audioconvert ! alsasink
+ * gst-launch -v filesrc location=1990s-nostalgia.xm ! modplug ! audioconvert ! alsasink
  * ]| Play a FastTracker xm file.
  * </refsect2>
  */
@@ -42,6 +42,10 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
+/* FIXME 0.11: suppress warnings for deprecated API such as GStaticRecMutex
+ * with newer GLib versions (>= 2.31.0) */
+#define GLIB_DISABLE_DEPRECATION_WARNINGS
 
 /* Required to not get an undefined warning
  * https://bugzilla.gnome.org/show_bug.cgi?id=613795
@@ -91,7 +95,7 @@ enum
 #define DEFAULT_OVERSAMP         TRUE
 #define DEFAULT_NOISE_REDUCTION  TRUE
 
-#define FORMATS "{ " GST_AUDIO_NE (S32) ", " GST_AUDIO_NE (S16) ", U8 }"
+#define FORMATS "{ "GST_AUDIO_NE (S32)", "GST_AUDIO_NE (S16)", U8 }"
 
 static GstStaticPadTemplate modplug_src_template_factory =
 GST_STATIC_PAD_TEMPLATE ("src",
@@ -205,8 +209,10 @@ gst_modplug_class_init (GstModPlugClass * klass)
 
   gstelement_class->change_state = gst_modplug_change_state;
 
-  gst_element_class_add_static_pad_template (gstelement_class, &modplug_sink_template_factory);
-  gst_element_class_add_static_pad_template (gstelement_class, &modplug_src_template_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&modplug_sink_template_factory));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&modplug_src_template_factory));
 
   gst_element_class_set_static_metadata (gstelement_class, "ModPlug",
       "Codec/Decoder/Audio", "Module decoder based on modplug engine",
@@ -326,9 +332,18 @@ gst_modplug_do_seek (GstModPlug * modplug, GstEvent * event)
   gboolean flush;
   gint64 cur, stop;
   GstSegment seg;
+/* FIXME timestamp is set but not used */
+#if 0
+  guint64 timestamp;
+#endif
 
   if (modplug->frequency == 0)
     goto no_song;
+
+#if 0
+  timestamp = gst_util_uint64_scale_int (modplug->offset, GST_SECOND,
+      modplug->frequency);
+#endif
 
   gst_event_parse_seek (event, &rate, &format, &flags, &cur_type, &cur,
       &stop_type, &stop);

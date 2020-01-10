@@ -31,9 +31,9 @@ GST_DEBUG_CATEGORY_STATIC (webvttenc_debug);
 
 enum
 {
-  PROP_0,
-  PROP_TIMESTAMP,
-  PROP_DURATION
+  ARG_0,
+  ARG_TIMESTAMP,
+  ARG_DURATION
 };
 
 static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
@@ -210,10 +210,10 @@ gst_webvtt_enc_get_property (GObject * object,
   webvttenc = GST_WEBVTT_ENC (object);
 
   switch (prop_id) {
-    case PROP_TIMESTAMP:
+    case ARG_TIMESTAMP:
       g_value_set_int64 (value, webvttenc->timestamp);
       break;
-    case PROP_DURATION:
+    case ARG_DURATION:
       g_value_set_int64 (value, webvttenc->duration);
       break;
     default:
@@ -232,10 +232,10 @@ gst_webvtt_enc_set_property (GObject * object,
   webvttenc = GST_WEBVTT_ENC (object);
 
   switch (prop_id) {
-    case PROP_TIMESTAMP:
+    case ARG_TIMESTAMP:
       webvttenc->timestamp = g_value_get_int64 (value);
       break;
-    case PROP_DURATION:
+    case ARG_DURATION:
       webvttenc->duration = g_value_get_int64 (value);
       break;
     default:
@@ -255,19 +255,21 @@ gst_webvtt_enc_class_init (GstWebvttEncClass * klass)
 
   element_class->change_state = GST_DEBUG_FUNCPTR (gst_webvtt_enc_change_state);
 
-  g_object_class_install_property (gobject_class, PROP_TIMESTAMP,
+  g_object_class_install_property (gobject_class, ARG_TIMESTAMP,
       g_param_spec_int64 ("timestamp", "Offset for the starttime",
           "Offset for the starttime for the subtitles", G_MININT64, G_MAXINT64,
           0,
           G_PARAM_READWRITE | GST_PARAM_CONTROLLABLE | G_PARAM_STATIC_STRINGS));
-  g_object_class_install_property (gobject_class, PROP_DURATION,
+  g_object_class_install_property (gobject_class, ARG_DURATION,
       g_param_spec_int64 ("duration", "Offset for the duration",
           "Offset for the duration of the subtitles", G_MININT64, G_MAXINT64,
           0,
           G_PARAM_READWRITE | GST_PARAM_CONTROLLABLE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
-  gst_element_class_add_static_pad_template (element_class, &src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
 
   gst_element_class_set_static_metadata (element_class,
       "WebVTT encoder", "Codec/Encoder/Subtitle",

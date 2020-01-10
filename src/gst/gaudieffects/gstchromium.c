@@ -1,6 +1,6 @@
 /*
  * GStreamer
- * Copyright (C) <2010> Luis de Bethencourt <luis@debethencourt.com>
+ * Copyright (C) <2010-2012> Luis de Bethencourt <luis@debethencourt.com>
  *
  * Chromium - burning chrome video effect.
  * Based on Pete Warden's FreeFrame plugin with the same name.
@@ -52,7 +52,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! chromium ! videoconvert ! autovideosink
+ * gst-launch -v videotestsrc ! chromium ! videoconvert ! autovideosink
  * ]| This pipeline shows the effect of chromium on a test stream
  * </refsect2>
  */
@@ -90,6 +90,7 @@ enum
   PROP_0 = 0,
   PROP_EDGE_A,
   PROP_EDGE_B,
+  PROP_SILENT
 };
 
 /* Initializations */
@@ -152,10 +153,10 @@ gst_chromium_class_init (GstChromiumClass * klass)
       "Chromium breaks the colors of the video signal.",
       "Luis de Bethencourt <luis@debethencourt.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_chromium_sink_template);
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_chromium_src_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_chromium_sink_template));
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_chromium_src_template));
 
   gobject_class->set_property = gst_chromium_set_property;
   gobject_class->get_property = gst_chromium_get_property;
@@ -171,6 +172,10 @@ gst_chromium_class_init (GstChromiumClass * klass)
           "Second edge parameter", 0, 256, DEFAULT_EDGE_B,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE));
 
+  g_object_class_install_property (gobject_class, PROP_SILENT,
+      g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
+          FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
   vfilter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_chromium_transform_frame);
 }
@@ -185,6 +190,7 @@ gst_chromium_init (GstChromium * filter)
 {
   filter->edge_a = DEFAULT_EDGE_A;
   filter->edge_b = DEFAULT_EDGE_B;
+  filter->silent = FALSE;
 
   setup_cos_table ();
 }
@@ -196,6 +202,9 @@ gst_chromium_set_property (GObject * object, guint prop_id,
   GstChromium *filter = GST_CHROMIUM (object);
 
   switch (prop_id) {
+    case PROP_SILENT:
+      filter->silent = g_value_get_boolean (value);
+      break;
     case PROP_EDGE_A:
       filter->edge_a = g_value_get_uint (value);
       break;
@@ -216,6 +225,9 @@ gst_chromium_get_property (GObject * object, guint prop_id,
 
   GST_OBJECT_LOCK (filter);
   switch (prop_id) {
+    case PROP_SILENT:
+      g_value_set_boolean (value, filter->silent);
+      break;
     case PROP_EDGE_A:
       g_value_set_uint (value, filter->edge_a);
       break;
@@ -243,13 +255,16 @@ gst_chromium_transform_frame (GstVideoFilter * vfilter,
     GstVideoFrame * in_frame, GstVideoFrame * out_frame)
 {
   GstChromium *filter = GST_CHROMIUM (vfilter);
-  gint video_size, edge_a, edge_b;
+  gint video_size, edge_a, edge_b, width, height;
   guint32 *src, *dest;
   GstClockTime timestamp;
   gint64 stream_time;
 
   src = GST_VIDEO_FRAME_PLANE_DATA (in_frame, 0);
   dest = GST_VIDEO_FRAME_PLANE_DATA (out_frame, 0);
+
+  width = GST_VIDEO_FRAME_WIDTH (in_frame);
+  height = GST_VIDEO_FRAME_HEIGHT (in_frame);
 
   /* GstController: update the properties */
   timestamp = GST_BUFFER_TIMESTAMP (in_frame->buffer);
@@ -268,8 +283,7 @@ gst_chromium_transform_frame (GstVideoFilter * vfilter,
   edge_b = filter->edge_b;
   GST_OBJECT_UNLOCK (filter);
 
-  video_size = GST_VIDEO_FRAME_WIDTH (in_frame) *
-      GST_VIDEO_FRAME_HEIGHT (in_frame);
+  video_size = width * height;
   transform (src, dest, video_size, edge_a, edge_b);
 
   return GST_FLOW_OK;
@@ -343,6 +357,7 @@ transform (guint32 * src, guint32 * dest, gint video_area,
     red = CLAMP (red, 0, 255);
     green = CLAMP (green, 0, 255);
     blue = CLAMP (blue, 0, 255);
+
 
     *dest++ = (red << 16) | (green << 8) | blue;
   }

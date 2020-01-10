@@ -3,7 +3,7 @@
   <description>use libsndfile to read and write various audio formats</description>
   <filename>../../ext/sndfile/.libs/libgstsndfile.so</filename>
   <basename>libgstsndfile.so</basename>
-  <version>1.10.4</version>
+  <version>1.4.5</version>
   <license>LGPL</license>
   <source>gst-plugins-bad</source>
   <package>GStreamer Bad Plug-ins source release</package>
@@ -20,7 +20,7 @@
           <name>sink</name>
           <direction>sink</direction>
           <presence>always</presence>
-          <details>audio/x-ircam; audio/x-nist; audio/x-paris; audio/x-rf64; audio/x-sds; audio/x-svx; audio/x-voc; audio/x-w64; audio/x-xi</details>
+          <details>audio/ogg; audio/x-aiff; audio/x-au; audio/x-flac; audio/x-ircam; audio/x-nist; audio/x-paris; audio/x-raw; audio/x-rf64; audio/x-sds; audio/x-svx; audio/x-voc; audio/x-w64; audio/x-wav; audio/x-xi</details>
         </caps>
         <caps>
           <name>src</name>

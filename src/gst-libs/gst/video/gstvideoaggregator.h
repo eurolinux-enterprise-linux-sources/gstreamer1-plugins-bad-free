@@ -17,7 +17,7 @@
  * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
  * Boston, MA 02110-1301, USA.
  */
-
+ 
 #ifndef __GST_VIDEO_AGGREGATOR_H__
 #define __GST_VIDEO_AGGREGATOR_H__
 
@@ -30,9 +30,11 @@
 #include <gst/video/video.h>
 #include <gst/base/gstaggregator.h>
 
+#include "gstvideoaggregatorpad.h"
+
 G_BEGIN_DECLS
 
-#define GST_TYPE_VIDEO_AGGREGATOR (gst_video_aggregator_get_type())
+#define GST_TYPE_VIDEO_AGGREGATOR (gst_videoaggregator_get_type())
 #define GST_VIDEO_AGGREGATOR(obj) \
         (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_VIDEO_AGGREGATOR, GstVideoAggregator))
 #define GST_VIDEO_AGGREGATOR_CLASS(klass) \
@@ -47,8 +49,6 @@ G_BEGIN_DECLS
 typedef struct _GstVideoAggregator GstVideoAggregator;
 typedef struct _GstVideoAggregatorClass GstVideoAggregatorClass;
 typedef struct _GstVideoAggregatorPrivate GstVideoAggregatorPrivate;
-
-#include "gstvideoaggregatorpad.h"
 
 /**
  * GstVideoAggregator:
@@ -65,17 +65,17 @@ struct _GstVideoAggregator
 
   /* < private > */
   GstVideoAggregatorPrivate *priv;
-  gpointer          _gst_reserved[GST_PADDING_LARGE];
+  gpointer          _gst_reserved[GST_PADDING];
 };
 
 /**
  * GstVideoAggregatorClass:
- * @update_caps:              Optional.
- *                            Lets subclasses update the #GstCaps representing
- *                            the src pad caps before usage.  Return %NULL to indicate failure.
- * @fixate_caps:              Fixate and return the src pad caps provided.  The function takes
- *                            ownership of @caps and returns a fixated version of
- *                            @caps. @caps is not guaranteed to be writable.
+ * @disable_frame_conversion: Optional.
+ *                            Allows subclasses to disable the frame colorspace
+ *                            conversion feature
+ * @update_info:              Optional.
+ *                            Lets subclasses update the src #GstVideoInfo representing
+ *                            the src pad caps before usage.
  * @aggregate_frames:         Lets subclasses aggregate frames that are ready. Subclasses
  *                            should iterate the GstElement.sinkpads and use the already
  *                            mapped #GstVideoFrame from GstVideoAggregatorPad.aggregated_frame
@@ -87,8 +87,6 @@ struct _GstVideoAggregator
  *                            the #aggregate_frames vmethod.
  * @negotiated_caps:          Optional.
  *                            Notifies subclasses what caps format has been negotiated
- * @find_best_format:         Optional.
- *                            Lets subclasses decide of the best common format to use.
  **/
 struct _GstVideoAggregatorClass
 {
@@ -96,29 +94,21 @@ struct _GstVideoAggregatorClass
   GstAggregatorClass parent_class;
 
   /*< public >*/
-  GstCaps *          (*update_caps)               (GstVideoAggregator *  videoaggregator,
-                                                   GstCaps            *  caps,
-                                                   GstCaps            *  filter_caps);
-  GstCaps *          (*fixate_caps)               (GstVideoAggregator *  videoaggregator,
-                                                   GstCaps            *  caps);
+  gboolean           disable_frame_conversion;
+
+  gboolean           (*update_info)               (GstVideoAggregator *  videoaggregator,
+                                                   GstVideoInfo       *  info);
   GstFlowReturn      (*aggregate_frames)          (GstVideoAggregator *  videoaggregator,
                                                    GstBuffer          *  outbuffer);
   GstFlowReturn      (*get_output_buffer)         (GstVideoAggregator *  videoaggregator,
                                                    GstBuffer          ** outbuffer);
   gboolean           (*negotiated_caps)           (GstVideoAggregator *  videoaggregator,
                                                    GstCaps            *  caps);
-  void               (*find_best_format)          (GstVideoAggregator *  vagg,
-                                                   GstCaps            *  downstream_caps,
-                                                   GstVideoInfo       *  best_info,
-                                                   gboolean           *  at_least_one_alpha);
-
-  GstCaps           *sink_non_alpha_caps;
-
   /* < private > */
-  gpointer            _gst_reserved[GST_PADDING_LARGE];
+  gpointer            _gst_reserved[GST_PADDING];
 };
 
-GType gst_video_aggregator_get_type       (void);
+GType gst_videoaggregator_get_type       (void);
 
 G_END_DECLS
 #endif /* __GST_VIDEO_AGGREGATOR_H__ */

@@ -59,7 +59,8 @@ enum
 {
   PROP_0,
   PROP_DROP,
-  PROP_GOP_SPLIT
+  PROP_GOP_SPLIT,
+  PROP_LAST
 };
 
 #define parent_class gst_mpegv_parse_parent_class
@@ -146,8 +147,10 @@ gst_mpegv_parse_class_init (GstMpegvParseClass * klass)
           "Split frame when encountering GOP", DEFAULT_PROP_GOP_SPLIT,
           G_PARAM_CONSTRUCT | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (element_class, &src_template);
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
 
   gst_element_class_set_static_metadata (element_class,
       "MPEG video elementary stream parser",
@@ -175,7 +178,6 @@ gst_mpegv_parse_init (GstMpegvParse * parse)
 
   gst_base_parse_set_pts_interpolation (GST_BASE_PARSE (parse), FALSE);
   GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (parse));
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (parse));
 }
 
 static void
@@ -573,8 +575,8 @@ gst_mpegv_parse_process_sc (GstMpegvParse * mpvparse,
 }
 
 /* FIXME move into baseparse, or anything equivalent;
- * see https://bugzilla.gnome.org/show_bug.cgi?id=650093
- * #define GST_BASE_PARSE_FRAME_FLAG_PARSING   0x100000 */
+ * see https://bugzilla.gnome.org/show_bug.cgi?id=650093 */
+#define GST_BASE_PARSE_FRAME_FLAG_PARSING   0x10000
 
 static inline void
 update_frame_parsing_status (GstMpegvParse * mpvparse,
@@ -617,7 +619,7 @@ retry:
 
   /* if already found a previous start code, e.g. start of frame, go for next */
   if (mpvparse->last_sc >= 0) {
-    packet.offset = mpvparse->last_sc;
+    off = packet.offset = mpvparse->last_sc;
     packet.size = 0;
     goto next;
   }
@@ -813,7 +815,6 @@ gst_mpegv_parse_update_src_caps (GstMpegvParse * mpvparse)
   }
 
   if (mpvparse->config_flags & FLAG_SEQUENCE_EXT) {
-    guint8 escape = mpvparse->sequenceext.profile_level_escape_bit;
     const guint profile_c = mpvparse->sequenceext.profile;
     const guint level_c = mpvparse->sequenceext.level;
     const gchar *profile = NULL, *level = NULL;
@@ -823,14 +824,20 @@ gst_mpegv_parse_update_src_caps (GstMpegvParse * mpvparse)
      * 4:2:2 and Multi-view have profile = 0, with the escape bit set to 1
      */
     const gchar *const profiles[] =
-        { "4:2:2", "high", "spatial", "snr", "main", "simple" };
+        { "high", "spatial", "snr", "main", "simple" };
     /*
      * Level indication - 4 => High, 6 => High-1440, 8 => Main, 10 => Low,
      *                    except in the case of profile = 0
      */
     const gchar *const levels[] = { "high", "high-1440", "main", "low" };
 
-    if (escape) {
+    if (profile_c > 0 && profile_c < 6)
+      profile = profiles[profile_c - 1];
+
+    if ((level_c > 3) && (level_c < 11) && (level_c % 2 == 0))
+      level = levels[(level_c >> 1) - 2];
+
+    if (profile_c == 8) {
       /* Non-hierarchical profile */
       switch (level_c) {
         case 2:
@@ -856,14 +863,9 @@ gst_mpegv_parse_update_src_caps (GstMpegvParse * mpvparse)
         default:
           break;
       }
-
-    } else {
-      if (profile_c < 6)
-        profile = profiles[profile_c];
-
-      if ((level_c > 3) && (level_c < 11) && (level_c % 2 == 0))
-        level = levels[(level_c >> 1) - 2];
     }
+
+    /* FIXME does it make sense to expose profile/level in the caps ? */
 
     GST_DEBUG_OBJECT (mpvparse, "profile:'%s' level:'%s'", profile, level);
 
@@ -946,24 +948,14 @@ gst_mpegv_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
     GstCaps *caps;
 
     /* codec tag */
-    caps = gst_pad_get_current_caps (GST_BASE_PARSE_SRC_PAD (parse));
-    if (G_UNLIKELY (caps == NULL)) {
-      if (GST_PAD_IS_FLUSHING (GST_BASE_PARSE_SRC_PAD (parse))) {
-        GST_INFO_OBJECT (parse, "Src pad is flushing");
-        return GST_FLOW_FLUSHING;
-      } else {
-        GST_INFO_OBJECT (parse, "Src pad is not negotiated!");
-        return GST_FLOW_NOT_NEGOTIATED;
-      }
-    }
-
     taglist = gst_tag_list_new_empty ();
+    caps = gst_pad_get_current_caps (GST_BASE_PARSE_SRC_PAD (parse));
     gst_pb_utils_add_codec_description_to_tag_list (taglist,
         GST_TAG_VIDEO_CODEC, caps);
     gst_caps_unref (caps);
 
-    gst_base_parse_merge_tags (parse, taglist, GST_TAG_MERGE_REPLACE);
-    gst_tag_list_unref (taglist);
+    gst_pad_push_event (GST_BASE_PARSE_SRC_PAD (parse),
+        gst_event_new_tag (taglist));
 
     mpvparse->send_codec_tag = FALSE;
   }

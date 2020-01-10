@@ -18,8 +18,8 @@
  */
 
 #include "qtkitvideosrc.h"
+
 #import "corevideobuffer.h"
-#include "glcontexthelper.h"
 
 #import <QTKit/QTKit.h>
 
@@ -100,12 +100,9 @@ G_DEFINE_TYPE (GstQTKitVideoSrc, gst_qtkit_video_src, GST_TYPE_PUSH_SRC);
   BOOL stopRequest;
 
   gint width, height;
-  gint fps_n, fps_d;
+  gint fps_n, fps_d;  
   GstClockTime duration;
   guint64 offset;
-  GstGLContextHelper *ctxh;
-  GstVideoTextureCache *textureCache;
-  GstVideoInfo outputInfo;
 }
 
 - (id)init;
@@ -152,10 +149,6 @@ G_DEFINE_TYPE (GstQTKitVideoSrc, gst_qtkit_video_src, GST_TYPE_PUSH_SRC);
 
     gst_base_src_set_live (baseSrc, TRUE);
     gst_base_src_set_format (baseSrc, GST_FORMAT_TIME);
-
-    self->ctxh = NULL;
-    textureCache = NULL;
-    gst_video_info_init (&outputInfo);
   }
 
   return self;
@@ -279,17 +272,6 @@ openFailed:
                          error:nil];
   g_assert (success);
 
-  gst_gl_context_helper_ensure_context (ctxh);
-  GST_INFO_OBJECT (element, "pushing textures, context %p old context %p",
-      ctxh->context, textureCache ? textureCache->ctx : NULL);
-  if (textureCache && textureCache->ctx != ctxh->context) {
-    gst_video_texture_cache_free (textureCache);
-    textureCache = NULL;
-  }
-  textureCache = gst_video_texture_cache_new (ctxh->context);
-  gst_video_texture_cache_set_format (textureCache, GST_VIDEO_FORMAT_UYVY, caps);
-  gst_video_info_set_format (&outputInfo, GST_VIDEO_FORMAT_UYVY, width, height);
-
   [output setDelegate:self];
   [session startRunning];
 
@@ -309,7 +291,6 @@ openFailed:
   fps_n = 0;
   fps_d = 1;
   duration = GST_CLOCK_TIME_NONE;
-  ctxh = gst_gl_context_helper_new (element);
 
   /* this will trigger negotiation and open the device in setCaps */
   gst_base_src_start_complete (baseSrc, GST_FLOW_OK);
@@ -325,6 +306,7 @@ openFailed:
     [[NSRunLoop mainRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1]];
   }
 
+
   return YES;
 }
 
@@ -337,12 +319,6 @@ openFailed:
   queueLock = nil;
   [queue release];
   queue = nil;
-
-  gst_gl_context_helper_free (ctxh);
-  ctxh = NULL;
-  if (textureCache)
-    gst_video_texture_cache_free (textureCache);
-  textureCache = NULL;
 
   return YES;
 }
@@ -458,7 +434,7 @@ openFailed:
   [queueLock unlockWithCondition:
       ([queue count] == 0) ? NO_FRAMES : HAS_FRAME_OR_STOP_REQUEST];
 
-  *buf = gst_core_video_buffer_new ((CVBufferRef)frame, &outputInfo, textureCache);
+  *buf = gst_core_video_buffer_new ((CVBufferRef)frame, NULL);
   CVBufferRelease (frame);
 
   [self timestampBuffer:*buf];
@@ -542,7 +518,8 @@ gst_qtkit_video_src_class_init (GstQTKitVideoSrcClass * klass)
       "Reads frames from a Mac OS X QTKit device",
       "Ole André Vadla Ravnås <oleavr@soundrop.com>");
 
-  gst_element_class_add_static_pad_template (gstelement_class, &src_template);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&src_template));
 
   gobject_class->finalize = gst_qtkit_video_src_finalize;
   gobject_class->get_property = gst_qtkit_video_src_get_property;

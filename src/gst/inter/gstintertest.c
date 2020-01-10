@@ -80,13 +80,16 @@ main (int argc, char *argv[])
   GstInterTest *intertest2;
   GMainLoop *main_loop;
 
+#if !GLIB_CHECK_VERSION (2, 31, 0)
+  if (!g_thread_supported ())
+    g_thread_init (NULL);
+#endif
+
   context = g_option_context_new ("- Internal src/sink test");
   g_option_context_add_main_entries (context, entries, GETTEXT_PACKAGE);
   g_option_context_add_group (context, gst_init_get_option_group ());
   if (!g_option_context_parse (context, &argc, &argv, &error)) {
     g_print ("option parsing failed: %s\n", error->message);
-    g_option_context_free (context);
-    g_clear_error (&error);
     exit (1);
   }
   g_option_context_free (context);
@@ -130,11 +133,6 @@ gst_inter_test_free (GstInterTest * intertest)
   if (intertest->sink_element) {
     gst_object_unref (intertest->sink_element);
     intertest->sink_element = NULL;
-  }
-
-  if (intertest->bus) {
-    gst_object_unref (intertest->bus);
-    intertest->bus = NULL;
   }
 
   if (intertest->pipeline) {
@@ -201,7 +199,6 @@ gst_inter_test_create_pipeline_vts (GstInterTest * intertest)
   if (error) {
     g_print ("pipeline parsing error: %s\n", error->message);
     gst_object_unref (pipeline);
-    g_clear_error (&error);
     return;
   }
 
@@ -239,7 +236,6 @@ gst_inter_test_create_pipeline_server (GstInterTest * intertest)
   if (error) {
     g_print ("pipeline parsing error: %s\n", error->message);
     gst_object_unref (pipeline);
-    g_clear_error (&error);
     return;
   }
 
@@ -356,7 +352,7 @@ gst_inter_test_handle_message (GstBus * bus, GstMessage * message,
 
       gst_message_parse_error (message, &error, &debug);
       gst_inter_test_handle_error (intertest, error, debug);
-      g_clear_error (&error);
+      g_error_free (error);
       g_free (debug);
     }
       break;
@@ -367,7 +363,7 @@ gst_inter_test_handle_message (GstBus * bus, GstMessage * message,
 
       gst_message_parse_warning (message, &error, &debug);
       gst_inter_test_handle_warning (intertest, error, debug);
-      g_clear_error (&error);
+      g_error_free (error);
       g_free (debug);
     }
       break;
@@ -378,7 +374,7 @@ gst_inter_test_handle_message (GstBus * bus, GstMessage * message,
 
       gst_message_parse_info (message, &error, &debug);
       gst_inter_test_handle_info (intertest, error, debug);
-      g_clear_error (&error);
+      g_error_free (error);
       g_free (debug);
     }
       break;

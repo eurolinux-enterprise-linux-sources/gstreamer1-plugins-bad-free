@@ -110,7 +110,7 @@ check_caps_buffer (gint refcount, GstCaps * caps)
 
   fail_if ((outbuffer = (GstBuffer *) buffers->data) == NULL);
   buffers = g_list_remove (buffers, outbuffer);
-  ASSERT_BUFFER_REFCOUNT (outbuffer, "outbuffer", refcount);
+  ASSERT_BUFFER_REFCOUNT (outbuffer, "outbuffer", 2);
   length = GST_DP_HEADER_LENGTH + (strlen (caps_string) + 1);
   fail_unless_equals_int (gst_buffer_get_size (outbuffer), length);
   gst_buffer_unref (outbuffer);
@@ -147,7 +147,6 @@ GST_START_TEST (test_audio)
 
   GST_DEBUG ("first buffer");
   inbuffer = gst_buffer_new_and_alloc (4);
-  gst_buffer_memset (inbuffer, 0, 0x00, 4);
   caps = gst_caps_from_string (AUDIO_CAPS_STRING);
   gst_check_setup_events (mysrcpad, gdppay, caps, GST_FORMAT_TIME);
 
@@ -160,13 +159,14 @@ GST_START_TEST (test_audio)
   fail_unless_equals_int (g_list_length (buffers), 4);
 
   /* first buffer is the stream-start event */
-  check_stream_start_buffer (1);
+  check_stream_start_buffer (2);
 
-  /* second buffer is the serialized caps */
-  check_caps_buffer (1, caps);
+  /* second buffer is the serialized caps;
+   * the element also holds a ref to it */
+  check_caps_buffer (2, caps);
 
   /* third buffer is the serialized new_segment event */
-  check_segment_buffer (1);
+  check_segment_buffer (2);
 
   /* the fourth buffer is the GDP buffer for our pushed buffer */
   fail_if ((outbuffer = (GstBuffer *) buffers->data) == NULL);
@@ -179,7 +179,6 @@ GST_START_TEST (test_audio)
   /* second buffer */
   GST_DEBUG ("second buffer");
   inbuffer = gst_buffer_new_and_alloc (4);
-  gst_buffer_memset (inbuffer, 0, 0x00, 4);
 
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
 
@@ -199,7 +198,6 @@ GST_START_TEST (test_audio)
   /* a third buffer without caps set explicitly; should work */
   GST_DEBUG ("Creating third buffer, no caps set");
   inbuffer = gst_buffer_new_and_alloc (4);
-  gst_buffer_memset (inbuffer, 0, 0x00, 4);
 
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
 
@@ -321,15 +319,15 @@ GST_START_TEST (test_streamheader)
   gst_caps_unref (sinkcaps);
 
   /* first buffer is the stream-start event */
-  check_stream_start_buffer (1);
+  check_stream_start_buffer (2);
 
   /* second buffer is the serialized caps;
    * the element also holds a ref to it */
-  check_caps_buffer (1, caps);
+  check_caps_buffer (2, caps);
 
   /* third buffer is the serialized new_segment event;
    * the element also holds a ref to it */
-  check_segment_buffer (1);
+  check_segment_buffer (2);
 
   /* the fourth buffer is the GDP buffer for our pushed buffer */
   fail_if ((outbuffer = (GstBuffer *) buffers->data) == NULL);
@@ -342,7 +340,6 @@ GST_START_TEST (test_streamheader)
   /* second buffer */
   GST_DEBUG ("second buffer");
   inbuffer = gst_buffer_new_and_alloc (4);
-  gst_buffer_memset (inbuffer, 0, 0x02, 4);
 
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
 
@@ -362,7 +359,6 @@ GST_START_TEST (test_streamheader)
   /* a third buffer without caps set explicitly; should work */
   GST_DEBUG ("Creating third buffer, no caps set");
   inbuffer = gst_buffer_new_and_alloc (4);
-  gst_buffer_memset (inbuffer, 0, 0x03, 4);
 
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
 
@@ -410,7 +406,6 @@ GST_START_TEST (test_first_no_caps)
 
   GST_DEBUG ("first buffer");
   inbuffer = gst_buffer_new_and_alloc (4);
-  gst_buffer_memset (inbuffer, 0, 0x01, 4);
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
 
   /* pushing should trigger an error */
@@ -446,7 +441,6 @@ GST_START_TEST (test_first_no_new_segment)
 
   GST_DEBUG ("first buffer");
   inbuffer = gst_buffer_new_and_alloc (4);
-  gst_buffer_memset (inbuffer, 0, 0x01, 4);
   caps = gst_caps_from_string (AUDIO_CAPS_STRING);
   gst_check_setup_events (mysrcpad, gdppay, caps, GST_FORMAT_TIME);
   gst_caps_unref (caps);
@@ -494,7 +488,6 @@ GST_START_TEST (test_crc)
 
   GST_DEBUG ("first buffer");
   inbuffer = gst_buffer_new_and_alloc (4);
-  gst_buffer_memset (inbuffer, 0, g_random_int () & 0xff, 4);
   caps = gst_caps_from_string (AUDIO_CAPS_STRING);
   gst_check_setup_events (mysrcpad, gdppay, caps, GST_FORMAT_TIME);
 
@@ -507,16 +500,16 @@ GST_START_TEST (test_crc)
   fail_unless_equals_int (g_list_length (buffers), 4);
 
   /* first buffer is the stream-start event */
-  check_stream_start_buffer (1);
+  check_stream_start_buffer (2);
 
   /* second buffer is the serialized caps;
    * the element also holds a ref to it */
-  check_caps_buffer (1, caps);
+  check_caps_buffer (2, caps);
 
   /* third buffer is the serialized new_segment event */
   fail_if ((outbuffer = (GstBuffer *) buffers->data) == NULL);
   buffers = g_list_remove (buffers, outbuffer);
-  ASSERT_BUFFER_REFCOUNT (outbuffer, "outbuffer", 1);
+  ASSERT_BUFFER_REFCOUNT (outbuffer, "outbuffer", 2);
 
   /* verify the header checksum */
   /* CRC's start at 58 in the header */

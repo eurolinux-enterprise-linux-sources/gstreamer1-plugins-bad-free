@@ -26,7 +26,7 @@
  * <refsect2>
  * <title>Examples</title>
  * |[
- * gst-launch-1.0 videotestsrc ! glupload ! gldeinterlace ! glimagesink
+ * gst-launch videotestsrc ! glupload ! gldeinterlace ! glimagesink
  * ]|
  * FBO (Frame Buffer Object) and GLSL (OpenGL Shading Language) are required.
  * </refsect2>
@@ -43,13 +43,12 @@ GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
 
 enum
 {
-  PROP_0,
-  PROP_METHOD
+  PROP_0
 };
 
 #define DEBUG_INIT \
   GST_DEBUG_CATEGORY_INIT (gst_gl_deinterlace_debug, "gldeinterlace", 0, "gldeinterlace element");
-#define gst_gl_deinterlace_parent_class parent_class
+
 G_DEFINE_TYPE_WITH_CODE (GstGLDeinterlace, gst_gl_deinterlace,
     GST_TYPE_GL_FILTER, DEBUG_INIT);
 
@@ -58,23 +57,17 @@ static void gst_gl_deinterlace_set_property (GObject * object,
 static void gst_gl_deinterlace_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
 
-static gboolean gst_gl_deinterlace_start (GstBaseTransform * trans);
-static gboolean gst_gl_deinterlace_reset (GstBaseTransform * trans);
-static gboolean gst_gl_deinterlace_init_fbo (GstGLFilter * filter);
+static void gst_gl_deinterlace_reset (GstGLFilter * filter);
+static gboolean gst_gl_deinterlace_init_shader (GstGLFilter * filter);
 static gboolean gst_gl_deinterlace_filter (GstGLFilter * filter,
     GstBuffer * inbuf, GstBuffer * outbuf);
 static gboolean gst_gl_deinterlace_filter_texture (GstGLFilter * filter,
-    GstGLMemory * in_tex, GstGLMemory * out_tex);
-static gboolean gst_gl_deinterlace_vfir_callback (GstGLFilter * filter,
-    GstGLMemory * in_tex, gpointer stuff);
-static gboolean gst_gl_deinterlace_greedyh_callback (GstGLFilter * filter,
-    GstGLMemory * in_tex, gpointer stuff);
+    guint in_tex, guint out_tex);
+static void gst_gl_deinterlace_callback (gint width, gint height,
+    guint texture, gpointer stuff);
 
 /* *INDENT-OFF* */
 static const gchar *greedyh_fragment_source =
-  "#ifdef GL_ES\n"
-  "precision mediump float;\n"
-  "#endif\n"
   "uniform sampler2D tex;\n"
   "uniform sampler2D tex_prev;\n"
   "uniform float max_comb;\n"
@@ -82,35 +75,35 @@ static const gchar *greedyh_fragment_source =
   "uniform float motion_sense;\n"
   "uniform float width;\n"
   "uniform float height;\n"
-  "varying vec2 v_texcoord;\n"
 
   "void main () {\n"
-  "  if (int(mod(v_texcoord.y * height, 2.0)) == 0) {\n"
-  "    gl_FragColor = vec4(texture2D(tex_prev, v_texcoord).rgb, 1.0);\n"
+  "  vec2 texcoord = gl_TexCoord[0].xy;\n"
+  "  if (int(mod(texcoord.y * height, 2.0)) == 0) {\n"
+  "    gl_FragColor = vec4(texture2D(tex_prev, texcoord).rgb, 1.0);\n"
   "  } else {\n"
   "    vec2 texcoord_L1_a1, texcoord_L3_a1, texcoord_L1, texcoord_L3, texcoord_L1_1, texcoord_L3_1;\n"
   "    vec3 L1_a1, L3_a1, L1, L3, L1_1, L3_1;\n"
 
-  "    texcoord_L1 = vec2(v_texcoord.x, v_texcoord.y - 1.0 / height);\n"
-  "    texcoord_L3 = vec2(v_texcoord.x, v_texcoord.y + 1.0 / height);\n"
+  "    texcoord_L1 = vec2(texcoord.x, texcoord.y - 1.0 / height);\n"
+  "    texcoord_L3 = vec2(texcoord.x, texcoord.y + 1.0 / height);\n"
   "    L1 = texture2D(tex_prev, texcoord_L1).rgb;\n"
   "    L3 = texture2D(tex_prev, texcoord_L3).rgb;\n"
-  "    if (v_texcoord.x == 1.0 && v_texcoord.y == 1.0) {\n"
+  "    if (texcoord.x == 1.0 && texcoord.y == 1.0) {\n"
   "      L1_1 = L1;\n"
   "      L3_1 = L3;\n"
   "    } else {\n"
-  "      texcoord_L1_1 = vec2(v_texcoord.x + 1.0 / width, v_texcoord.y - 1.0 / height);\n"
-  "      texcoord_L3_1 = vec2(v_texcoord.x + 1.0 / width, v_texcoord.y + 1.0 / height);\n"
+  "      texcoord_L1_1 = vec2(texcoord.x + 1.0 / width, texcoord.y - 1.0 / height);\n"
+  "      texcoord_L3_1 = vec2(texcoord.x + 1.0 / width, texcoord.y + 1.0 / height);\n"
   "      L1_1 = texture2D(tex_prev, texcoord_L1_1).rgb;\n"
   "      L3_1 = texture2D(tex_prev, texcoord_L3_1).rgb;\n"
   "    }\n"
 
-  "    if (int(ceil(v_texcoord.x + v_texcoord.y)) == 0) {\n"
+  "    if (int(ceil(texcoord.x + texcoord.y)) == 0) {\n"
   "      L1_a1 = L1;\n"
   "      L3_a1 = L3;\n"
   "    } else {\n"
-  "      texcoord_L1_a1 = vec2(v_texcoord.x - 1.0 / width, v_texcoord.y - 1.0 / height);\n"
-  "      texcoord_L3_a1 = vec2(v_texcoord.x - 1.0 / width, v_texcoord.y + 1.0 / height);\n"
+  "      texcoord_L1_a1 = vec2(texcoord.x - 1.0 / width, texcoord.y - 1.0 / height);\n"
+  "      texcoord_L3_a1 = vec2(texcoord.x - 1.0 / width, texcoord.y + 1.0 / height);\n"
   "      L1_a1 = texture2D(tex_prev, texcoord_L1_a1).rgb;\n"
   "      L3_a1 = texture2D(tex_prev, texcoord_L3_a1).rgb;\n"
   "    }\n"
@@ -120,8 +113,8 @@ static const gchar *greedyh_fragment_source =
   "    vec3 avg_1 = (L1_1 + L3_1) / 2.0;\n"
   "    vec3 avg_s = (avg_a1 + avg_1) / 2.0;\n"
   "    vec3 avg_sc = (avg_s + avg) / 2.0;\n"
-  "    vec3 L2 = texture2D(tex, v_texcoord).rgb;\n"
-  "    vec3 LP2 = texture2D(tex_prev, v_texcoord).rgb;\n"
+  "    vec3 L2 = texture2D(tex, texcoord).rgb;\n"
+  "    vec3 LP2 = texture2D(tex_prev, texcoord).rgb;\n"
   "    vec3 best;\n"
   "    if (abs(L2.r - avg_sc.r) < abs(LP2.r - avg_sc.r)) {\n"
   "      best.r = L2.r;\n" "    } else {\n"
@@ -151,86 +144,7 @@ static const gchar *greedyh_fragment_source =
   "    gl_FragColor = vec4(last, 1.0);\n"
   "  }\n"
   "}\n";
-
-const gchar *vfir_fragment_source =
-  "#ifdef GL_ES\n"
-  "precision mediump float;\n"
-  "#endif\n"
-  "uniform sampler2D tex;\n"
-  "uniform float width;\n"
-  "uniform float height;\n"
-  "varying vec2 v_texcoord;\n"
-  "void main()\n"
-  "{\n"
-  "  vec2 topcoord, botcoord;\n"
-  "  vec4 cur_color, top_color, bot_color;\n"
-  "  topcoord.x = v_texcoord.x;\n"
-  "  botcoord.x = v_texcoord.x;\n"
-  "  if (v_texcoord.y == 0.0 || v_texcoord.y == 1.0) {\n"
-  "    topcoord.y = v_texcoord.y ;\n"
-  "    botcoord.y = v_texcoord.y ;\n"
-  "  }\n"
-  "  else {\n"
-  "    topcoord.y = v_texcoord.y - 1.0/height;\n"
-  "    botcoord.y = v_texcoord.y + 1.0/height;\n"
-  "  }\n"
-  "  cur_color = texture2D(tex, v_texcoord);\n"
-  "  top_color = texture2D(tex, topcoord);\n"
-  "  bot_color = texture2D(tex, botcoord);\n"
-  "  gl_FragColor = 0.5*cur_color + 0.25*top_color + 0.25*bot_color;\n"
-  "}";
 /* *INDENT-ON* */
-
-/* dont' forget to edit the following when a new method is added */
-typedef enum
-{
-  GST_GL_DEINTERLACE_VFIR,
-  GST_GL_DEINTERLACE_GREEDYH
-} GstGLDeinterlaceMethod;
-
-static const GEnumValue *
-gst_gl_deinterlace_get_methods (void)
-{
-  static const GEnumValue method_types[] = {
-    {GST_GL_DEINTERLACE_VFIR, "Blur Vertical", "vfir"},
-    {GST_GL_DEINTERLACE_GREEDYH, "Motion Adaptive: Advanced Detection",
-        "greedyh"},
-    {0, NULL, NULL}
-  };
-  return method_types;
-}
-
-#define GST_TYPE_GL_DEINTERLACE_METHODS (gst_gl_deinterlace_method_get_type ())
-static GType
-gst_gl_deinterlace_method_get_type (void)
-{
-  static GType gl_deinterlace_method_type = 0;
-  if (!gl_deinterlace_method_type) {
-    gl_deinterlace_method_type =
-        g_enum_register_static ("GstGLDeinterlaceMethod",
-        gst_gl_deinterlace_get_methods ());
-  }
-  return gl_deinterlace_method_type;
-}
-
-static void
-gst_gl_deinterlace_set_method (GstGLDeinterlace * deinterlace,
-    guint method_types)
-{
-  switch (method_types) {
-    case GST_GL_DEINTERLACE_VFIR:
-      deinterlace->deinterlacefunc = gst_gl_deinterlace_vfir_callback;
-      deinterlace->current_method = method_types;
-      break;
-    case GST_GL_DEINTERLACE_GREEDYH:
-      deinterlace->deinterlacefunc = gst_gl_deinterlace_greedyh_callback;
-      deinterlace->current_method = method_types;
-      break;
-    default:
-      g_assert_not_reached ();
-      break;
-  }
-}
 
 static void
 gst_gl_deinterlace_class_init (GstGLDeinterlaceClass * klass)
@@ -249,92 +163,43 @@ gst_gl_deinterlace_class_init (GstGLDeinterlaceClass * klass)
       "Deinterlacing based on fragment shaders",
       "Julien Isorce <julien.isorce@mail.com>");
 
-  g_object_class_install_property (gobject_class,
-      PROP_METHOD,
-      g_param_spec_enum ("method",
-          "Deinterlace Method",
-          "Select which deinterlace method apply to GL video texture",
-          GST_TYPE_GL_DEINTERLACE_METHODS,
-          GST_GL_DEINTERLACE_VFIR, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  GST_BASE_TRANSFORM_CLASS (klass)->start = gst_gl_deinterlace_start;
-  GST_BASE_TRANSFORM_CLASS (klass)->stop = gst_gl_deinterlace_reset;
-
   GST_GL_FILTER_CLASS (klass)->filter = gst_gl_deinterlace_filter;
   GST_GL_FILTER_CLASS (klass)->filter_texture =
       gst_gl_deinterlace_filter_texture;
-  GST_GL_FILTER_CLASS (klass)->init_fbo = gst_gl_deinterlace_init_fbo;
-
-  GST_GL_BASE_FILTER_CLASS (klass)->supported_gl_api =
-      GST_GL_API_OPENGL | GST_GL_API_GLES2 | GST_GL_API_OPENGL3;
+  GST_GL_FILTER_CLASS (klass)->onInitFBO = gst_gl_deinterlace_init_shader;
+  GST_GL_FILTER_CLASS (klass)->onReset = gst_gl_deinterlace_reset;
 }
 
 static void
 gst_gl_deinterlace_init (GstGLDeinterlace * filter)
 {
-  filter->shaderstable = NULL;
-  filter->deinterlacefunc = gst_gl_deinterlace_vfir_callback;
-  filter->current_method = GST_GL_DEINTERLACE_VFIR;
+  filter->shader = NULL;
   filter->prev_buffer = NULL;
-  filter->prev_tex = NULL;
-}
-
-static gboolean
-gst_gl_deinterlace_start (GstBaseTransform * trans)
-{
-  GstGLDeinterlace *deinterlace_filter = GST_GL_DEINTERLACE (trans);
-
-  deinterlace_filter->shaderstable = g_hash_table_new (g_str_hash, g_str_equal);
-
-  return GST_BASE_TRANSFORM_CLASS (parent_class)->start (trans);
+  filter->prev_tex = 0;
 }
 
 static void
-gst_gl_deinterlace_ghash_func_clean (gpointer key, gpointer value,
-    gpointer data)
+gst_gl_deinterlace_reset (GstGLFilter * filter)
 {
-  GstGLShader *shader = (GstGLShader *) value;
-  GstGLFilter *filter = (GstGLFilter *) data;
+  GstGLDeinterlace *deinterlace_filter = GST_GL_DEINTERLACE (filter);
 
-  //blocking call, wait the opengl thread has destroyed the shader
-  gst_gl_context_del_shader (GST_GL_BASE_FILTER (filter)->context, shader);
-
-  value = NULL;
-}
-
-static gboolean
-gst_gl_deinterlace_reset (GstBaseTransform * trans)
-{
-  GstGLDeinterlace *deinterlace_filter = GST_GL_DEINTERLACE (trans);
-
-  gst_buffer_replace (&deinterlace_filter->prev_buffer, NULL);
-
-  //blocking call, wait the opengl thread has destroyed the shader
-  if (deinterlace_filter->shaderstable) {
-    /* release shaders in the gl thread */
-    g_hash_table_foreach (deinterlace_filter->shaderstable,
-        gst_gl_deinterlace_ghash_func_clean, deinterlace_filter);
-
-    /* clean the htable without calling values destructors
-     * because shaders have been released in the glthread
-     * through the foreach func */
-    g_hash_table_unref (deinterlace_filter->shaderstable);
-    deinterlace_filter->shaderstable = NULL;
+  if (deinterlace_filter->prev_buffer) {
+    gst_buffer_unref (deinterlace_filter->prev_buffer);
+    deinterlace_filter->prev_buffer = NULL;
   }
-
-  return GST_BASE_TRANSFORM_CLASS (parent_class)->stop (trans);
+  //blocking call, wait the opengl thread has destroyed the shader
+  if (deinterlace_filter->shader)
+    gst_gl_context_del_shader (filter->context, deinterlace_filter->shader);
+  deinterlace_filter->shader = NULL;
 }
 
 static void
 gst_gl_deinterlace_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstGLDeinterlace *filter = GST_GL_DEINTERLACE (object);
+  //GstGLDeinterlace *filter = GST_GL_DEINTERLACE (object);
 
   switch (prop_id) {
-    case PROP_METHOD:
-      gst_gl_deinterlace_set_method (filter, g_value_get_enum (value));
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -345,12 +210,9 @@ static void
 gst_gl_deinterlace_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstGLDeinterlace *filter = GST_GL_DEINTERLACE (object);
+  //GstGLDeinterlace *filter = GST_GL_DEINTERLACE (object);
 
   switch (prop_id) {
-    case PROP_METHOD:
-      g_value_set_enum (value, filter->current_method);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -358,20 +220,24 @@ gst_gl_deinterlace_get_property (GObject * object, guint prop_id,
 }
 
 static gboolean
-gst_gl_deinterlace_init_fbo (GstGLFilter * filter)
+gst_gl_deinterlace_init_shader (GstGLFilter * filter)
 {
-  return TRUE;
+  GstGLDeinterlace *deinterlace_filter = GST_GL_DEINTERLACE (filter);
+
+  //blocking call, wait the opengl thread has compiled the shader
+  return gst_gl_context_gen_shader (filter->context, 0, greedyh_fragment_source,
+      &deinterlace_filter->shader);
 }
 
 static gboolean
-gst_gl_deinterlace_filter_texture (GstGLFilter * filter, GstGLMemory * in_tex,
-    GstGLMemory * out_tex)
+gst_gl_deinterlace_filter_texture (GstGLFilter * filter, guint in_tex,
+    guint out_tex)
 {
   GstGLDeinterlace *deinterlace_filter = GST_GL_DEINTERLACE (filter);
 
   //blocking call, use a FBO
-  gst_gl_filter_render_to_target (filter, in_tex, out_tex,
-      deinterlace_filter->deinterlacefunc, deinterlace_filter);
+  gst_gl_filter_render_to_target (filter, TRUE, in_tex, out_tex,
+      gst_gl_deinterlace_callback, deinterlace_filter);
 
   return TRUE;
 }
@@ -384,132 +250,102 @@ gst_gl_deinterlace_filter (GstGLFilter * filter, GstBuffer * inbuf,
 
   gst_gl_filter_filter_texture (filter, inbuf, outbuf);
 
-  gst_buffer_replace (&deinterlace_filter->prev_buffer, inbuf);
+  if (deinterlace_filter->prev_buffer) {
+    gst_buffer_unref (deinterlace_filter->prev_buffer);
+  }
+  deinterlace_filter->prev_buffer = gst_buffer_ref (inbuf);
 
   return TRUE;
 }
 
-static GstGLShader *
-gst_gl_deinterlace_get_fragment_shader (GstGLFilter * filter,
-    const gchar * shader_name, const gchar * shader_source)
+//opengl scene, params: input texture (not the output filter->texture)
+static void
+gst_gl_deinterlace_callback (gint width, gint height, guint texture,
+    gpointer stuff)
 {
-  GstGLShader *shader = NULL;
-  GstGLDeinterlace *deinterlace_filter = GST_GL_DEINTERLACE (filter);
-  GstGLContext *context = GST_GL_BASE_FILTER (filter)->context;
+  GstGLDeinterlace *deinterlace_filter = GST_GL_DEINTERLACE (stuff);
+  GstGLFilter *filter = GST_GL_FILTER (stuff);
+  GstGLFuncs *gl = filter->context->gl_vtable;
+  guint temp;
 
-  shader = g_hash_table_lookup (deinterlace_filter->shaderstable, shader_name);
+  GLfloat verts[] = { -1.0, -1.0,
+    1.0, -1.0,
+    1.0, 1.0,
+    -1.0, 1.0
+  };
+  GLfloat texcoords0[] = { 0.0f, 0.0f,
+    1.0f, 0.0f,
+    1.0f, 1.0f,
+    0.0f, 1.0f
+  };
+  GLfloat texcoords1[] = { 0.0f, 0.0f,
+    1.0f, 0.0f,
+    1.0f, 1.0f,
+    0.0f, 1.0f
+  };
 
-  if (!shader) {
-    GError *error = NULL;
+  gl->MatrixMode (GL_PROJECTION);
+  gl->LoadIdentity ();
 
-    if (!(shader = gst_gl_shader_new_link_with_stages (context, &error,
-                gst_glsl_stage_new_default_vertex (context),
-                gst_glsl_stage_new_with_string (context, GL_FRAGMENT_SHADER,
-                    GST_GLSL_VERSION_NONE,
-                    GST_GLSL_PROFILE_ES | GST_GLSL_PROFILE_COMPATIBILITY,
-                    shader_source), NULL))) {
-      GST_ELEMENT_ERROR (deinterlace_filter, RESOURCE, NOT_FOUND,
-          ("Failed to initialize %s shader", shader_name), (NULL));
-    }
+  gst_gl_shader_use (deinterlace_filter->shader);
 
-    filter->draw_attr_position_loc =
-        gst_gl_shader_get_attribute_location (shader, "a_position");
-    filter->draw_attr_texture_loc =
-        gst_gl_shader_get_attribute_location (shader, "a_texcoord");
-  }
+  gl->Enable (GL_TEXTURE_2D);
 
-  g_hash_table_insert (deinterlace_filter->shaderstable, (gchar *) shader_name,
-      shader);
-
-  return shader;
-}
-
-static gboolean
-gst_gl_deinterlace_vfir_callback (GstGLFilter * filter, GstGLMemory * in_tex,
-    gpointer user_data)
-{
-  GstGLContext *context = GST_GL_BASE_FILTER (filter)->context;
-  const GstGLFuncs *gl = context->gl_vtable;
-  GstGLShader *shader;
-
-  shader = gst_gl_deinterlace_get_fragment_shader (filter, "vfir",
-      vfir_fragment_source);
-
-  if (!shader)
-    return FALSE;
-
-#if GST_GL_HAVE_OPENGL
-  if (USING_OPENGL (context)) {
-    gl->MatrixMode (GL_PROJECTION);
-    gl->LoadIdentity ();
-  }
-#endif
-
-  gst_gl_shader_use (shader);
-
-  gl->ActiveTexture (GL_TEXTURE0);
-  gl->BindTexture (GL_TEXTURE_2D, gst_gl_memory_get_texture_id (in_tex));
-
-  gst_gl_shader_set_uniform_1i (shader, "tex", 0);
-  gst_gl_shader_set_uniform_1f (shader, "width",
-      GST_VIDEO_INFO_WIDTH (&filter->out_info));
-  gst_gl_shader_set_uniform_1f (shader, "height",
-      GST_VIDEO_INFO_HEIGHT (&filter->out_info));
-
-  gst_gl_filter_draw_fullscreen_quad (filter);
-
-  return TRUE;
-}
-
-static gboolean
-gst_gl_deinterlace_greedyh_callback (GstGLFilter * filter, GstGLMemory * in_tex,
-    gpointer user_data)
-{
-  GstGLShader *shader;
-  GstGLDeinterlace *deinterlace_filter = GST_GL_DEINTERLACE (filter);
-  GstGLContext *context = GST_GL_BASE_FILTER (filter)->context;
-  GstGLFuncs *gl = context->gl_vtable;
-
-  shader =
-      gst_gl_deinterlace_get_fragment_shader (filter, "greedhy",
-      greedyh_fragment_source);
-
-  if (!shader)
-    return FALSE;
-
-#if GST_GL_HAVE_OPENGL
-  if (USING_OPENGL (context)) {
-    gl->MatrixMode (GL_PROJECTION);
-    gl->LoadIdentity ();
-  }
-#endif
-
-  gst_gl_shader_use (shader);
-
-  if (G_LIKELY (deinterlace_filter->prev_tex != NULL)) {
+  if (G_UNLIKELY (deinterlace_filter->prev_tex == 0)) {
+    gst_gl_context_gen_texture (filter->context,
+        &deinterlace_filter->prev_tex,
+        GST_VIDEO_INFO_FORMAT (&filter->out_info),
+        GST_VIDEO_INFO_WIDTH (&filter->out_info),
+        GST_VIDEO_INFO_HEIGHT (&filter->out_info));
+  } else {
     gl->ActiveTexture (GL_TEXTURE1);
-    gst_gl_shader_set_uniform_1i (shader, "tex_prev", 1);
-    gl->BindTexture (GL_TEXTURE_2D,
-        gst_gl_memory_get_texture_id (deinterlace_filter->prev_tex));
+    gst_gl_shader_set_uniform_1i (deinterlace_filter->shader, "tex_prev", 1);
+    gl->BindTexture (GL_TEXTURE_2D, deinterlace_filter->prev_tex);
   }
 
   gl->ActiveTexture (GL_TEXTURE0);
-  gl->BindTexture (GL_TEXTURE_2D, gst_gl_memory_get_texture_id (in_tex));
+  gst_gl_shader_set_uniform_1i (deinterlace_filter->shader, "tex", 0);
+  gl->BindTexture (GL_TEXTURE_2D, texture);
 
-  gst_gl_shader_set_uniform_1i (shader, "tex", 0);
-  gst_gl_shader_set_uniform_1f (shader, "max_comb", 5.0f / 255.0f);
-  gst_gl_shader_set_uniform_1f (shader, "motion_threshold", 25.0f / 255.0f);
-  gst_gl_shader_set_uniform_1f (shader, "motion_sense", 30.0f / 255.0f);
+  gst_gl_shader_set_uniform_1f (deinterlace_filter->shader, "max_comb",
+      5.0f / 255.0f);
+  gst_gl_shader_set_uniform_1f (deinterlace_filter->shader, "motion_threshold",
+      25.0f / 255.0f);
+  gst_gl_shader_set_uniform_1f (deinterlace_filter->shader, "motion_sense",
+      30.0f / 255.0f);
 
-  gst_gl_shader_set_uniform_1f (shader, "width",
+  gst_gl_shader_set_uniform_1f (deinterlace_filter->shader, "width",
       GST_VIDEO_INFO_WIDTH (&filter->out_info));
-  gst_gl_shader_set_uniform_1f (shader, "height",
+  gst_gl_shader_set_uniform_1f (deinterlace_filter->shader, "height",
       GST_VIDEO_INFO_HEIGHT (&filter->out_info));
 
-  gst_gl_filter_draw_fullscreen_quad (filter);
+  gl->ClientActiveTexture (GL_TEXTURE0);
 
-  /* we keep the previous buffer around so this is safe */
-  deinterlace_filter->prev_tex = in_tex;
+  gl->EnableClientState (GL_TEXTURE_COORD_ARRAY);
+  gl->EnableClientState (GL_VERTEX_ARRAY);
 
-  return TRUE;
+  gl->VertexPointer (2, GL_FLOAT, 0, &verts);
+  gl->TexCoordPointer (2, GL_FLOAT, 0, &texcoords0);
+
+  gl->ClientActiveTexture (GL_TEXTURE1);
+  gl->EnableClientState (GL_TEXTURE_COORD_ARRAY);
+  gl->TexCoordPointer (2, GL_FLOAT, 0, &texcoords1);
+
+  gl->DrawArrays (GL_TRIANGLE_FAN, 0, 4);
+
+  gl->DisableClientState (GL_VERTEX_ARRAY);
+  gl->DisableClientState (GL_TEXTURE_COORD_ARRAY);
+
+  gl->ClientActiveTexture (GL_TEXTURE0);
+  gl->DisableClientState (GL_TEXTURE_COORD_ARRAY);
+
+  gl->Disable (GL_TEXTURE_2D);
+
+  if (texture == filter->in_tex_id) {
+    temp = filter->in_tex_id;
+    filter->in_tex_id = deinterlace_filter->prev_tex;
+    deinterlace_filter->prev_tex = temp;
+  } else {
+    deinterlace_filter->prev_tex = texture;
+  }
 }

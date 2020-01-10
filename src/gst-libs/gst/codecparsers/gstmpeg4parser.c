@@ -123,21 +123,21 @@ static const guint8 mpeg4_zigzag_8x8[64] = {
 };
 
 static const VLCTable mpeg4_dmv_size_vlc_table[] = {
-  {0, 0x00, 2},
-  {1, 0x02, 3},
-  {2, 0x03, 3},
-  {3, 0x04, 3},
-  {4, 0x05, 3},
-  {5, 0x06, 3},
-  {6, 0x0e, 4},
-  {7, 0x1e, 5},
-  {8, 0x3e, 6},
-  {9, 0x7e, 7},
-  {10, 0xfe, 8},
-  {11, 0x1fe, 9},
-  {12, 0x3fe, 10},
-  {13, 0x7fe, 11},
-  {14, 0xffe, 12}
+  {0x00, 2, 0},
+  {0x02, 3, 1},
+  {0x03, 3, 2},
+  {0x04, 3, 3},
+  {0x05, 3, 4},
+  {0x06, 3, 5},
+  {0x0e, 4, 6},
+  {0x1e, 5, 7},
+  {0x3e, 6, 8},
+  {0x7e, 7, 9},
+  {0xfe, 8, 10},
+  {0x1fe, 9, 11},
+  {0x3fe, 10, 12},
+  {0x7fe, 11, 13},
+  {0xffe, 12, 14}
 };
 
 static void
@@ -347,7 +347,7 @@ compute_resync_marker_size (const GstMpeg4VideoObjectPlane * vop,
     }
   }
 
-  return off + 1;               /* Take the following 1 into account */
+  return off++;                 /* Take the following 1 into account */
 }
 
 /**
@@ -411,7 +411,7 @@ gst_mpeg4_next_resync (GstMpeg4Packet * packet,
 /**
  * gst_mpeg4_parse:
  * @packet: The #GstMpeg4Packet to fill
- * @skip_user_data: %TRUE to skip user data packet %FALSE otherwise
+ * @skip_user_data: %TRUE to skip user data packet %FALSE otherwize
  * @vop: The last parsed #GstMpeg4VideoObjectPlane or %NULL if you do
  * not need to detect the resync codes.
  * @offset: offset from which to start the parsing
@@ -481,11 +481,8 @@ gst_mpeg4_parse (GstMpeg4Packet * packet, gboolean skip_user_data,
   packet->type = (GstMpeg4StartCode) (data[off1 + 3]);
 
 find_end:
-  if (off1 < size - 4)
-    off2 = gst_byte_reader_masked_scan_uint32 (&br, 0xffffff00, 0x00000100,
-        off1 + 4, size - off1 - 4);
-  else
-    off2 = -1;
+  off2 = gst_byte_reader_masked_scan_uint32 (&br, 0xffffff00, 0x00000100,
+      off1 + 4, size - off1 - 4);
 
   if (off2 == -1) {
     GST_DEBUG ("Packet start %d, No end found", off1 + 4);
@@ -1644,7 +1641,7 @@ gst_mpeg4_parse_video_packet_header (GstMpeg4VideoPacketHdr * videopackethdr,
 
   CHECK_REMAINING (&br, markersize);
 
-  if (gst_bit_reader_get_bits_uint32_unchecked (&br, markersize) != 0x01)
+  if (gst_bit_reader_get_bits_uint32_unchecked (&br, markersize + 1) != 0x01)
     goto failed;
 
   if (vol->shape != GST_MPEG4_RECTANGULAR) {

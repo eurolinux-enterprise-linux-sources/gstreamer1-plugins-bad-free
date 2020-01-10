@@ -133,7 +133,6 @@ enum TsMuxStreamType {
   TSMUX_ST_AUDIO_AAC                  = 0x0f,
   TSMUX_ST_VIDEO_MPEG4                = 0x10,
   TSMUX_ST_VIDEO_H264                 = 0x1b,
-  TSMUX_ST_VIDEO_HEVC                 = 0x24,
 
   /* private stream types */
   TSMUX_ST_PS_AUDIO_AC3               = 0x81,
@@ -141,8 +140,6 @@ enum TsMuxStreamType {
   TSMUX_ST_PS_AUDIO_LPCM              = 0x8b,
   TSMUX_ST_PS_DVB_SUBPICTURE          = 0x8c,
   TSMUX_ST_PS_TELETEXT                = 0x8d,
-  TSMUX_ST_PS_KLV                     = 0x8e,    /* only used internally */
-  TSMUX_ST_PS_OPUS                    = 0x8f,    /* only used internally */
   TSMUX_ST_PS_DVD_SUBPICTURE          = 0xff,
 
   /* Non-standard definitions */
@@ -209,13 +206,6 @@ struct TsMuxStream {
 
   gboolean is_dvb_sub;
   gchar language[4];
-
-  gboolean is_meta;
-  gboolean is_audio;
-
-  /* Opus */
-  gboolean is_opus;
-  guint8 opus_channel_config_code;
 };
 
 /* stream management */

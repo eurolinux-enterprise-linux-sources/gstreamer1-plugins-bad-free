@@ -57,7 +57,6 @@ static guint gst_gl_filter_app_signals[LAST_SIGNAL] = { 0 };
 #define DEBUG_INIT \
   GST_DEBUG_CATEGORY_INIT (gst_gl_filter_app_debug, "glfilterapp", 0, "glfilterapp element");
 
-#define gst_gl_filter_app_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstGLFilterApp, gst_gl_filter_app,
     GST_TYPE_GL_FILTER, DEBUG_INIT);
 
@@ -69,10 +68,10 @@ static void gst_gl_filter_app_get_property (GObject * object, guint prop_id,
 static gboolean gst_gl_filter_app_set_caps (GstGLFilter * filter,
     GstCaps * incaps, GstCaps * outcaps);
 static gboolean gst_gl_filter_app_filter_texture (GstGLFilter * filter,
-    GstGLMemory * in_tex, GstGLMemory * out_tex);
+    guint in_tex, guint out_tex);
+static void gst_gl_filter_app_callback (gint width, gint height, guint texture,
+    gpointer stuff);
 
-static gboolean gst_gl_filter_app_gl_start (GstGLBaseFilter * base_filter);
-static void gst_gl_filter_app_gl_stop (GstGLBaseFilter * base_filter);
 
 static void
 gst_gl_filter_app_class_init (GstGLFilterAppClass * klass)
@@ -85,9 +84,6 @@ gst_gl_filter_app_class_init (GstGLFilterAppClass * klass)
 
   gobject_class->set_property = gst_gl_filter_app_set_property;
   gobject_class->get_property = gst_gl_filter_app_get_property;
-
-  GST_GL_BASE_FILTER_CLASS (klass)->gl_start = gst_gl_filter_app_gl_start;
-  GST_GL_BASE_FILTER_CLASS (klass)->gl_stop = gst_gl_filter_app_gl_stop;
 
   GST_GL_FILTER_CLASS (klass)->set_caps = gst_gl_filter_app_set_caps;
   GST_GL_FILTER_CLASS (klass)->filter_texture =
@@ -115,9 +111,6 @@ gst_gl_filter_app_class_init (GstGLFilterAppClass * klass)
       "OpenGL application filter", "Filter/Effect",
       "Use client callbacks to define the scene",
       "Julien Isorce <julien.isorce@gmail.com>");
-
-  GST_GL_BASE_FILTER_CLASS (klass)->supported_gl_api =
-      GST_GL_API_OPENGL | GST_GL_API_GLES2 | GST_GL_API_OPENGL3;
 }
 
 static void
@@ -148,34 +141,6 @@ gst_gl_filter_app_get_property (GObject * object, guint prop_id,
 }
 
 static gboolean
-gst_gl_filter_app_gl_start (GstGLBaseFilter * base_filter)
-{
-  GstGLFilter *filter = GST_GL_FILTER (base_filter);
-  GError *error = NULL;
-
-  if (!(filter->default_shader =
-          gst_gl_shader_new_default (base_filter->context, &error))) {
-    GST_ELEMENT_ERROR (filter, RESOURCE, NOT_FOUND, ("%s",
-            "Failed to create the default shader"), ("%s", error->message));
-    return FALSE;
-  }
-
-  return GST_GL_BASE_FILTER_CLASS (parent_class)->gl_start (base_filter);
-}
-
-static void
-gst_gl_filter_app_gl_stop (GstGLBaseFilter * base_filter)
-{
-  GstGLFilter *filter = GST_GL_FILTER (base_filter);
-
-  if (filter->default_shader)
-    gst_object_unref (filter->default_shader);
-  filter->default_shader = NULL;
-
-  GST_GL_BASE_FILTER_CLASS (parent_class)->gl_stop (base_filter);
-}
-
-static gboolean
 gst_gl_filter_app_set_caps (GstGLFilter * filter, GstCaps * incaps,
     GstCaps * outcaps)
 {
@@ -184,46 +149,54 @@ gst_gl_filter_app_set_caps (GstGLFilter * filter, GstCaps * incaps,
   return TRUE;
 }
 
-struct glcb2
+static void
+_emit_draw_signal (guint tex, gint width, gint height, gpointer data)
 {
-  GstGLFilterApp *app;
-  GstGLMemory *in_tex;
-  GstGLMemory *out_tex;
-};
-
-static gboolean
-_emit_draw_signal (gpointer data)
-{
-  struct glcb2 *cb = data;
+  GstGLFilterApp *app_filter = GST_GL_FILTER_APP (data);
   gboolean drawn;
 
-  g_signal_emit (cb->app, gst_gl_filter_app_signals[CLIENT_DRAW_SIGNAL], 0,
-      cb->in_tex->tex_id, gst_gl_memory_get_texture_width (cb->out_tex),
-      gst_gl_memory_get_texture_height (cb->out_tex), &drawn);
+  g_signal_emit (app_filter, gst_gl_filter_app_signals[CLIENT_DRAW_SIGNAL], 0,
+      tex, width, height, &drawn);
 
-  return !drawn;
+  app_filter->default_draw = !drawn;
 }
 
 static gboolean
-gst_gl_filter_app_filter_texture (GstGLFilter * filter, GstGLMemory * in_tex,
-    GstGLMemory * out_tex)
+gst_gl_filter_app_filter_texture (GstGLFilter * filter, guint in_tex,
+    guint out_tex)
 {
   GstGLFilterApp *app_filter = GST_GL_FILTER_APP (filter);
-  gboolean default_draw;
-  struct glcb2 cb;
 
-  cb.app = app_filter;
-  cb.in_tex = in_tex;
-  cb.out_tex = out_tex;
+  //blocking call, use a FBO
+  gst_gl_context_use_fbo (filter->context,
+      GST_VIDEO_INFO_WIDTH (&filter->out_info),
+      GST_VIDEO_INFO_HEIGHT (&filter->out_info),
+      filter->fbo, filter->depthbuffer, out_tex, (GLCB) _emit_draw_signal,
+      GST_VIDEO_INFO_WIDTH (&filter->in_info),
+      GST_VIDEO_INFO_HEIGHT (&filter->in_info),
+      in_tex, 45,
+      (gfloat) GST_VIDEO_INFO_WIDTH (&filter->out_info) /
+      (gfloat) GST_VIDEO_INFO_HEIGHT (&filter->out_info),
+      0.1, 100, GST_GL_DISPLAY_PROJECTION_PERSPECTIVE, filter);
 
-  default_draw =
-      gst_gl_framebuffer_draw_to_texture (filter->fbo,
-      out_tex, _emit_draw_signal, &cb);
-
-  if (default_draw) {
-    gst_gl_filter_render_to_target_with_shader (filter, in_tex, out_tex,
-        filter->default_shader);
+  if (app_filter->default_draw) {
+    gst_gl_filter_render_to_target (filter, TRUE, in_tex, out_tex,
+        gst_gl_filter_app_callback, filter);
   }
 
   return TRUE;
+}
+
+//opengl scene, params: input texture (not the output filter->texture)
+static void
+gst_gl_filter_app_callback (gint width, gint height, guint texture,
+    gpointer stuff)
+{
+  GstGLFilter *filter = GST_GL_FILTER (stuff);
+  GstGLFuncs *gl = filter->context->gl_vtable;
+
+  gl->MatrixMode (GL_PROJECTION);
+  gl->LoadIdentity ();
+
+  gst_gl_filter_draw_texture (filter, texture, width, height);
 }

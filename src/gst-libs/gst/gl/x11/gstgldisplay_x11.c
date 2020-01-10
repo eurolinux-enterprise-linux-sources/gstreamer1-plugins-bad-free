@@ -55,7 +55,8 @@ gst_gl_display_x11_finalize (GObject * object)
 {
   GstGLDisplayX11 *display_x11 = GST_GL_DISPLAY_X11 (object);
 
-  g_free (display_x11->name);
+  if (display_x11->name)
+    g_free (display_x11->name);
 
   if (!display_x11->foreign_display && display_x11->display) {
     XCloseDisplay (display_x11->display);

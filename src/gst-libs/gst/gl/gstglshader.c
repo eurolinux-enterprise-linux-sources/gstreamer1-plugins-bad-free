@@ -25,14 +25,33 @@
 
 #include "gl.h"
 #include "gstglshader.h"
-#include "gstglsl_private.h"
 
-/**
- * SECTION:gstglshader
- * @short_description: object representing an OpenGL shader program
- * @see_also: #GstGLSLStage
- */
+#if GST_GL_HAVE_GLES2
+/* *INDENT-OFF* */
+static const gchar *simple_vertex_shader_str_gles2 =
+      "attribute vec4 a_position;   \n"
+      "attribute vec2 a_texCoord;   \n"
+      "varying vec2 v_texCoord;     \n"
+      "void main()                  \n"
+      "{                            \n"
+      "   gl_Position = a_position; \n"
+      "   v_texCoord = a_texCoord;  \n"
+      "}                            \n";
 
+static const gchar *simple_fragment_shader_str_gles2 =
+      "precision mediump float;                            \n"
+      "varying vec2 v_texCoord;                            \n"
+      "uniform sampler2D tex;                              \n"
+      "void main()                                         \n"
+      "{                                                   \n"
+      "  gl_FragColor = texture2D( tex, v_texCoord );      \n"
+      "}                                                   \n";
+/* *INDENT-ON* */
+#endif
+
+#ifndef GL_COMPILE_STATUS
+#define GL_COMPILE_STATUS             0x8B81
+#endif
 #ifndef GLhandleARB
 #define GLhandleARB GLuint
 #endif
@@ -48,40 +67,47 @@
 
 typedef struct _GstGLShaderVTable
 {
-  GLuint (GSTGLAPI *CreateProgram) (void);
-  void (GSTGLAPI *DeleteProgram) (GLuint program);
-  void (GSTGLAPI *UseProgram) (GLuint program);
-  void (GSTGLAPI *GetAttachedShaders) (GLuint program, GLsizei maxcount,
+  GLuint GSTGLAPI (*CreateProgram) (void);
+  void GSTGLAPI (*DeleteProgram) (GLuint program);
+  void GSTGLAPI (*UseProgram) (GLuint program);
+  void GSTGLAPI (*GetAttachedShaders) (GLuint program, GLsizei maxcount,
       GLsizei * count, GLuint * shaders);
 
-  GLuint (GSTGLAPI *CreateShader) (GLenum shaderType);
-  void (GSTGLAPI *DeleteShader) (GLuint shader);
-  void (GSTGLAPI *AttachShader) (GLuint program, GLuint shader);
-  void (GSTGLAPI *DetachShader) (GLuint program, GLuint shader);
+  GLuint GSTGLAPI (*CreateShader) (GLenum shaderType);
+  void GSTGLAPI (*DeleteShader) (GLuint shader);
+  void GSTGLAPI (*AttachShader) (GLuint program, GLuint shader);
+  void GSTGLAPI (*DetachShader) (GLuint program, GLuint shader);
 
-  void (GSTGLAPI *GetShaderiv) (GLuint program, GLenum pname, GLint * params);
-  void (GSTGLAPI *GetProgramiv) (GLuint program, GLenum pname, GLint * params);
-  void (GSTGLAPI *GetShaderInfoLog) (GLuint shader, GLsizei maxLength,
+  void GSTGLAPI (*GetShaderiv) (GLuint program, GLenum pname, GLint * params);
+  void GSTGLAPI (*GetProgramiv) (GLuint program, GLenum pname, GLint * params);
+  void GSTGLAPI (*GetShaderInfoLog) (GLuint shader, GLsizei maxLength,
       GLsizei * length, char *log);
-  void (GSTGLAPI *GetProgramInfoLog) (GLuint shader, GLsizei maxLength,
+  void GSTGLAPI (*GetProgramInfoLog) (GLuint shader, GLsizei maxLength,
       GLsizei * length, char *log);
 } GstGLShaderVTable;
 
 enum
 {
   PROP_0,
-  PROP_LINKED,
+  PROP_VERTEX_SRC,
+  PROP_FRAGMENT_SRC,
+  PROP_COMPILED,
+  PROP_ACTIVE                   /* unused */
 };
 
 struct _GstGLShaderPrivate
 {
+  gchar *vertex_src;
+  gchar *fragment_src;
+
+  GLhandleARB vertex_handle;
+  GLhandleARB fragment_handle;
   GLhandleARB program_handle;
-  GList *stages;
 
-  gboolean linked;
-  GHashTable *uniform_locations;
+  gboolean compiled;
+  gboolean active;
 
-  GstGLSLFuncs vtable;
+  GstGLShaderVTable vtable;
 };
 
 GST_DEBUG_CATEGORY_STATIC (gst_gl_shader_debug);
@@ -97,21 +123,21 @@ _cleanup_shader (GstGLContext * context, GstGLShader * shader)
 {
   GstGLShaderPrivate *priv = shader->priv;
 
-  GST_OBJECT_LOCK (shader);
-
   /* release shader objects */
-  gst_gl_shader_release_unlocked (shader);
+  gst_gl_shader_release (shader);
 
   /* delete program */
   if (priv->program_handle) {
     GST_TRACE ("finalizing program shader %u", priv->program_handle);
 
     priv->vtable.DeleteProgram (priv->program_handle);
+    /* err = glGetError (); */
+    /* GST_WARNING ("error: 0x%x", err);  */
+    /* glGetObjectParameteriv(priv->program_handle, GL_OBJECT_DELETE_STATUS_, &status); */
+    /* GST_INFO ("program deletion status:%s", status == GL_TRUE ? "true" : "false" ); */
   }
 
   GST_DEBUG ("shader deleted %u", priv->program_handle);
-
-  GST_OBJECT_UNLOCK (shader);
 }
 
 static void
@@ -123,13 +149,17 @@ gst_gl_shader_finalize (GObject * object)
   shader = GST_GL_SHADER (object);
   priv = shader->priv;
 
-  GST_TRACE_OBJECT (shader, "finalizing shader %u", priv->program_handle);
+  GST_TRACE ("finalizing shader %u", priv->program_handle);
+
+  g_free (priv->vertex_src);
+  g_free (priv->fragment_src);
 
   gst_gl_context_thread_add (shader->context,
       (GstGLContextThreadFunc) _cleanup_shader, shader);
 
+  priv->fragment_handle = 0;
+  priv->vertex_handle = 0;
   priv->program_handle = 0;
-  g_hash_table_destroy (priv->uniform_locations);
 
   if (shader->context) {
     gst_object_unref (shader->context);
@@ -143,7 +173,15 @@ static void
 gst_gl_shader_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec)
 {
+  GstGLShader *shader = GST_GL_SHADER (object);
+
   switch (prop_id) {
+    case PROP_VERTEX_SRC:
+      gst_gl_shader_set_vertex_source (shader, g_value_get_string (value));
+      break;
+    case PROP_FRAGMENT_SRC:
+      gst_gl_shader_set_fragment_source (shader, g_value_get_string (value));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -158,13 +196,20 @@ gst_gl_shader_get_property (GObject * object,
   GstGLShaderPrivate *priv = shader->priv;
 
   switch (prop_id) {
-    case PROP_LINKED:
-      g_value_set_boolean (value, priv->linked);
+    case PROP_VERTEX_SRC:
+      g_value_set_string (value, priv->vertex_src);
+      break;
+    case PROP_FRAGMENT_SRC:
+      g_value_set_string (value, priv->fragment_src);
+      break;
+    case PROP_COMPILED:
+      g_value_set_boolean (value, priv->compiled);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
+
 }
 
 static void
@@ -180,12 +225,80 @@ gst_gl_shader_class_init (GstGLShaderClass * klass)
   obj_class->get_property = gst_gl_shader_get_property;
 
   /* .. and install properties */
+
   g_object_class_install_property (obj_class,
-      PROP_LINKED,
-      g_param_spec_boolean ("linked",
-          "Linked",
-          "Shader link status", FALSE,
+      PROP_VERTEX_SRC,
+      g_param_spec_string ("vertex-src",
+          "Vertex Source",
+          "GLSL Vertex Shader source code", NULL,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (obj_class,
+      PROP_FRAGMENT_SRC,
+      g_param_spec_string ("fragment-src",
+          "Fragment Source",
+          "GLSL Fragment Shader source code", NULL,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (obj_class,
+      PROP_ACTIVE,
+      g_param_spec_string ("active",
+          "Active", "Enable/Disable the shader", NULL,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (obj_class,
+      PROP_COMPILED,
+      g_param_spec_boolean ("compiled",
+          "Compiled",
+          "Shader compile and link status", FALSE,
           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+}
+
+void
+gst_gl_shader_set_vertex_source (GstGLShader * shader, const gchar * src)
+{
+  GstGLShaderPrivate *priv;
+
+  g_return_if_fail (GST_GL_IS_SHADER (shader));
+  g_return_if_fail (src != NULL);
+
+  priv = shader->priv;
+
+  if (gst_gl_shader_is_compiled (shader))
+    gst_gl_shader_release (shader);
+
+  g_free (priv->vertex_src);
+
+  priv->vertex_src = g_strdup (src);
+}
+
+void
+gst_gl_shader_set_fragment_source (GstGLShader * shader, const gchar * src)
+{
+  GstGLShaderPrivate *priv;
+
+  g_return_if_fail (GST_GL_IS_SHADER (shader));
+  g_return_if_fail (src != NULL);
+
+  priv = shader->priv;
+
+  if (gst_gl_shader_is_compiled (shader))
+    gst_gl_shader_release (shader);
+
+  g_free (priv->fragment_src);
+
+  priv->fragment_src = g_strdup (src);
+}
+
+const gchar *
+gst_gl_shader_get_vertex_source (GstGLShader * shader)
+{
+  g_return_val_if_fail (GST_GL_IS_SHADER (shader), NULL);
+  return shader->priv->vertex_src;
+}
+
+const gchar *
+gst_gl_shader_get_fragment_source (GstGLShader * shader)
+{
+  g_return_val_if_fail (GST_GL_IS_SHADER (shader), NULL);
+  return shader->priv->fragment_src;
 }
 
 static void
@@ -196,495 +309,175 @@ gst_gl_shader_init (GstGLShader * self)
 
   priv = self->priv = GST_GL_SHADER_GET_PRIVATE (self);
 
-  priv->linked = FALSE;
-  priv->uniform_locations =
-      g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  priv->vertex_src = NULL;
+  priv->fragment_src = NULL;
+
+  priv->fragment_handle = 0;
+  priv->vertex_handle = 0;
+
+  priv->compiled = FALSE;
+  priv->active = FALSE;         /* unused at the moment */
 }
 
-static int
-_get_uniform_location (GstGLShader * shader, const gchar * name)
+static gboolean
+_fill_vtable (GstGLShader * shader, GstGLContext * context)
 {
-  GstGLShaderPrivate *priv = shader->priv;
-  int location;
-  gpointer value;
+  GstGLFuncs *gl = context->gl_vtable;
+  GstGLShaderVTable *vtable = &shader->priv->vtable;
 
-  g_return_val_if_fail (priv->linked, 0);
+  if (gl->CreateProgram) {
+    vtable->CreateProgram = gl->CreateProgram;
+    vtable->DeleteProgram = gl->DeleteProgram;
+    vtable->UseProgram = gl->UseProgram;
 
-  if (!g_hash_table_lookup_extended (priv->uniform_locations, name, NULL,
-          &value)) {
-    const GstGLFuncs *gl = shader->context->gl_vtable;
-    location = gl->GetUniformLocation (priv->program_handle, name);
-    g_hash_table_insert (priv->uniform_locations, g_strdup (name),
-        GINT_TO_POINTER (location));
+    vtable->CreateShader = gl->CreateShader;
+    vtable->DeleteShader = gl->DeleteShader;
+    vtable->AttachShader = gl->AttachShader;
+    vtable->DetachShader = gl->DetachShader;
+
+    vtable->GetAttachedShaders = gl->GetAttachedShaders;
+
+    vtable->GetShaderInfoLog = gl->GetShaderInfoLog;
+    vtable->GetShaderiv = gl->GetShaderiv;
+    vtable->GetProgramInfoLog = gl->GetProgramInfoLog;
+    vtable->GetProgramiv = gl->GetProgramiv;
+  } else if (gl->CreateProgramObject) {
+    vtable->CreateProgram = gl->CreateProgramObject;
+    vtable->DeleteProgram = gl->DeleteObject;
+    vtable->UseProgram = gl->UseProgramObject;
+
+    vtable->CreateShader = gl->CreateShaderObject;
+    vtable->DeleteShader = gl->DeleteObject;
+    vtable->AttachShader = gl->AttachObject;
+    vtable->DetachShader = gl->DetachObject;
+
+    vtable->GetAttachedShaders = gl->GetAttachedObjects;
+
+    vtable->GetShaderInfoLog = gl->GetInfoLog;
+    vtable->GetShaderiv = gl->GetObjectParameteriv;
+    vtable->GetProgramInfoLog = gl->GetInfoLog;
+    vtable->GetProgramiv = gl->GetObjectParameteriv;
   } else {
-    location = GPOINTER_TO_INT (value);
+    return FALSE;
   }
 
-  return location;
+  return TRUE;
 }
 
-static GstGLShader *
-_new_with_stages_va_list (GstGLContext * context, GError ** error,
-    va_list varargs)
+GstGLShader *
+gst_gl_shader_new (GstGLContext * context)
 {
   GstGLShader *shader;
-  GstGLSLStage *stage;
-  gboolean to_unref_and_out = FALSE;
 
-  g_return_val_if_fail (GST_IS_GL_CONTEXT (context), NULL);
+  g_return_val_if_fail (GST_GL_IS_CONTEXT (context), NULL);
 
   shader = g_object_new (GST_GL_TYPE_SHADER, NULL);
   shader->context = gst_object_ref (context);
 
-  while ((stage = va_arg (varargs, GstGLSLStage *))) {
-    if (to_unref_and_out) {
-      gst_object_unref (stage);
-      continue;
-    }
-
-    if (!gst_glsl_stage_compile (stage, error)) {
-      gst_object_unref (stage);
-      to_unref_and_out = TRUE;
-      continue;
-    }
-    if (!gst_gl_shader_attach (shader, stage)) {
-      g_set_error (error, GST_GLSL_ERROR, GST_GLSL_ERROR_PROGRAM,
-          "Failed to attach stage to program");
-      to_unref_and_out = TRUE;
-      continue;
-    }
-  }
-
-  if (to_unref_and_out) {
-    gst_object_unref (shader);
-    return NULL;
-  }
-
   return shader;
 }
 
-/**
- * gst_gl_shader_new_link_with_stages:
- * @context: a #GstGLContext
- * @error: a #GError
- * @...: a NULL terminated list of #GstGLSLStage's
- *
- * Each stage will attempt to be compiled and attached to @shader.  Then
- * the shader will be linked. On error, %NULL will be returned and @error will
- * contain the details of the error.
- *
- * Note: must be called in the GL thread
- *
- * Returns: (transfer full): a new @shader with the specified stages.
- *
- * Since: 1.8
- */
-GstGLShader *
-gst_gl_shader_new_link_with_stages (GstGLContext * context, GError ** error,
-    ...)
-{
-  GstGLShader *shader;
-  va_list varargs;
-
-  va_start (varargs, error);
-  shader = _new_with_stages_va_list (context, error, varargs);
-  va_end (varargs);
-
-  if (!shader)
-    return NULL;
-
-  if (!gst_gl_shader_link (shader, error))
-    return NULL;
-
-  return shader;
-}
-
-/**
- * gst_gl_shader_new_with_stages:
- * @context: a #GstGLContext
- * @error: a #GError
- * @...: a NULL terminated list of #GstGLSLStage's
- *
- * Each stage will attempt to be compiled and attached to @shader.  On error,
- * %NULL will be returned and @error will contain the details of the error.
- *
- * Note: must be called in the GL thread
- *
- * Returns: (transfer full): a new @shader with the specified stages.
- *
- * Since: 1.8
- */
-GstGLShader *
-gst_gl_shader_new_with_stages (GstGLContext * context, GError ** error, ...)
-{
-  GstGLShader *shader;
-  va_list varargs;
-
-  va_start (varargs, error);
-  shader = _new_with_stages_va_list (context, error, varargs);
-  va_end (varargs);
-
-  return shader;
-}
-
-/**
- * gst_gl_shader_new:
- * @context: a #GstGLContext
- *
- * Note: must be called in the GL thread
- *
- * Returns: (transfer full): a new empty @shader
- */
-GstGLShader *
-gst_gl_shader_new (GstGLContext * context)
-{
-  return gst_gl_shader_new_with_stages (context, NULL, NULL);
-}
-
-/**
- * gst_gl_shader_new_default:
- * @context: a #GstGLContext
- * @error: a #GError that is filled on failure
- *
- * Note: must be called in the GL thread
- *
- * Returns: (transfer full): a default @shader or %NULL on failure
- *
- * Since: 1.8
- */
-GstGLShader *
-gst_gl_shader_new_default (GstGLContext * context, GError ** error)
-{
-  return gst_gl_shader_new_link_with_stages (context, error,
-      gst_glsl_stage_new_default_vertex (context),
-      gst_glsl_stage_new_default_fragment (context), NULL);
-}
-
-/**
- * gst_gl_shader_is_linked:
- * @shader: a #GstGLShader
- *
- * Note: must be called in the GL thread
- *
- * Returns: whether @shader has been successfully linked
- *
- * Since: 1.8
- */
 gboolean
-gst_gl_shader_is_linked (GstGLShader * shader)
+gst_gl_shader_is_compiled (GstGLShader * shader)
 {
-  gboolean ret;
+  g_return_val_if_fail (GST_GL_IS_SHADER (shader), FALSE);
 
-  g_return_val_if_fail (GST_IS_GL_SHADER (shader), FALSE);
-
-  GST_OBJECT_LOCK (shader);
-  ret = shader->priv->linked;
-  GST_OBJECT_UNLOCK (shader);
-
-  return ret;
+  return shader->priv->compiled;
 }
 
-static gboolean
-_ensure_program (GstGLShader * shader)
-{
-  if (shader->priv->program_handle)
-    return TRUE;
-
-  shader->priv->program_handle = shader->priv->vtable.CreateProgram ();
-  return shader->priv->program_handle != 0;
-}
-
-/**
- * gst_gl_shader_get_program_handle:
- * @shader: a #GstGLShader
- *
- * Returns: the GL program handle for this shader
- *
- * Since: 1.8
- */
-int
-gst_gl_shader_get_program_handle (GstGLShader * shader)
-{
-  int ret;
-
-  g_return_val_if_fail (GST_IS_GL_SHADER (shader), 0);
-
-  GST_OBJECT_LOCK (shader);
-  ret = (int) shader->priv->program_handle;
-  GST_OBJECT_UNLOCK (shader);
-
-  return ret;
-}
-
-/**
- * gst_gl_shader_detach_unlocked:
- * @shader: a #GstGLShader
- * @stage: a #GstGLSLStage to attach
- *
- * Detaches @stage from @shader.  @stage must have been successfully attached
- * to @shader with gst_gl_shader_attach() or gst_gl_shader_attach_unlocked().
- *
- * Note: must be called in the GL thread
- *
- * Since: 1.8
- */
-void
-gst_gl_shader_detach_unlocked (GstGLShader * shader, GstGLSLStage * stage)
-{
-  guint stage_handle;
-  GList *elem;
-
-  g_return_if_fail (GST_IS_GL_SHADER (shader));
-  g_return_if_fail (GST_IS_GLSL_STAGE (stage));
-
-  if (!_gst_glsl_funcs_fill (&shader->priv->vtable, shader->context)) {
-    GST_WARNING_OBJECT (shader, "Failed to retreive required GLSL functions");
-    return;
-  }
-
-  if (!shader->priv->program_handle)
-    return;
-
-  elem = g_list_find (shader->priv->stages, stage);
-  if (!elem) {
-    GST_FIXME_OBJECT (shader, "Could not find stage %p in shader %p", stage,
-        shader);
-    return;
-  }
-
-  stage_handle = gst_glsl_stage_get_handle (stage);
-  if (!stage_handle) {
-    GST_FIXME_OBJECT (shader, "Stage %p doesn't have a GL handle", stage);
-    return;
-  }
-
-  if (shader->context->gl_vtable->IsProgram)
-    g_assert (shader->context->gl_vtable->IsProgram (shader->
-            priv->program_handle));
-  if (shader->context->gl_vtable->IsShader)
-    g_assert (shader->context->gl_vtable->IsShader (stage_handle));
-
-  GST_LOG_OBJECT (shader, "detaching shader %i from program %i", stage_handle,
-      (int) shader->priv->program_handle);
-  shader->priv->vtable.DetachShader (shader->priv->program_handle,
-      stage_handle);
-
-  shader->priv->stages = g_list_delete_link (shader->priv->stages, elem);
-  gst_object_unref (stage);
-}
-
-/**
- * gst_gl_shader_detach:
- * @shader: a #GstGLShader
- * @stage: a #GstGLSLStage to attach
- *
- * Detaches @stage from @shader.  @stage must have been successfully attached
- * to @shader with gst_gl_shader_attach() or gst_gl_shader_attach_unlocked().
- *
- * Note: must be called in the GL thread
- *
- * Since: 1.8
- */
-void
-gst_gl_shader_detach (GstGLShader * shader, GstGLSLStage * stage)
-{
-  g_return_if_fail (GST_IS_GL_SHADER (shader));
-  g_return_if_fail (GST_IS_GLSL_STAGE (stage));
-
-  GST_OBJECT_LOCK (shader);
-  gst_gl_shader_detach_unlocked (shader, stage);
-  GST_OBJECT_UNLOCK (shader);
-}
-
-/**
- * gst_gl_shader_attach_unlocked:
- * @shader: a #GstGLShader
- * @stage: a #GstGLSLStage to attach
- *
- * Attaches @stage to @shader.  @stage must have been successfully compiled
- * with gst_glsl_stage_compile().
- *
- * Note: must be called in the GL thread
- *
- * Returns: whether @stage could be attached to @shader
- *
- * Since: 1.8
- */
 gboolean
-gst_gl_shader_attach_unlocked (GstGLShader * shader, GstGLSLStage * stage)
-{
-  guint stage_handle;
-
-  g_return_val_if_fail (GST_IS_GL_SHADER (shader), FALSE);
-  g_return_val_if_fail (GST_IS_GLSL_STAGE (stage), FALSE);
-
-  if (!_gst_glsl_funcs_fill (&shader->priv->vtable, shader->context)) {
-    GST_WARNING_OBJECT (shader, "Failed to retreive required GLSL functions");
-    return FALSE;
-  }
-
-  if (!_ensure_program (shader))
-    return FALSE;
-
-  /* already attached? */
-  if (g_list_find (shader->priv->stages, stage))
-    return TRUE;
-
-  stage_handle = gst_glsl_stage_get_handle (stage);
-  if (!stage_handle) {
-    return FALSE;
-  }
-
-  if (shader->context->gl_vtable->IsProgram)
-    g_assert (shader->context->gl_vtable->IsProgram (shader->
-            priv->program_handle));
-  if (shader->context->gl_vtable->IsShader)
-    g_assert (shader->context->gl_vtable->IsShader (stage_handle));
-
-  shader->priv->stages =
-      g_list_prepend (shader->priv->stages, gst_object_ref_sink (stage));
-  GST_LOG_OBJECT (shader, "attaching shader %i to program %i", stage_handle,
-      (int) shader->priv->program_handle);
-  shader->priv->vtable.AttachShader (shader->priv->program_handle,
-      stage_handle);
-
-  return TRUE;
-}
-
-/**
- * gst_gl_shader_attach:
- * @shader: a #GstGLShader
- * @stage: a #GstGLSLStage to attach
- *
- * Attaches @stage to @shader.  @stage must have been successfully compiled
- * with gst_glsl_stage_compile().
- *
- * Note: must be called in the GL thread
- *
- * Returns: whether @stage could be attached to @shader
- *
- * Since: 1.8
- */
-gboolean
-gst_gl_shader_attach (GstGLShader * shader, GstGLSLStage * stage)
-{
-  gboolean ret;
-
-  g_return_val_if_fail (GST_IS_GL_SHADER (shader), FALSE);
-  g_return_val_if_fail (GST_IS_GLSL_STAGE (stage), FALSE);
-
-  GST_OBJECT_LOCK (shader);
-  ret = gst_gl_shader_attach_unlocked (shader, stage);
-  GST_OBJECT_UNLOCK (shader);
-
-  return ret;
-}
-
-/**
- * gst_gl_shader_compile_attach_stage:
- * @shader: a #GstGLShader
- * @stage: a #GstGLSLStage to attach
- * @error: a #GError
- *
- * Compiles @stage and attaches it to @shader.
- *
- * Note: must be called in the GL thread
- *
- * Returns: whether @stage could be compiled and attached to @shader
- *
- * Since: 1.8
- */
-gboolean
-gst_gl_shader_compile_attach_stage (GstGLShader * shader, GstGLSLStage * stage,
-    GError ** error)
-{
-  g_return_val_if_fail (GST_IS_GLSL_STAGE (stage), FALSE);
-
-  if (!gst_glsl_stage_compile (stage, error)) {
-    return FALSE;
-  }
-
-  if (!gst_gl_shader_attach (shader, stage)) {
-    g_set_error (error, GST_GLSL_ERROR, GST_GLSL_ERROR_COMPILE,
-        "Failed to attach stage to shader");
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
-/**
- * gst_gl_shader_link:
- * @shader: a #GstGLShader
- * @error: a #GError
- *
- * Links the current list of #GstGLSLStage's in @shader.
- *
- * Note: must be called in the GL thread
- *
- * Returns: whether @shader could be linked together.
- *
- * Since: 1.8
- */
-gboolean
-gst_gl_shader_link (GstGLShader * shader, GError ** error)
+gst_gl_shader_compile (GstGLShader * shader, GError ** error)
 {
   GstGLShaderPrivate *priv;
-  const GstGLFuncs *gl;
+  GstGLFuncs *gl;
+
   gchar info_buffer[2048];
-  GLint status = GL_FALSE;
   gint len = 0;
-  gboolean ret;
-  GList *elem;
+  GLint status = GL_FALSE;
 
-  g_return_val_if_fail (GST_IS_GL_SHADER (shader), FALSE);
-
-  GST_OBJECT_LOCK (shader);
+  g_return_val_if_fail (GST_GL_IS_SHADER (shader), FALSE);
 
   priv = shader->priv;
   gl = shader->context->gl_vtable;
 
-  if (priv->linked) {
-    GST_OBJECT_UNLOCK (shader);
-    return TRUE;
-  }
+  if (priv->compiled)
+    return priv->compiled;
 
-  if (!_gst_glsl_funcs_fill (&shader->priv->vtable, shader->context)) {
-    g_set_error (error, GST_GLSL_ERROR, GST_GLSL_ERROR_PROGRAM,
-        "Failed to retreive required GLSL functions");
-    GST_OBJECT_UNLOCK (shader);
+  if (!_fill_vtable (shader, shader->context))
     return FALSE;
-  }
 
-  if (!_ensure_program (shader)) {
-    g_set_error (error, GST_GLSL_ERROR, GST_GLSL_ERROR_PROGRAM,
-        "Failed to create GL program object");
-    GST_OBJECT_UNLOCK (shader);
-    return FALSE;
-  }
+  shader->priv->program_handle = shader->priv->vtable.CreateProgram ();
 
   GST_TRACE ("shader created %u", shader->priv->program_handle);
 
-  for (elem = shader->priv->stages; elem; elem = elem->next) {
-    GstGLSLStage *stage = elem->data;
+  g_return_val_if_fail (priv->program_handle, FALSE);
 
-    if (!gst_glsl_stage_compile (stage, error)) {
-      GST_OBJECT_UNLOCK (shader);
-      return FALSE;
-    }
+  if (priv->vertex_src) {
+    /* create vertex object */
+    const gchar *vertex_source = priv->vertex_src;
+    priv->vertex_handle = priv->vtable.CreateShader (GL_VERTEX_SHADER);
+    gl->ShaderSource (priv->vertex_handle, 1, &vertex_source, NULL);
+    /* compile */
+    gl->CompileShader (priv->vertex_handle);
+    /* check everything is ok */
+    gl->GetShaderiv (priv->vertex_handle, GL_COMPILE_STATUS, &status);
 
-    if (!gst_gl_shader_attach_unlocked (shader, stage)) {
-      g_set_error (error, GST_GLSL_ERROR, GST_GLSL_ERROR_COMPILE,
-          "Failed to attach shader %" GST_PTR_FORMAT "to program %"
-          GST_PTR_FORMAT, stage, shader);
-      GST_OBJECT_UNLOCK (shader);
-      return FALSE;
+    priv->vtable.GetShaderInfoLog (priv->vertex_handle,
+        sizeof (info_buffer) - 1, &len, info_buffer);
+    info_buffer[len] = '\0';
+
+    if (status != GL_TRUE) {
+      GST_ERROR ("Vertex Shader compilation failed:\n%s", info_buffer);
+
+      g_set_error (error, GST_GL_SHADER_ERROR,
+          GST_GL_SHADER_ERROR_COMPILE,
+          "Vertex Shader compilation failed:\n%s", info_buffer);
+
+      priv->vtable.DeleteShader (priv->vertex_handle);
+      priv->compiled = FALSE;
+      return priv->compiled;
+    } else if (len > 1) {
+      GST_FIXME ("vertex shader info log:\n%s\n", info_buffer);
     }
+    priv->vtable.AttachShader (priv->program_handle, priv->vertex_handle);
+
+    GST_LOG ("vertex shader attached %u", priv->vertex_handle);
+  }
+
+  if (priv->fragment_src) {
+    /* create fragment object */
+    const gchar *fragment_source = priv->fragment_src;
+    priv->fragment_handle = priv->vtable.CreateShader (GL_FRAGMENT_SHADER);
+    gl->ShaderSource (priv->fragment_handle, 1, &fragment_source, NULL);
+    /* compile */
+    gl->CompileShader (priv->fragment_handle);
+    /* check everything is ok */
+    priv->vtable.GetShaderiv (priv->fragment_handle,
+        GL_COMPILE_STATUS, &status);
+
+    priv->vtable.GetShaderInfoLog (priv->fragment_handle,
+        sizeof (info_buffer) - 1, &len, info_buffer);
+    info_buffer[len] = '\0';
+    if (status != GL_TRUE) {
+      GST_ERROR ("Fragment Shader compilation failed:\n%s", info_buffer);
+
+      g_set_error (error, GST_GL_SHADER_ERROR,
+          GST_GL_SHADER_ERROR_COMPILE,
+          "Fragment Shader compilation failed:\n%s", info_buffer);
+
+      priv->vtable.DeleteShader (priv->fragment_handle);
+      priv->compiled = FALSE;
+      return priv->compiled;
+    } else if (len > 1) {
+      GST_FIXME ("vertex shader info log:\n%s\n", info_buffer);
+    }
+    priv->vtable.AttachShader (priv->program_handle, priv->fragment_handle);
+
+    GST_LOG ("fragment shader attached %u", priv->fragment_handle);
   }
 
   /* if nothing failed link shaders */
   gl->LinkProgram (priv->program_handle);
-  status = GL_FALSE;
   priv->vtable.GetProgramiv (priv->program_handle, GL_LINK_STATUS, &status);
 
   priv->vtable.GetProgramInfoLog (priv->program_handle,
@@ -694,94 +487,59 @@ gst_gl_shader_link (GstGLShader * shader, GError ** error)
   if (status != GL_TRUE) {
     GST_ERROR ("Shader linking failed:\n%s", info_buffer);
 
-    g_set_error (error, GST_GLSL_ERROR, GST_GLSL_ERROR_LINK,
-        "Shader Linking failed:\n%s", info_buffer);
-    ret = priv->linked = FALSE;
-    GST_OBJECT_UNLOCK (shader);
-    return ret;
+    g_set_error (error, GST_GL_SHADER_ERROR,
+        GST_GL_SHADER_ERROR_LINK, "Shader Linking failed:\n%s", info_buffer);
+    priv->compiled = FALSE;
+    return priv->compiled;
   } else if (len > 1) {
     GST_FIXME ("shader link log:\n%s\n", info_buffer);
   }
+  /* success! */
+  priv->compiled = TRUE;
+  g_object_notify (G_OBJECT (shader), "compiled");
 
-  ret = priv->linked = TRUE;
-  GST_OBJECT_UNLOCK (shader);
-
-  g_object_notify (G_OBJECT (shader), "linked");
-
-  return ret;
+  return priv->compiled;
 }
 
-/**
- * gst_gl_shader_release_unlocked:
- * @shader: a #GstGLShader
- *
- * Releases the shader and stages.
- *
- * Note: must be called in the GL thread
- *
- * Since: 1.8
- */
-void
-gst_gl_shader_release_unlocked (GstGLShader * shader)
-{
-  GstGLShaderPrivate *priv;
-  GList *elem;
-
-  g_return_if_fail (GST_IS_GL_SHADER (shader));
-
-  priv = shader->priv;
-
-  for (elem = shader->priv->stages; elem;) {
-    GstGLSLStage *stage = elem->data;
-    GList *next = elem->next;
-
-    gst_gl_shader_detach_unlocked (shader, stage);
-    elem = next;
-  }
-
-  g_list_free_full (shader->priv->stages, (GDestroyNotify) gst_object_unref);
-  shader->priv->stages = NULL;
-
-  priv->linked = FALSE;
-  g_hash_table_remove_all (priv->uniform_locations);
-
-  g_object_notify (G_OBJECT (shader), "linked");
-}
-
-/**
- * gst_gl_shader_release:
- * @shader: a #GstGLShader
- *
- * Releases the shader and stages.
- *
- * Note: must be called in the GL thread
- *
- * Since: 1.8
- */
 void
 gst_gl_shader_release (GstGLShader * shader)
 {
-  g_return_if_fail (GST_IS_GL_SHADER (shader));
+  GstGLShaderPrivate *priv;
 
-  GST_OBJECT_LOCK (shader);
-  gst_gl_shader_release_unlocked (shader);
-  GST_OBJECT_UNLOCK (shader);
+  g_return_if_fail (GST_GL_IS_SHADER (shader));
+
+  priv = shader->priv;
+
+  if (!priv->compiled || !priv->program_handle)
+    return;
+
+  if (priv->vertex_handle) {    /* not needed but nvidia doesn't care to respect the spec */
+    GST_TRACE ("finalizing vertex shader %u", priv->vertex_handle);
+
+    priv->vtable.DeleteShader (priv->vertex_handle);
+  }
+
+  if (priv->fragment_handle) {
+    GST_TRACE ("finalizing fragment shader %u", priv->fragment_handle);
+
+    priv->vtable.DeleteShader (priv->fragment_handle);
+  }
+
+  if (priv->vertex_handle)
+    priv->vtable.DetachShader (priv->program_handle, priv->vertex_handle);
+  if (priv->fragment_handle)
+    priv->vtable.DetachShader (priv->program_handle, priv->fragment_handle);
+
+  priv->compiled = FALSE;
+  g_object_notify (G_OBJECT (shader), "compiled");
 }
 
-/**
- * gst_gl_shader_use:
- * @shader: a #GstGLShader
- *
- * Mark's @shader as being used for the next GL draw command.
- *
- * Note: must be called in the GL thread and @shader must have been linked.
- */
 void
 gst_gl_shader_use (GstGLShader * shader)
 {
   GstGLShaderPrivate *priv;
 
-  g_return_if_fail (GST_IS_GL_SHADER (shader));
+  g_return_if_fail (GST_GL_IS_SHADER (shader));
 
   priv = shader->priv;
 
@@ -792,20 +550,12 @@ gst_gl_shader_use (GstGLShader * shader)
   return;
 }
 
-/**
- * gst_gl_context_clear_shader:
- * @context: a #GstGLContext
- *
- * Clear's the currently set shader from the GL state machine.
- *
- * Note: must be called in the GL thread.
- */
 void
 gst_gl_context_clear_shader (GstGLContext * context)
 {
   GstGLFuncs *gl;
 
-  g_return_if_fail (GST_IS_GL_CONTEXT (context));
+  g_return_if_fail (GST_GL_IS_CONTEXT (context));
 
   gl = context->gl_vtable;
 
@@ -814,6 +564,107 @@ gst_gl_context_clear_shader (GstGLContext * context)
   else if (gl->CreateProgramObject)
     gl->UseProgramObject (0);
 }
+
+gboolean
+gst_gl_shader_compile_and_check (GstGLShader * shader,
+    const gchar * source, GstGLShaderSourceType type)
+{
+  gboolean is_compiled = FALSE;
+
+  g_object_get (G_OBJECT (shader), "compiled", &is_compiled, NULL);
+
+  if (!is_compiled) {
+    GError *error = NULL;
+
+    switch (type) {
+      case GST_GL_SHADER_FRAGMENT_SOURCE:
+        gst_gl_shader_set_fragment_source (shader, source);
+        break;
+      case GST_GL_SHADER_VERTEX_SOURCE:
+        gst_gl_shader_set_vertex_source (shader, source);
+        break;
+      default:
+        g_assert_not_reached ();
+        break;
+    }
+
+    gst_gl_shader_compile (shader, &error);
+    if (error) {
+      gst_gl_context_set_error (shader->context, "%s", error->message);
+      g_error_free (error);
+      gst_gl_context_clear_shader (shader->context);
+
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+gboolean
+gst_gl_shader_compile_all_with_attribs_and_check (GstGLShader * shader,
+    const gchar * v_src, const gchar * f_src, const gint n_attribs,
+    const gchar * attrib_names[], GLint attrib_locs[])
+{
+  gint i = 0;
+  GError *error = NULL;
+
+  gst_gl_shader_set_vertex_source (shader, v_src);
+  gst_gl_shader_set_fragment_source (shader, f_src);
+
+  gst_gl_shader_compile (shader, &error);
+  if (error) {
+    gst_gl_context_set_error (shader->context, "%s", error->message);
+    g_error_free (error);
+    gst_gl_context_clear_shader (shader->context);
+
+    return FALSE;
+  }
+
+  for (i = 0; i < n_attribs; i++)
+    attrib_locs[i] =
+        gst_gl_shader_get_attribute_location (shader, attrib_names[i]);
+
+  return TRUE;
+}
+
+#if GST_GL_HAVE_GLES2
+gboolean
+gst_gl_shader_compile_with_default_f_and_check (GstGLShader * shader,
+    const gchar * v_src, const gint n_attribs, const gchar * attrib_names[],
+    GLint attrib_locs[])
+{
+  return gst_gl_shader_compile_all_with_attribs_and_check (shader, v_src,
+      simple_fragment_shader_str_gles2, n_attribs, attrib_names, attrib_locs);
+}
+
+gboolean
+gst_gl_shader_compile_with_default_v_and_check (GstGLShader * shader,
+    const gchar * f_src, GLint * pos_loc, GLint * tex_loc)
+{
+  const gchar *attrib_names[2] = { "a_position", "a_texCoord" };
+  GLint attrib_locs[2] = { 0 };
+  gboolean ret = TRUE;
+
+  ret =
+      gst_gl_shader_compile_all_with_attribs_and_check (shader,
+      simple_vertex_shader_str_gles2, f_src, 2, attrib_names, attrib_locs);
+
+  if (ret) {
+    *pos_loc = attrib_locs[0];
+    *tex_loc = attrib_locs[1];
+  }
+
+  return ret;
+}
+
+gboolean
+gst_gl_shader_compile_with_default_vf_and_check (GstGLShader * shader,
+    GLint * pos_loc, GLint * tex_loc)
+{
+  return gst_gl_shader_compile_with_default_v_and_check (shader,
+      simple_fragment_shader_str_gles2, pos_loc, tex_loc);
+}
+#endif
 
 void
 gst_gl_shader_set_uniform_1f (GstGLShader * shader, const gchar * name,
@@ -829,7 +680,7 @@ gst_gl_shader_set_uniform_1f (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform1f (location, value);
 }
@@ -847,7 +698,7 @@ gst_gl_shader_set_uniform_1fv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform1fv (location, count, value);
 }
@@ -865,7 +716,7 @@ gst_gl_shader_set_uniform_1i (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform1i (location, value);
 }
@@ -883,7 +734,7 @@ gst_gl_shader_set_uniform_1iv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform1iv (location, count, value);
 }
@@ -901,7 +752,7 @@ gst_gl_shader_set_uniform_2f (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform2f (location, value0, value1);
 }
@@ -919,7 +770,7 @@ gst_gl_shader_set_uniform_2fv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform2fv (location, count, value);
 }
@@ -937,7 +788,7 @@ gst_gl_shader_set_uniform_2i (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform2i (location, v0, v1);
 }
@@ -955,7 +806,7 @@ gst_gl_shader_set_uniform_2iv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform2iv (location, count, value);
 }
@@ -973,7 +824,7 @@ gst_gl_shader_set_uniform_3f (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform3f (location, v0, v1, v2);
 }
@@ -991,7 +842,7 @@ gst_gl_shader_set_uniform_3fv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform3fv (location, count, value);
 }
@@ -1009,7 +860,7 @@ gst_gl_shader_set_uniform_3i (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform3i (location, v0, v1, v2);
 }
@@ -1027,7 +878,7 @@ gst_gl_shader_set_uniform_3iv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform3iv (location, count, value);
 }
@@ -1045,7 +896,7 @@ gst_gl_shader_set_uniform_4f (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform4f (location, v0, v1, v2, v3);
 }
@@ -1063,7 +914,7 @@ gst_gl_shader_set_uniform_4fv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform4fv (location, count, value);
 }
@@ -1081,7 +932,7 @@ gst_gl_shader_set_uniform_4i (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform4i (location, v0, v1, v2, v3);
 }
@@ -1099,7 +950,7 @@ gst_gl_shader_set_uniform_4iv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->Uniform4iv (location, count, value);
 }
@@ -1117,7 +968,7 @@ gst_gl_shader_set_uniform_matrix_2fv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix2fv (location, count, transpose, value);
 }
@@ -1135,7 +986,7 @@ gst_gl_shader_set_uniform_matrix_3fv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix3fv (location, count, transpose, value);
 }
@@ -1153,7 +1004,7 @@ gst_gl_shader_set_uniform_matrix_4fv (GstGLShader * shader, const gchar * name,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix4fv (location, count, transpose, value);
 }
@@ -1172,7 +1023,7 @@ gst_gl_shader_set_uniform_matrix_2x3fv (GstGLShader * shader,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix2x3fv (location, count, transpose, value);
 }
@@ -1190,7 +1041,7 @@ gst_gl_shader_set_uniform_matrix_2x4fv (GstGLShader * shader,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix2x4fv (location, count, transpose, value);
 }
@@ -1208,7 +1059,7 @@ gst_gl_shader_set_uniform_matrix_3x2fv (GstGLShader * shader,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix3x2fv (location, count, transpose, value);
 }
@@ -1226,7 +1077,7 @@ gst_gl_shader_set_uniform_matrix_3x4fv (GstGLShader * shader,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix3x4fv (location, count, transpose, value);
 }
@@ -1244,7 +1095,7 @@ gst_gl_shader_set_uniform_matrix_4x2fv (GstGLShader * shader,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix4x2fv (location, count, transpose, value);
 }
@@ -1262,7 +1113,7 @@ gst_gl_shader_set_uniform_matrix_4x3fv (GstGLShader * shader,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  location = _get_uniform_location (shader, name);
+  location = gl->GetUniformLocation (priv->program_handle, name);
 
   gl->UniformMatrix4x3fv (location, count, transpose, value);
 }
@@ -1273,20 +1124,13 @@ gst_gl_shader_get_attribute_location (GstGLShader * shader, const gchar * name)
 {
   GstGLShaderPrivate *priv;
   GstGLFuncs *gl;
-  gint ret;
 
-  g_return_val_if_fail (shader != NULL, -1);
+  g_return_val_if_fail (shader != NULL, 0);
   priv = shader->priv;
-  g_return_val_if_fail (priv->program_handle != 0, -1);
-
+  g_return_val_if_fail (priv->program_handle != 0, 0);
   gl = shader->context->gl_vtable;
 
-  ret = gl->GetAttribLocation (priv->program_handle, name);
-
-  GST_TRACE_OBJECT (shader, "retreived program %i attribute \'%s\' location %i",
-      (int) priv->program_handle, name, ret);
-
-  return ret;
+  return gl->GetAttribLocation (priv->program_handle, name);
 }
 
 void
@@ -1301,28 +1145,11 @@ gst_gl_shader_bind_attribute_location (GstGLShader * shader, GLuint index,
   g_return_if_fail (priv->program_handle != 0);
   gl = shader->context->gl_vtable;
 
-  GST_TRACE_OBJECT (shader, "binding program %i attribute \'%s\' location %i",
-      (int) priv->program_handle, name, index);
-
   gl->BindAttribLocation (priv->program_handle, index, name);
 }
 
-void
-gst_gl_shader_bind_frag_data_location (GstGLShader * shader,
-    guint index, const gchar * name)
+GQuark
+gst_gl_shader_error_quark (void)
 {
-  GstGLShaderPrivate *priv;
-  GstGLFuncs *gl;
-
-  g_return_if_fail (shader != NULL);
-  if (!_ensure_program (shader))
-    g_return_if_fail (shader->priv->program_handle);
-  priv = shader->priv;
-  gl = shader->context->gl_vtable;
-  g_return_if_fail (gl->BindFragDataLocation);
-
-  GST_TRACE_OBJECT (shader, "binding program %i frag data \'%s\' location %i",
-      (int) priv->program_handle, name, index);
-
-  gl->BindFragDataLocation (priv->program_handle, index, name);
+  return g_quark_from_static_string ("gst-gl-shader-error");
 }

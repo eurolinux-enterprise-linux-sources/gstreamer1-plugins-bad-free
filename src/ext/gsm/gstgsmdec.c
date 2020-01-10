@@ -84,13 +84,13 @@ gst_gsmdec_class_init (GstGSMDecClass * klass)
   element_class = (GstElementClass *) klass;
   base_class = (GstAudioDecoderClass *) klass;
 
-  gst_element_class_add_static_pad_template (element_class,
-      &gsmdec_sink_template);
-  gst_element_class_add_static_pad_template (element_class,
-      &gsmdec_src_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gsmdec_sink_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gsmdec_src_template));
   gst_element_class_set_static_metadata (element_class, "GSM audio decoder",
-      "Codec/Decoder/Audio", "Decodes GSM encoded audio",
-      "Philippe Khalaf <burger@speedy.org>");
+      "Codec/Decoder/Audio",
+      "Decodes GSM encoded audio", "Philippe Khalaf <burger@speedy.org>");
 
   base_class->start = GST_DEBUG_FUNCPTR (gst_gsmdec_start);
   base_class->stop = GST_DEBUG_FUNCPTR (gst_gsmdec_stop);
@@ -105,9 +105,6 @@ static void
 gst_gsmdec_init (GstGSMDec * gsmdec)
 {
   gst_audio_decoder_set_needs_format (GST_AUDIO_DECODER (gsmdec), TRUE);
-  gst_audio_decoder_set_use_default_pad_acceptcaps (GST_AUDIO_DECODER_CAST
-      (gsmdec), TRUE);
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_DECODER_SINK_PAD (gsmdec));
 }
 
 static gboolean

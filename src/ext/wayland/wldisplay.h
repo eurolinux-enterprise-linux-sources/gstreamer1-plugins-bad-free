@@ -23,7 +23,7 @@
 
 #include <gst/gst.h>
 #include <wayland-client.h>
-#include "viewporter-client-protocol.h"
+#include "scaler-client-protocol.h"
 
 G_BEGIN_DECLS
 
@@ -51,17 +51,13 @@ struct _GstWlDisplay
   struct wl_subcompositor *subcompositor;
   struct wl_shell *shell;
   struct wl_shm *shm;
-  struct wp_viewporter *viewporter;
-  GArray *shm_formats;
+  struct wl_scaler *scaler;
+  GArray *formats;
 
   /* private */
   gboolean own_display;
   GThread *thread;
   GstPoll *wl_fd_poll;
-
-  GMutex buffers_mutex;
-  GHashTable *buffers;
-  gboolean shutting_down;
 };
 
 struct _GstWlDisplayClass
@@ -74,10 +70,6 @@ GType gst_wl_display_get_type (void);
 GstWlDisplay *gst_wl_display_new (const gchar * name, GError ** error);
 GstWlDisplay *gst_wl_display_new_existing (struct wl_display * display,
     gboolean take_ownership, GError ** error);
-
-/* see wlbuffer.c for explanation */
-void gst_wl_display_register_buffer (GstWlDisplay * self, gpointer buf);
-void gst_wl_display_unregister_buffer (GstWlDisplay * self, gpointer buf);
 
 G_END_DECLS
 

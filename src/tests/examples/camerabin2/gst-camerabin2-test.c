@@ -428,7 +428,7 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
 
       gst_message_parse_error (message, &err, &debug);
       g_print ("Error: %s\n", err->message);
-      g_clear_error (&err);
+      g_error_free (err);
       g_free (debug);
 
       /* Write debug graph to file */
@@ -556,7 +556,8 @@ load_encoding_profile (void)
           gep_filename);
       if (error) {
         GST_WARNING ("Error from file loading: %s", error->message);
-        g_clear_error (&error);
+        g_error_free (error);
+        error = NULL;
       }
     } else {
       prof = gst_encoding_target_get_profile (target, gep_profilename);
@@ -594,13 +595,12 @@ setup_pipeline_element (GstElement * element, const gchar * property_name,
     elem = gst_parse_launch (element_name, &error);
     if (elem) {
       g_object_set (element, property_name, elem, NULL);
-      g_object_unref (elem);
     } else {
       GST_WARNING ("can't create element '%s' for property '%s'", element_name,
           property_name);
       if (error) {
         GST_ERROR ("%s", error->message);
-        g_clear_error (&error);
+        g_error_free (error);
       }
       res = FALSE;
     }
@@ -695,7 +695,6 @@ setup_pipeline (void)
 
     if (setup_pipeline_element (wrapper, "video-source", videosrc_name, NULL)) {
       g_object_set (camerabin, "camera-source", wrapper, NULL);
-      g_object_unref (wrapper);
     } else {
       GST_WARNING ("Failed to set videosrc to %s", videosrc_name);
     }
@@ -719,18 +718,15 @@ setup_pipeline (void)
 
   if (imagepp_name) {
     ipp = create_ipp_bin ();
-    if (ipp) {
+    if (ipp)
       g_object_set (camerabin, "image-filter", ipp, NULL);
-      g_object_unref (ipp);
-    } else
+    else
       GST_WARNING ("Could not create ipp elements");
   }
 
   prof = load_encoding_profile ();
-  if (prof) {
+  if (prof)
     g_object_set (G_OBJECT (camerabin), "video-profile", prof, NULL);
-    gst_encoding_profile_unref (prof);
-  }
 
   GST_INFO_OBJECT (camerabin, "elements created");
 
@@ -1075,9 +1071,6 @@ print_performance_data (void)
     i++;
   }
 
-  if (i == 0)
-    return;
-
   if (i > 1)
     shot_to_shot = avg.shot_to_shot / (i - 1);
   else
@@ -1252,8 +1245,6 @@ main (int argc, char *argv[])
   g_option_context_add_group (ctx, gst_init_get_option_group ());
   if (!g_option_context_parse (ctx, &argc, &argv, &err)) {
     g_print ("Error initializing: %s\n", err->message);
-    g_option_context_free (ctx);
-    g_clear_error (&err);
     exit (1);
   }
   g_option_context_free (ctx);

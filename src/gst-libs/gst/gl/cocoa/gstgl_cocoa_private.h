@@ -27,18 +27,13 @@
 
 #include "gstglwindow_cocoa.h"
 #include "gstglcontext_cocoa.h"
-#include "gstglcaopengllayer.h"
 
 G_BEGIN_DECLS
 
 struct _GstGLContextCocoaPrivate
 {
-  CGLPixelFormatObj pixel_format;
-  CGLContextObj gl_context;
-  CGLContextObj external_gl_context;
-
-  GstGLAPI context_api;
-
+  NSOpenGLContext *gl_context;
+  NSOpenGLContext *external_gl_context;
   gint source_id;
 };
 
@@ -50,16 +45,12 @@ struct _GstGLContextCocoaPrivate
 /* =============================================================*/
 
 @interface GstGLNSView: NSView {
-@public
   GstGLWindowCocoa *window_cocoa;
-  GstGLCAOpenGLLayer *layer;
 }
-- (id) initWithFrameLayer:(GstGLWindowCocoa *)window rect:(NSRect)contentRect layer:(CALayer *)layerContent;
+- (id) initWithFrame:(GstGLWindowCocoa *)window rect:(NSRect)contentRect;
 @end
 
-gboolean gst_gl_window_cocoa_create_window (GstGLWindowCocoa *window_cocoa);
-
-void _invoke_on_main (GstGLWindowCB func, gpointer data);
+gboolean gst_gl_window_cocoa_create_window (GstGLWindowCocoa *window_cocoa, NSRect rect);
 
 G_END_DECLS
 

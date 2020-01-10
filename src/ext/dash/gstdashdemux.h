@@ -31,11 +31,9 @@
 #define __GST_DASH_DEMUX_H__
 
 #include <gst/gst.h>
-#include <gst/adaptivedemux/gstadaptivedemux.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstdataqueue.h>
 #include "gstmpdparser.h"
-#include "gstisoff.h"
 #include <gst/uridownloader/gsturidownloader.h>
 
 G_BEGIN_DECLS
@@ -52,50 +50,48 @@ G_BEGIN_DECLS
 #define GST_DASH_DEMUX_CAST(obj) \
 	((GstDashDemux *)obj)
 
-typedef struct _GstDashDemuxClockDrift GstDashDemuxClockDrift;
 typedef struct _GstDashDemuxStream GstDashDemuxStream;
 typedef struct _GstDashDemux GstDashDemux;
 typedef struct _GstDashDemuxClass GstDashDemuxClass;
 
 struct _GstDashDemuxStream
 {
-  GstAdaptiveDemuxStream parent;
+  GstPad *pad;
+
+  GstDashDemux *demux;
 
   gint index;
   GstActiveStream *active_stream;
 
+  GstCaps *input_caps;
+
+  GstFlowReturn last_ret;
+  GstClockTime position;
+  gboolean restart_download;
+
+  GstEvent *pending_segment;
+
+  gboolean stream_eos;
+  gboolean need_header;
+  gboolean discont;
+
+  /* Download task */
+  GMutex download_mutex;
+  GCond download_cond;
+  GstTask *download_task;
+  GRecMutex download_task_lock;
+
+  /* download tooling */
+  GstElement *src;
+  GstPad *src_srcpad;
+  GMutex fragment_download_lock;
+  GCond fragment_download_cond;
   GstMediaFragmentInfo current_fragment;
-
-  /* index parsing */
-  GstAdapter *sidx_adapter;
-  GstSidxParser sidx_parser;
-  gint sidx_index;
-  gint64 sidx_base_offset;
-  GstClockTime pending_seek_ts;
-  /* sidx offset tracking */
-  guint64 sidx_current_offset;
-  /* index = 1, header = 2, data = 3 */
-  guint sidx_index_header_or_data;
-
-  /* ISOBMFF box parsing */
-  gboolean is_isobmff;
-  GstAdapter *isobmff_adapter;
-  struct {
-    /* index = 1, header = 2, data = 3 */
-    guint index_header_or_data;
-    guint32 current_fourcc;
-    guint64 current_start_offset;
-    guint64 current_offset;
-    guint64 current_size;
-  } isobmff_parser;
-
-  GstMoofBox *moof;
-  guint64 moof_offset, moof_size;
-  GArray *moof_sync_samples;
-  guint current_sync_sample;
-
-  guint64 moof_average_size, first_sync_sample_average_size;
-  gboolean first_sync_sample_after_moof, first_sync_sample_always_after_moof;
+  gboolean starting_fragment;
+  gint64 download_start_time;
+  gint64 download_total_time;
+  gint64 download_total_bytes;
+  gint current_download_rate;
 };
 
 /**
@@ -105,36 +101,40 @@ struct _GstDashDemuxStream
  */
 struct _GstDashDemux
 {
-  GstAdaptiveDemux parent;
+  GstBin parent;
+  GstPad *sinkpad;
 
+  gboolean have_group_id;
+  guint group_id;
+
+  GSList *streams;
   GSList *next_periods;
 
+  GstSegment segment;
+  GstClockTime timestamp_offset;
+
+  GstBuffer *manifest;
+  GstUriDownloader *downloader;
   GstMpdClient *client;         /* MPD client */
   GMutex client_lock;
-
-  GstDashDemuxClockDrift *clock_drift;
 
   gboolean end_of_period;
   gboolean end_of_manifest;
 
   /* Properties */
   GstClockTime max_buffering_time;      /* Maximum buffering time accumulated during playback */
+  gfloat bandwidth_usage;       /* Percentage of the available bandwidth to use       */
   guint64 max_bitrate;          /* max of bitrate supported by target decoder         */
-  gint max_video_width, max_video_height;
-  gint max_video_framerate_n, max_video_framerate_d;
-  gchar* default_presentation_delay; /* presentation time delay if MPD@suggestedPresentationDelay is not present */
 
-  gint n_audio_streams;
-  gint n_video_streams;
-  gint n_subtitle_streams;
+  gboolean cancelled;
 
-  gboolean trickmode_no_audio;
-  gboolean allow_trickmode_key_units;
+  /* Manifest update */
+  GstClockTime last_manifest_update;
 };
 
 struct _GstDashDemuxClass
 {
-  GstAdaptiveDemuxClass parent_class;
+  GstBinClass parent_class;
 };
 
 GType gst_dash_demux_get_type (void);

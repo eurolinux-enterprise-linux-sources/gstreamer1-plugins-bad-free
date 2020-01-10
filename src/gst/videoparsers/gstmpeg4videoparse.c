@@ -66,7 +66,8 @@ enum
 {
   PROP_0,
   PROP_DROP,
-  PROP_CONFIG_INTERVAL
+  PROP_CONFIG_INTERVAL,
+  PROP_LAST
 };
 
 #define gst_mpeg4vparse_parent_class parent_class
@@ -154,8 +155,10 @@ gst_mpeg4vparse_class_init (GstMpeg4VParseClass * klass)
           0, 3600, DEFAULT_CONFIG_INTERVAL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (element_class, &src_template);
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
 
   gst_element_class_set_static_metadata (element_class,
       "MPEG 4 video elementary stream parser", "Codec/Parser/Video",
@@ -185,7 +188,6 @@ gst_mpeg4vparse_init (GstMpeg4VParse * parse)
 
   gst_base_parse_set_pts_interpolation (GST_BASE_PARSE (parse), FALSE);
   GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (parse));
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (parse));
 }
 
 static void
@@ -507,6 +509,7 @@ next:
         mp4vparse->last_sc = size - 3;
       }
       goto out;
+      break;
     default:
       /* decide whether this startcode ends a frame */
       ret = gst_mpeg4vparse_process_sc (mp4vparse, &packet, size);
@@ -720,25 +723,16 @@ gst_mpeg4vparse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
     GstTagList *taglist;
     GstCaps *caps;
 
+    taglist = gst_tag_list_new_empty ();
+
     /* codec tag */
     caps = gst_pad_get_current_caps (GST_BASE_PARSE_SRC_PAD (parse));
-    if (G_UNLIKELY (caps == NULL)) {
-      if (GST_PAD_IS_FLUSHING (GST_BASE_PARSE_SRC_PAD (parse))) {
-        GST_INFO_OBJECT (parse, "Src pad is flushing");
-        return GST_FLOW_FLUSHING;
-      } else {
-        GST_INFO_OBJECT (parse, "Src pad is not negotiated!");
-        return GST_FLOW_NOT_NEGOTIATED;
-      }
-    }
-
-    taglist = gst_tag_list_new_empty ();
     gst_pb_utils_add_codec_description_to_tag_list (taglist,
         GST_TAG_VIDEO_CODEC, caps);
     gst_caps_unref (caps);
 
-    gst_base_parse_merge_tags (parse, taglist, GST_TAG_MERGE_REPLACE);
-    gst_tag_list_unref (taglist);
+    gst_pad_push_event (GST_BASE_PARSE_SRC_PAD (mp4vparse),
+        gst_event_new_tag (taglist));
 
     /* also signals the end of first-frame processing */
     mp4vparse->sent_codec_tag = TRUE;

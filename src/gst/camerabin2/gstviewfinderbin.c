@@ -24,7 +24,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! viewfinderbin
+ * gst-launch -v videotestsrc ! viewfinderbin
  * ]|
  * Feeds the viewfinderbin with video test data.
  * </refsect2>
@@ -122,7 +122,8 @@ gst_viewfinder_bin_class_init (GstViewfinderBinClass * klass)
           DEFAULT_DISABLE_CONVERTERS,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
 
   gst_element_class_set_static_metadata (element_class, "Viewfinder Bin",
       "Sink/Video", "Viewfinder Bin used in camerabin2",

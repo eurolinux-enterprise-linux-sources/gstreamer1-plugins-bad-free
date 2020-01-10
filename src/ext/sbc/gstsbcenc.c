@@ -346,10 +346,11 @@ gst_sbc_enc_class_init (GstSbcEncClass * klass)
   encoder_class->set_format = GST_DEBUG_FUNCPTR (gst_sbc_enc_set_format);
   encoder_class->handle_frame = GST_DEBUG_FUNCPTR (gst_sbc_enc_handle_frame);
 
-  gst_element_class_add_static_pad_template (element_class,
-      &sbc_enc_sink_factory);
-  gst_element_class_add_static_pad_template (element_class,
-      &sbc_enc_src_factory);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sbc_enc_sink_factory));
+
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sbc_enc_src_factory));
 
   gst_element_class_set_static_metadata (element_class,
       "Bluetooth SBC audio encoder", "Codec/Encoder/Audio",
@@ -361,7 +362,6 @@ gst_sbc_enc_class_init (GstSbcEncClass * klass)
 static void
 gst_sbc_enc_init (GstSbcEnc * self)
 {
-  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_ENCODER_SINK_PAD (self));
   self->subbands = 0;
   self->blocks = 0;
   self->rate = 0;

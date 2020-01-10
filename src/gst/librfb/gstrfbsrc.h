@@ -25,8 +25,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
 #include <gst/video/gstvideopool.h>
-
-#include "rfbdecoder.h"
+#include <librfb/rfb.h>
 
 G_BEGIN_DECLS
 #define GST_TYPE_RFB_SRC \
@@ -60,6 +59,8 @@ struct _GstRfbSrc
   gboolean view_only;
 
   guint button_mask;
+
+  GstBufferPool *pool;
 
   /* protocol version */
   guint version_major;

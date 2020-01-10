@@ -71,7 +71,7 @@ struct _GstCurlSmtpSink
   gboolean transfer_end;
   GCond cond_transfer_end;
 
-  gint curr_attachment;
+  gint nbr_attachments_left;
   gboolean reset_transfer_options;
   gboolean final_boundary_added;
   gboolean eos;

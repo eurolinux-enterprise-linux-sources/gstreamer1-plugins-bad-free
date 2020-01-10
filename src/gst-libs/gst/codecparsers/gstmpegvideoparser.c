@@ -286,7 +286,7 @@ failed:
  * Parses the @seqhdr MPEG Video Sequence Header structure members
  * from video @packet
  *
- * Returns: %TRUE if the seqhdr could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the seqhdr could be parsed correctly, %FALSE otherwize.
  *
  * Since: 1.2
  */
@@ -296,6 +296,7 @@ gst_mpeg_video_packet_parse_sequence_header (const GstMpegVideoPacket * packet,
 {
   GstBitReader br;
   guint8 bits;
+  guint8 load_intra_flag, load_non_intra_flag;
 
   g_return_val_if_fail (seqhdr != NULL, FALSE);
 
@@ -338,8 +339,8 @@ gst_mpeg_video_packet_parse_sequence_header (const GstMpegVideoPacket * packet,
   READ_UINT8 (&br, seqhdr->constrained_parameters_flag, 1);
 
   /* load_intra_quantiser_matrix */
-  READ_UINT8 (&br, seqhdr->load_intra_quantiser_matrix, 1);
-  if (seqhdr->load_intra_quantiser_matrix) {
+  READ_UINT8 (&br, load_intra_flag, 1);
+  if (load_intra_flag) {
     gint i;
     for (i = 0; i < 64; i++)
       READ_UINT8 (&br, seqhdr->intra_quantizer_matrix[i], 8);
@@ -347,8 +348,8 @@ gst_mpeg_video_packet_parse_sequence_header (const GstMpegVideoPacket * packet,
     memcpy (seqhdr->intra_quantizer_matrix, default_intra_quantizer_matrix, 64);
 
   /* non intra quantizer matrix */
-  READ_UINT8 (&br, seqhdr->load_non_intra_quantiser_matrix, 1);
-  if (seqhdr->load_non_intra_quantiser_matrix) {
+  READ_UINT8 (&br, load_non_intra_flag, 1);
+  if (load_non_intra_flag) {
     gint i;
     for (i = 0; i < 64; i++)
       READ_UINT8 (&br, seqhdr->non_intra_quantizer_matrix[i], 8);
@@ -381,7 +382,7 @@ failed:
  * Parses the @seqext MPEG Video Sequence Extension structure members
  * from video @packet
  *
- * Returns: %TRUE if the seqext could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the seqext could be parsed correctly, %FALSE otherwize.
  *
  * Since: 1.2
  */
@@ -407,8 +408,7 @@ gst_mpeg_video_packet_parse_sequence_extension (const GstMpegVideoPacket *
   }
 
   /* skip profile and level escape bit */
-  seqext->profile_level_escape_bit =
-      gst_bit_reader_get_bits_uint8_unchecked (&br, 1);
+  gst_bit_reader_skip_unchecked (&br, 1);
 
   seqext->profile = gst_bit_reader_get_bits_uint8_unchecked (&br, 3);
   seqext->level = gst_bit_reader_get_bits_uint8_unchecked (&br, 4);
@@ -448,7 +448,7 @@ gst_mpeg_video_packet_parse_sequence_extension (const GstMpegVideoPacket *
  * Parses the @seqext MPEG Video Sequence Display Extension structure
  * members from video @packet
  *
- * Returns: %TRUE if the seqext could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the seqext could be parsed correctly, %FALSE otherwize.
  *
  * Since: 1.2
  */
@@ -510,7 +510,7 @@ gst_mpeg_video_packet_parse_sequence_display_extension (const GstMpegVideoPacket
  * Parses the @seqscaleext MPEG Video Sequence Scalable Extension structure
  * members from video @packet
  *
- * Returns: %TRUE if the seqext could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the seqext could be parsed correctly, %FALSE otherwize.
  *
  * Since: 1.2
  */
@@ -632,7 +632,7 @@ gst_mpeg_video_finalise_mpeg2_sequence_header (GstMpegVideoSequenceHdr * seqhdr,
  * structure members from video @packet
  *
  * Returns: %TRUE if the quant matrix extension could be parsed correctly,
- * %FALSE otherwise.
+ * %FALSE otherwize.
  *
  * Since: 1.2
  */
@@ -702,7 +702,7 @@ failed:
  * video @packet
  *
  * Returns: %TRUE if the picture extension could be parsed correctly,
- * %FALSE otherwise.
+ * %FALSE otherwize.
  *
  * Since: 1.2
  */
@@ -802,7 +802,7 @@ failed:
  * from video @packet
  *
  * Returns: %TRUE if the picture sequence could be parsed correctly, %FALSE
- * otherwise.
+ * otherwize.
  *
  * Since: 1.2
  */
@@ -830,8 +830,8 @@ gst_mpeg_video_packet_parse_picture_header (const GstMpegVideoPacket * packet,
   if (hdr->pic_type == 0 || hdr->pic_type > 4)
     goto bad_pic_type;          /* Corrupted picture packet */
 
-  /* VBV delay */
-  if (!gst_bit_reader_get_bits_uint16 (&br, &hdr->vbv_delay, 16))
+  /* skip VBV delay */
+  if (!gst_bit_reader_skip (&br, 16))
     goto failed;
 
   if (hdr->pic_type == GST_MPEG_VIDEO_PICTURE_TYPE_P
@@ -879,7 +879,7 @@ failed:
  * Parses the @gop MPEG Video Group of Picture structure members from
  * video @packet
  *
- * Returns: %TRUE if the gop could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the gop could be parsed correctly, %FALSE otherwize.
  *
  * Since: 1.2
  */
@@ -930,7 +930,7 @@ failed:
  *
  * Parses the @GstMpegVideoSliceHdr  structure members from @data
  *
- * Returns: %TRUE if the slice could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the slice could be parsed correctly, %FALSE otherwize.
  *
  * Since: 1.2
  */
@@ -963,9 +963,6 @@ gst_mpeg_video_packet_parse_slice_header (const GstMpegVideoPacket * packet,
   if (height > 2800)
     READ_UINT8 (&br, vertical_position_extension, 3);
 
-  slice_hdr->vertical_position = packet->type;
-  slice_hdr->vertical_position_ext = vertical_position_extension;
-
   if (seqscaleext)
     if (seqscaleext->scalable_mode ==
         GST_MPEG_VIDEO_SEQ_SCALABLE_MODE_DATA_PARTITIONING)
@@ -973,12 +970,12 @@ gst_mpeg_video_packet_parse_slice_header (const GstMpegVideoPacket * packet,
 
   READ_UINT8 (&br, slice_hdr->quantiser_scale_code, 5);
 
-  READ_UINT8 (&br, slice_hdr->slice_ext_flag, 1);
-  if (!slice_hdr->slice_ext_flag)
+  READ_UINT8 (&br, extra_bits, 1);
+  if (!extra_bits)
     slice_hdr->intra_slice = 0;
   else {
     READ_UINT8 (&br, slice_hdr->intra_slice, 1);
-    READ_UINT8 (&br, slice_hdr->slice_picture_id_enable, 1);
+    SKIP (&br, 1);
     READ_UINT8 (&br, slice_hdr->slice_picture_id, 6);
 
     READ_UINT8 (&br, bits, 1);
@@ -1074,7 +1071,7 @@ gst_mpeg_video_quant_matrix_get_zigzag_from_raster (guint8 out_quant[64],
  *
  * Parses the @seqhdr Mpeg Video Sequence Header structure members from @data
  *
- * Returns: %TRUE if the seqhdr could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the seqhdr could be parsed correctly, %FALSE otherwize.
  *
  * Deprecated: Use gst_mpeg_video_packet_parse_sequence_header() instead.
  */
@@ -1107,7 +1104,7 @@ gst_mpeg_video_parse_sequence_header (GstMpegVideoSequenceHdr * seqhdr,
  *
  * Parses the @seqext Mpeg Video Sequence Extension structure members from @data
  *
- * Returns: %TRUE if the seqext could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the seqext could be parsed correctly, %FALSE otherwize.
  *
  * Deprecated: Use gst_mpeg_video_packet_parse_sequence_extension() instead.
  */
@@ -1163,7 +1160,7 @@ gst_mpeg_video_parse_sequence_display_extension (GstMpegVideoSequenceDisplayExt
  * @data
  *
  * Returns: %TRUE if the quant matrix extension could be parsed correctly,
- * %FALSE otherwise.
+ * %FALSE otherwize.
  *
  * Deprecated: Use gst_mpeg_video_packet_parse_quant_matrix_extension() instead.
  */
@@ -1197,7 +1194,7 @@ gst_mpeg_video_parse_quant_matrix_extension (GstMpegVideoQuantMatrixExt * quant,
  * Parsers the @hdr Mpeg Video Picture Header structure members from @data
  *
  * Returns: %TRUE if the picture sequence could be parsed correctly, %FALSE
- * otherwise.
+ * otherwize.
  *
  * Deprecated: Use gst_mpeg_video_packet_parse_picture_header() instead.
  */
@@ -1231,7 +1228,7 @@ gst_mpeg_video_parse_picture_header (GstMpegVideoPictureHdr * hdr,
  * Parse the @ext Mpeg Video Picture Extension structure members from @data
  *
  * Returns: %TRUE if the picture extension could be parsed correctly,
- * %FALSE otherwise.
+ * %FALSE otherwize.
  *
  * Deprecated: Use gst_mpeg_video_packet_parse_picture_extension() instead.
  */
@@ -1264,7 +1261,7 @@ gst_mpeg_video_parse_picture_extension (GstMpegVideoPictureExt * ext,
  *
  * Parses the @gop Mpeg Video Group of Picture structure members from @data
  *
- * Returns: %TRUE if the gop could be parsed correctly, %FALSE otherwise.
+ * Returns: %TRUE if the gop could be parsed correctly, %FALSE otherwize.
  *
  * Deprecated: Use gst_mpeg_video_packet_parse_gop() instead.
  */

@@ -29,7 +29,7 @@
  *   <para>
  *   Standalone: this mode will take complete control of the monitor forcing
  *   <ulink url="http://www.directfb.org/">DirectFB</ulink> to fullscreen layout.
- *   This is convenient to test using the  gst-launch-1.0 command line tool or
+ *   This is convenient to test using the  gst-launch command line tool or
  *   other simple applications. It is possible to interrupt playback while
  *   being in this mode by pressing the Escape key.
  *   </para>
@@ -77,7 +77,7 @@
  * <refsect2>
  * <title>Example pipelines</title>
  * |[
- * gst-launch-1.0 -v videotestsrc ! dfbvideosink hue=20000 saturation=40000 brightness=25000
+ * gst-launch -v videotestsrc ! dfbvideosink hue=20000 saturation=40000 brightness=25000
  * ]| test the colorbalance interface implementation in dfbvideosink
  * </refsect2>
  */
@@ -168,19 +168,6 @@ gst_meta_dfbsurface_api_get_type (void)
   return type;
 }
 
-static gboolean
-gst_meta_dfbsurface_init (GstMetaDfbSurface * meta, gpointer params,
-    GstBuffer * buf)
-{
-  meta->surface = NULL;
-  meta->width = meta->height = 0;
-  meta->locked = FALSE;
-  meta->pixel_format = 0;
-  meta->dfbvideosink = NULL;
-
-  return TRUE;
-}
-
 /* our metadata */
 const GstMetaInfo *
 gst_meta_dfbsurface_get_info (void)
@@ -191,8 +178,7 @@ gst_meta_dfbsurface_get_info (void)
     const GstMetaInfo *meta =
         gst_meta_register (gst_meta_dfbsurface_api_get_type (),
         "GstMetaDfbSurface", sizeof (GstMetaDfbSurface),
-        (GstMetaInitFunction) gst_meta_dfbsurface_init,
-        (GstMetaFreeFunction) NULL,
+        (GstMetaInitFunction) NULL, (GstMetaFreeFunction) NULL,
         (GstMetaTransformFunction) NULL);
     g_once_init_leave (&meta_info, meta);
   }
@@ -1363,10 +1349,8 @@ gst_dfbvideosink_getcaps (GstBaseSink * bsink, GstCaps * filter)
   dfbvideosink = GST_DFBVIDEOSINK (bsink);
 
   if (!dfbvideosink->setup) {
-    GstCaps *tcaps =
-        gst_pad_get_pad_template_caps (GST_VIDEO_SINK_PAD (dfbvideosink));
-    caps = gst_caps_copy (tcaps);
-    gst_caps_unref (tcaps);
+    caps = gst_caps_copy (gst_pad_get_pad_template_caps (GST_VIDEO_SINK_PAD
+            (dfbvideosink)));
     GST_DEBUG_OBJECT (dfbvideosink, "getcaps called and we are not setup yet, "
         "returning template %" GST_PTR_FORMAT, caps);
     goto beach;
@@ -1832,7 +1816,7 @@ gst_dfbvideosink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
       src.h = dfbvideosink->video_height;
     }
     gst_caps_unref (caps);
-    surface->GetSize (surface, &dst.w, &dst.h);
+    res = surface->GetSize (surface, &dst.w, &dst.h);
 
     /* Center / Clip */
     gst_video_sink_center_rect (src, dst, &result, FALSE);
@@ -1924,15 +1908,15 @@ gst_dfbvideosink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
 
     gst_video_frame_unmap (&src_frame);
 
-    dest->Unlock (dest);
+    res = dest->Unlock (dest);
 
     dest->Release (dest);
 
     if (dfbvideosink->backbuffer) {
       if (dfbvideosink->vsync) {
-        surface->Flip (surface, NULL, DSFLIP_ONSYNC);
+        res = surface->Flip (surface, NULL, DSFLIP_ONSYNC);
       } else {
-        surface->Flip (surface, NULL, DSFLIP_NONE);
+        res = surface->Flip (surface, NULL, DSFLIP_NONE);
       }
     }
   } else {
@@ -2040,14 +2024,8 @@ gst_dfbvideosink_navigation_send_event (GstNavigation * navigation,
   pad = gst_pad_get_peer (GST_VIDEO_SINK_PAD (dfbvideosink));
 
   if (GST_IS_PAD (pad) && GST_IS_EVENT (event)) {
-    if (!gst_pad_send_event (pad, gst_event_ref (event))) {
-      /* If upstream didn't handle the event we'll post a message with it
-       * for the application in case it wants to do something with it */
-      gst_element_post_message (GST_ELEMENT_CAST (dfbvideosink),
-          gst_navigation_message_new_event (GST_OBJECT_CAST (dfbvideosink),
-              event));
-    }
-    gst_event_unref (event);
+    gst_pad_send_event (pad, event);
+
     gst_object_unref (pad);
   }
 }
@@ -2434,8 +2412,8 @@ gst_dfbvideosink_class_init (GstDfbVideoSinkClass * klass)
       "DirectFB video sink", "Sink/Video", "A DirectFB based videosink",
       "Julien Moutte <julien@moutte.net>");
 
-  gst_element_class_add_static_pad_template (gstelement_class,
-      &gst_dfbvideosink_sink_template_factory);
+  gst_element_class_add_pad_template (gstelement_class,
+      gst_static_pad_template_get (&gst_dfbvideosink_sink_template_factory));
 
   gstelement_class->change_state = gst_dfbvideosink_change_state;
 

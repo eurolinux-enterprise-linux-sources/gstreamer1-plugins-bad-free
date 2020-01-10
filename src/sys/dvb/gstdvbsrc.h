@@ -2,7 +2,7 @@
  * Copyright (C) 2006 Zaheer Abbas Merali <zaheerabbas at merali
  *                                         dot org>
  * Copyright (C) 2014 Samsung Electronics. All rights reserved.
- *     @Author: Reynaldo H. Verdejo Pinochet <reynaldo@osg.samsung.com>
+ *     @Author: Reynaldo H. Verdejo Pinochet <r.verdejo@sisa.samsung.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -60,12 +60,13 @@ typedef struct _GstDvbSrcParam GstDvbSrcParam;
 struct _GstDvbSrc
 {
   GstPushSrc element;
+  GstPad *srcpad;
 
   GMutex tune_mutex;
   gboolean need_tune;
 
-  GList * supported_delsys;
   guchar delsys;
+  guchar best_guess_delsys;
 
   int adapter_number;
   int frontend_number;
@@ -103,33 +104,6 @@ struct _GstDvbSrc
   gboolean need_unlock;
 
   guint dvb_buffer_size;
-
-  unsigned int isdbt_layer_enabled;
-  int isdbt_partial_reception;
-  int isdbt_sound_broadcasting;
-  int isdbt_sb_subchannel_id;
-  int isdbt_sb_segment_idx;
-  unsigned int isdbt_sb_segment_count;
-  int isdbt_layera_fec;
-  int isdbt_layera_modulation;
-  int isdbt_layera_segment_count;
-  int isdbt_layera_time_interleaving;
-  int isdbt_layerb_fec;
-  int isdbt_layerb_modulation;
-  int isdbt_layerb_segment_count;
-  int isdbt_layerb_time_interleaving;
-  int isdbt_layerc_fec;
-  int isdbt_layerc_modulation;
-  int isdbt_layerc_segment_count;
-  int isdbt_layerc_time_interleaving;
-
-  /* LNB properties */
-  unsigned int lnb_slof;
-  unsigned int lnb_lof1;
-  unsigned int lnb_lof2;
-
-  /* Only used for DTMB if available */
-  int interleaving;
 };
 
 struct _GstDvbSrcClass
@@ -138,8 +112,6 @@ struct _GstDvbSrcClass
 
   void (*adapter_type) (GstElement * element, gint type);
   void (*signal_quality) (GstElement * element, gint strength, gint snr);
-
-  void (*do_tune) (GstDvbSrc * self);
 };
 
 

@@ -34,7 +34,7 @@
  * <refsect2>
  * <title>Example pipeline</title>
  * |[
- * gst-launch-1.0 videotestsrc num-buffers=1000 ! mpeg2enc ! filesink location=videotestsrc.m1v
+ * gst-launch-0.10 videotestsrc num-buffers=1000 ! mpeg2enc ! filesink location=videotestsrc.m1v
  * ]| This example pipeline will encode a test video source to a an MPEG1
  * elementary stream (with Generic MPEG1 profile).
  * <para>
@@ -47,7 +47,7 @@
  * in the example above) allow most parameters to be adjusted.
  * </para>
  * |[
- * gst-launch-1.0 videotestsrc num-buffers=1000 ! videoscale ! mpeg2enc format=1 norm=p ! filesink location=videotestsrc.m1v
+ * gst-launch-0.10 videotestsrc num-buffers=1000 ! videoscale ! mpeg2enc format=1 norm=p ! filesink location=videotestsrc.m1v
  * ]| This will produce an MPEG1 profile stream according to VCD2.0 specifications
  * for PAL #GstMpeg2enc:norm (as the image height is dependent on video norm).
  * </refsect2>
@@ -126,8 +126,10 @@ gst_mpeg2enc_class_init (GstMpeg2encClass * klass)
 
   element_class->change_state = GST_DEBUG_FUNCPTR (gst_mpeg2enc_change_state);
 
-  gst_element_class_add_static_pad_template (element_class, &src_template);
-  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_template));
 
   gst_element_class_set_static_metadata (element_class,
       "mpeg2enc video encoder", "Codec/Encoder/Video",
@@ -253,7 +255,7 @@ gst_mpeg2enc_structure_from_norm (GstMpeg2enc * enc, gint horiz,
   GstStructure *structure;
 
   structure = gst_structure_new ("video/x-raw",
-      "format", G_TYPE_STRING, "I420", NULL);
+      "format", G_TYPE_STRING, 'I420', NULL);
 
   switch (enc->options->norm) {
     case 0:
@@ -446,6 +448,7 @@ gst_mpeg2enc_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       /* no special action as there is not much to flush;
        * neither is it possible to halt the mpeg encoding loop */
       goto done;
+      break;
     case GST_EVENT_FLUSH_STOP:
       /* forward event */
       result = gst_pad_push_event (enc->srcpad, event);
@@ -458,6 +461,7 @@ gst_mpeg2enc_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       enc->srcresult = GST_FLOW_OK;
       GST_MPEG2ENC_MUTEX_UNLOCK (enc);
       goto done;
+      break;
     case GST_EVENT_EOS:
       /* inform the encoding task that it can stop now */
       GST_MPEG2ENC_MUTEX_LOCK (enc);
@@ -468,6 +472,7 @@ gst_mpeg2enc_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       /* eat this event for now, task will send eos when finished */
       gst_event_unref (event);
       goto done;
+      break;
     case GST_EVENT_CAPS:
     {
       GstCaps *caps;
@@ -476,6 +481,7 @@ gst_mpeg2enc_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       result = gst_mpeg2enc_setcaps (enc, pad, caps);
       gst_event_unref (event);
       goto done;
+      break;
     }
     default:
       /* for a serialized event, wait until an earlier buffer is gone,

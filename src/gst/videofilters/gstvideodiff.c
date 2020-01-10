@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2013 David Schleef <ds@schleef.org>
+ * Copyright (C) 2013 FIXME <fixme@example.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,14 +19,14 @@
 /**
  * SECTION:element-gstvideodiff
  *
- * The videodiff element highlights the difference between a frame and its
- * previous on the luma plane.
+ * The videodiff element does FIXME stuff.
  *
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch-1.0 -v videotestsrc pattern=ball ! videodiff ! videoconvert ! autovideosink
+ * gst-launch -v fakesrc ! videodiff ! FIXME ! fakesink
  * ]|
+ * FIXME Describe what the pipeline does.
  * </refsect2>
  */
 
@@ -47,12 +47,23 @@ GST_DEBUG_CATEGORY_STATIC (gst_video_diff_debug_category);
 static GstFlowReturn gst_video_diff_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe);
 
+enum
+{
+  PROP_0
+};
+
+/* pad templates */
+
+/* FIXME: add/remove formats you can handle */
 #define VIDEO_SRC_CAPS \
-    GST_VIDEO_CAPS_MAKE("{ I420, Y444, Y42B, Y41B }")
+    GST_VIDEO_CAPS_MAKE("{ I420, Y444, Y42B, UYVY, RGBA }")
 
+/* FIXME: add/remove formats you can handle */
 #define VIDEO_SINK_CAPS \
-    GST_VIDEO_CAPS_MAKE("{ I420, Y444, Y42B, Y41B }")
+    GST_VIDEO_CAPS_MAKE("{ I420, Y444, Y42B, UYVY, RGBA }")
 
+
+/* class initialization */
 
 G_DEFINE_TYPE_WITH_CODE (GstVideoDiff, gst_video_diff, GST_TYPE_VIDEO_FILTER,
     GST_DEBUG_CATEGORY_INIT (gst_video_diff_debug_category, "videodiff", 0,
@@ -63,6 +74,8 @@ gst_video_diff_class_init (GstVideoDiffClass * klass)
 {
   GstVideoFilterClass *video_filter_class = GST_VIDEO_FILTER_CLASS (klass);
 
+  /* Setting up pads and setting metadata should be moved to
+     base_class_init if you intend to subclass this class. */
   gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
           gst_caps_from_string (VIDEO_SRC_CAPS)));
@@ -71,12 +84,12 @@ gst_video_diff_class_init (GstVideoDiffClass * klass)
           gst_caps_from_string (VIDEO_SINK_CAPS)));
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
-      "Video Diff", "Video/Filter",
-      "Visualize differences between adjacent video frames",
-      "David Schleef <ds@schleef.org>");
+      "FIXME Long name", "Generic", "FIXME Description",
+      "FIXME <fixme@example.com>");
 
   video_filter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_video_diff_transform_frame);
+
 }
 
 static void

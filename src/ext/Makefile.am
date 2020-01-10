@@ -16,11 +16,11 @@ else
 APEXSINK_DIR =
 endif
 
-if USE_BS2B
-BS2B_DIR=bs2b
-else
-BS2B_DIR=
-endif
+# if USE_AUDIOFILE
+# AUDIOFILE_DIR=audiofile
+# else
+AUDIOFILE_DIR=
+# endif
 
 if USE_BZ2
 BZ2_DIR=bz2
@@ -82,18 +82,6 @@ else
 GL_DIR=
 endif
 
-if USE_GTK3
-GTK3_DIR=gtk
-else
-GTK3_DIR=
-endif
-
-if USE_QT
-QT_DIR=qt
-else
-QT_DIR=
-endif
-
 if USE_RESINDVD
  RESINDVD_DIR = resindvd
 else
@@ -110,12 +98,6 @@ if USE_FAAD
  FAAD_DIR=faad
 else
  FAAD_DIR=
-endif
-
-if USE_FDK_AAC
- FDK_AAC_DIR=fdkaac
-else
- FDK_AAC_DIR=
 endif
 
 if USE_VOAACENC
@@ -160,11 +142,11 @@ else
 LV2_DIR =
 endif
 
-if USE_LIBDE265
-LIBDE265_DIR = libde265
-else
-LIBDE265_DIR =
-endif
+# if USE_LIBFAME
+# LIBFAME_DIR=libfame
+# else
+LIBFAME_DIR=
+# endif
 
 if USE_LIBMMS
 LIBMMS_DIR=libmms
@@ -190,6 +172,12 @@ else
 MPEG2ENC_DIR=
 endif
 
+if USE_MPG123
+MPG123_DIR=mpg123
+else
+MPG123_DIR=
+endif
+
 if USE_MIMIC
 MIMIC_DIR=mimic
 else
@@ -206,6 +194,12 @@ if USE_MUSEPACK
 MUSEPACK_DIR=musepack
 else
 MUSEPACK_DIR=
+endif
+
+if USE_MYTHTV
+MYTHTV_DIR=mythtv
+else
+MYTHTV_DIR=
 endif
 
 if USE_NAS
@@ -242,12 +236,6 @@ if USE_OPENEXR
 OPENEXR_DIR = openexr
 else
 OPENEXR_DIR =
-endif
-
-if USE_OPENH264
-OPENH264_DIR = openh264
-else
-OPENH264_DIR =
 endif
 
 if USE_OPENNI2
@@ -370,6 +358,12 @@ else
 TELETEXTDEC_DIR=
 endif
 
+if USE_GSETTINGS
+GSETTINGS_DIR=gsettings
+else
+GSETTINGS_DIR=
+endif
+
 if USE_XVID
 XVID_DIR=xvid
 else
@@ -400,37 +394,12 @@ else
 WEBP_DIR=
 endif
 
-if USE_X265
-X265_DIR=x265
-else
-X265_DIR=
-endif
-
-if USE_DTLS
-DTLS_DIR=dtls
-else
-DTLS_DIR=
-endif
-
-if USE_VULKAN
-VULKAN_DIR=vulkan
-else
-VULKAN_DIR=
-endif
-
-if USE_WEBRTCDSP
-WEBRTCDSP_DIR=webrtcdsp
-else
-WEBRTCDSP_DIR=
-endif
-
 SUBDIRS=\
 	$(VOAACENC_DIR) \
 	$(ASSRENDER_DIR) \
 	$(VOAMRWBENC_DIR) \
 	$(APEXSINK_DIR) \
 	$(AUDIOFILE_DIR) \
-	$(BS2B_DIR) \
 	$(BZ2_DIR) \
 	$(CHROMAPRINT_DIR) \
 	$(CURL_DIR) \
@@ -442,33 +411,32 @@ SUBDIRS=\
 	$(DTS_DIR) \
 	$(RESINDVD_DIR) \
 	$(GL_DIR) \
-	$(GTK3_DIR) \
-	$(QT_DIR) \
 	$(FAAC_DIR) \
 	$(FAAD_DIR) \
-	$(FDK_AAC_DIR) \
 	$(FLITE_DIR) \
 	$(FLUIDSYNTH_DIR) \
+	$(GSETTINGS_DIR) \
 	$(GSM_DIR) \
 	$(G729_DIR) \
 	$(KATE_DIR) \
 	$(LADSPA_DIR) \
 	$(LV2_DIR) \
-	$(LIBDE265_DIR) \
+	$(LIBFAME_DIR) \
 	$(LIBMMS_DIR) \
 	$(LIBVISUAL_DIR) \
 	$(MODPLUG_DIR) \
 	$(MPEG2ENC_DIR) \
+	$(MPG123_DIR) \
 	$(MIMIC_DIR) \
 	$(MPLEX_DIR) \
 	$(MUSEPACK_DIR) \
+	$(MYTHTV_DIR) \
 	$(NAS_DIR) \
 	$(NEON_DIR) \
 	$(OFA_DIR) \
 	$(OPENAL_DIR) \
 	$(OPENCV_DIR) \
 	$(OPENEXR_DIR) \
-	$(OPENH264_DIR) \
 	$(OPENJPEG_DIR) \
 	$(OPENNI2_DIR) \
 	$(OPUS_DIR) \
@@ -491,16 +459,11 @@ SUBDIRS=\
 	$(ZBAR_DIR) \
 	$(RTMP_DIR) \
 	$(HLS_DIR) \
-	$(WEBP_DIR) \
-	$(X265_DIR) \
-	$(DTLS_DIR) \
-	$(VULKAN_DIR) \
-	$(WEBRTCDSP_DIR)
+	$(WEBP_DIR)
 
 DIST_SUBDIRS = \
 	assrender \
 	apexsink \
-	bs2b \
 	bz2 \
 	chromaprint \
 	curl \
@@ -510,34 +473,32 @@ DIST_SUBDIRS = \
 	wayland \
 	faac \
 	faad \
-	fdkaac \
 	flite \
 	fluidsynth \
+	gsettings \
 	gsm \
 	hls \
 	ladspa \
 	kate \
-	libde265 \
 	libmms \
 	libvisual \
 	lv2 \
 	daala \
 	dts \
 	gl \
-	gtk \
-	qt \
 	modplug \
 	mimic \
 	mpeg2enc \
+	mpg123 \
 	mplex \
 	musepack \
+	mythtv \
 	nas \
 	neon \
 	ofa \
 	openal \
 	opencv \
 	openexr \
-	openh264 \
 	openni2 \
 	openjpeg \
 	opus \
@@ -561,10 +522,6 @@ DIST_SUBDIRS = \
 	xvid \
 	zbar \
 	rtmp \
-	webp \
-	x265 \
-	dtls \
-	vulkan \
-	webrtcdsp
+	webp
 
 include $(top_srcdir)/common/parallel-subdirs.mak
