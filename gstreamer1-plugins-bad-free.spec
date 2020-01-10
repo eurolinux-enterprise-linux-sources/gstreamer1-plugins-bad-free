@@ -10,7 +10,7 @@
 
 Name:           gstreamer1-plugins-bad-free
 Version:        1.10.4
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        GStreamer streaming media framework "bad" plugins
 
 License:        LGPLv2+ and LGPLv2
@@ -196,7 +196,7 @@ aren't tested well enough, or the code is not of good enough quality.
       --disable-dc1394 --disable-fluidsynth --disable-gme --disable-kate \
       --disable-modplug --disable-openexr --disable-qt --disable-schro \
       --disable-teletextdec --disable-vdpau --disable-webrtcdsp \
-      --disable-wildmidi --disable-zbar } \
+      --disable-wildmidi --disable-zbar --disable-wayland } \
     --enable-debug --disable-static --enable-gtk-doc --enable-experimental \
     --disable-dts --disable-faac --disable-faad --disable-nas \
     --disable-mimic --disable-libmms --disable-mpeg2enc --disable-mplex \
@@ -507,6 +507,10 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/libgstbadvideo-%{majorminor}.so
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{majorminor}.pc
 
 %changelog
+* Mon Oct 09 2017 Wim Taymans <wtaymans@redhat.com> - 1.10.4-3
+- Disable wayland sink plugin
+- Resolves: #1488978
+
 * Thu Mar 09 2017 Wim Taymans <wtaymans@redhat.com> - 1.10.4-2
 - Disable plugins
 - Fix origin
