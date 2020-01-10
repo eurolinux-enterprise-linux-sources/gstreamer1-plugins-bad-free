@@ -10,7 +10,7 @@
 
 Name:           gstreamer1-plugins-bad-free
 Version:        1.4.5
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        GStreamer streaming media framework "bad" plugins
 
 License:        LGPLv2+ and LGPLv2
@@ -349,6 +349,10 @@ chrpath --delete $RPM_BUILD_ROOT%{_libdir}/gstreamer-%{majorminor}/libgstcamerab
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{majorminor}.pc
 
 %changelog
+* Thu May 26 2016 Wim Taymans <wtaymans@redhat.com> - 1.4.5-4
+- rebuild for libdvdnav update
+- Resolves: #1340047
+
 * Thu Jul 30 2015 Wim Taymans <wtaymans@redhat.com> - 1.4.5-3
 - Update audiomixer unit test for big endian
 - add missing patch
